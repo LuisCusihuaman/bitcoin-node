@@ -11,6 +11,9 @@ impl Request {
     pub fn parse(stream: &mut TcpStream) -> Request {
         parse_internal(stream)
     }
+    pub fn path(&self) -> String {
+        self.path.to_string()
+    }
 }
 
 fn parse_internal<T: Read + Write>(stream: T) -> Request {
@@ -78,7 +81,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse() {
+    fn test_parse_with_valid_params() {
         let mut mock = MockTcpStream {
             read_data: "/get?name=pepito\n".as_bytes().to_vec(),
             write_data: Vec::new(),

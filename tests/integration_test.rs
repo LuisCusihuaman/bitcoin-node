@@ -1,18 +1,40 @@
+use app::net::request::Request;
+use app::net::response::Response;
 use app::net::router::Router;
+use app::net::server::Server;
+use std::{
+    io::{BufRead, BufReader, Write},
+    net::TcpStream,
+    thread::{self, JoinHandle},
+    time::Duration,
+};
 
 #[test]
-fn test_al_pedir_un_balance_el_router_devuelve_resultado_esperado() {
-    // setup
+fn test_al_pedir_un_balance_el_router_devuelve_resultado_esperado() -> std::io::Result<()> {
+    // GIVEN
     let mut router = Router::new();
-    let respuesta_esperado = "Hola";
+    router.branch("/ping", |_req: Request| -> Response {
+        Response::json(String::from("pong"))
+    });
+    let addrs = "127.0.0.1:8990";
+    let handle = thread::spawn(move || {
+        Server::new(router).run(&addrs);
+    });
+    thread::sleep(Duration::from_millis(500));
 
-    let mut balance;
+    //client
+    let mut socket = TcpStream::connect(addrs)?;
+    socket.write("/ping\n".as_bytes())?;
 
-    // ejecutar
-    router.get("/getBalance", &balance);
+    //get response from server
+    let mut response = String::new();
+    let mut reader = BufReader::new(socket);
+    let line_bytes = reader.read_line(&mut response)?;
 
-    // verificar
-    let mut resultado_devuleto = Server::new(router).run("127.0.0.1:8989");
-
-    assert_eq!(respuesta_esperado, balance);
+    assert_eq!(line_bytes, 4);
+    assert_eq!(response, String::from("pong"));
+    match handle.join() {
+        Ok(_) => Ok(()),
+        Err(_) => panic!("Se esperaba que el thread termine correctamente"),
+    }
 }

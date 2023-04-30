@@ -1,2 +1,2 @@
 pub mod net;
-mod node;
+pub mod node;

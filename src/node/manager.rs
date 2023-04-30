@@ -6,8 +6,8 @@ pub struct NodeManager {
 }
 
 pub struct Config {
-    addrs: String,
-    port: u16,
+    pub addrs: String,
+    pub port: u16,
 }
 
 impl NodeManager {
@@ -43,6 +43,9 @@ impl NodeManager {
         self.node_network
             .extend(ips.into_iter().filter(|addr| addr.is_ipv4()));
         Ok(())
+    }
+    pub fn peers(&self) -> Vec<IpAddr> {
+        self.node_network.clone()
     }
 }
 

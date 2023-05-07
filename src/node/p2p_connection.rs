@@ -1,5 +1,6 @@
 use std::net::TcpStream;
 use std::time::Duration;
+use crate::node::message::MessagePayload;
 
 pub struct P2PConnection {
     peer_address: String,
@@ -18,5 +19,8 @@ impl P2PConnection {
             peer_address: addr.clone(),
             tcp_stream,
         })
+    }
+    pub fn send(&mut self, payload: &MessagePayload) -> Result<(), String> {
+        Ok(())
     }
 }

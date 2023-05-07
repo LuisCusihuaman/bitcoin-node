@@ -1,8 +1,8 @@
 use crate::node::p2p_connection::P2PConnection;
 use std::net::{IpAddr, TcpListener, ToSocketAddrs};
-
+use crate::node::message::MessagePayload;
 pub struct NodeNetwork {
-    peer_connections: Vec<P2PConnection>,
+    pub peer_connections: Vec<P2PConnection>,
 }
 
 impl NodeNetwork {
@@ -11,6 +11,11 @@ impl NodeNetwork {
             peer_connections: vec![],
         }
     }
+    pub fn send_to_all_peers(&mut self, payload: &MessagePayload){
+        for connection in &mut self.peer_connections {
+            connection.send(payload);
+        }
+}
 }
 
 pub struct NodeManager {
@@ -75,9 +80,10 @@ impl NodeManager {
         }
         Ok(())
     }
-    //pub fn peers(&self) -> Vec<IpAddr> {
-    //    self.node_network.clone()
-    //}
+ 
+    pub fn broadcast(&mut self, payload: &MessagePayload) {
+        self.node_network.send_to_all_peers(&payload);
+    }
 }
 
 #[cfg(test)]
@@ -107,6 +113,30 @@ mod tests {
                 .map(|ip| format!("{}:18333", ip))
                 .collect(),
         )?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_node_send_and_recive() -> Result<(), String> {
+        let mut node_manager = NodeManager::new(Config {
+            addrs: "seed.testnet.bitcoin.sprovoost.nl".to_string(),
+            port: 80,
+        });
+        let node_network_ips = node_manager.get_initial_nodes().unwrap();
+        let first_address_from_dns = node_network_ips
+        .iter()
+        .map(|ip| format!("{}:18333", ip))
+        .take(1)
+        .collect();
+        node_manager.connect(first_address_from_dns);
+
+        let payload_version_message = MessagePayload::Version(1);
+        node_manager.broadcast(&payload_version_message);
+
+        // let received_messages = network.receive_all();
+        // let (received_peer_adress, received_payloads) = received_messages.first().unwrap();
+        // assert_eq!(received_peer_adress,  first_address_from_dns.first());
+        // assert_eq!(*received_payloads, vec![payload]);
         Ok(())
     }
 }

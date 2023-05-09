@@ -1,9 +1,9 @@
 use crate::node::message::{MessageHeader, MessagePayload};
 use bs58::{decode, encode};
 use std::io::Write;
+use std::io::{Cursor, Read};
 use std::net::TcpStream;
 use std::time::Duration;
-use std::io::Read;
 use std::vec;
 
 use super::message::Encoding;
@@ -44,40 +44,80 @@ impl P2PConnection {
             .map_err(|e| e.to_string())?;
         Ok(())
     }
-
-    fn receive_internal<T: Read + Write>(&mut self, stream: &mut T) -> Result<Vec<MessagePayload>, String> {
-        let mut buf = [0u8; 24];
-        stream.read_exact(&mut buf).map_err(|e| e.to_string())?;
-
-        // Parse the header fields
-        let magic_number = read_u32_le(&buf[0..4]);
-        let command_name = String::from_utf8_lossy(&buf[4..16]).trim_end_matches('\0').to_owned();
-        let payload_size = read_u32_le(&buf[16..20]);
-
-        // Read the payload
-        let mut payload_buf = vec![0u8; payload_size as usize];
-        stream.read_exact(&mut payload_buf).map_err(|e| e.to_string())?;
-
-        // Match the command name to a payload type
-        let payload = match command_name.as_str() {
-            "version" => MessagePayload::Version(read_u32_le(&payload_buf)),
-            "verack" => MessagePayload::Verack,
-            &_ => todo!()
-        };
-
-        Ok(vec![payload])
-    }
-
     pub fn receive(&mut self) -> (String, Vec<MessagePayload>) {
-        
+        let mut buf = [0u8; 24];
+        self.tcp_stream
+            .read_exact(&mut buf)
+            .map_err(|e| e.to_string())
+            .unwrap();
+        (
+            self.peer_address.clone(),
+            receive_internal(&mut buf).unwrap(),
+        )
 
         // |payloads| (self.peer_address.clone(), payloads)
     }
 }
+fn receive_internal(buf: &mut [u8]) -> Result<Vec<MessagePayload>, String> {
+    // Parse the header fields
+    let magic_number = read_u32_le(&buf[0..4]);
+    let command_name = String::from_utf8_lossy(&buf[4..16])
+        .trim_end_matches('\0')
+        .to_owned();
+    let payload_vec = &buf[16..20];
+    let payload_size = read_u32_le(payload_vec);
+
+    // Check the magic number
+    if magic_number != 0x0b110907 {
+        return Err(format!("Invalid magic number: 0x{:08x}", magic_number));
+    }
+    //Read payload
+    let mut payload: Vec<u8> = vec![0; payload_size as usize];
+    let mut cursor = Cursor::new(&mut buf[20..]);
+    cursor.read_exact(&mut payload).unwrap();
+    // match with the command name and create instance of the payload
+    let payload = match command_name.as_str() {
+        "version" => MessagePayload::Version(2), //MessagePayload::Version(0).decode(buffer) // we must a dummy valid in argument?
+        "verack" => MessagePayload::Verack,
+        // "ping" => MessagePayload::Ping(payload),
+        // "pong" => MessagePayload::Pong(payload),
+        // "addr" => MessagePayload::Addr(payload),
+        // "inv" => MessagePayload::Inv(payload),
+        // "getdata" => MessagePayload::GetData(payload),
+        // "notfound" => MessagePayload::NotFound(payload),
+        // "getblocks" => MessagePayload::GetBlocks(payload),
+        // "getheaders" => MessagePayload::GetHeaders(payload),
+        // "tx" => MessagePayload::Tx(payload),
+        // "block" => MessagePayload::Block(payload),
+        // "headers" => MessagePayload::Headers(payload),
+        // "getaddr" => MessagePayload::GetAddr(payload),
+        // "mempool" => MessagePayload::Mempool(payload),
+        // "reject" => MessagePayload::Reject(payload),
+        // "sendheaders" => MessagePayload::SendHeaders(payload),
+        // "feefilter" => MessagePayload::FeeFilter(payload),
+        // "filterload" => MessagePayload::FilterLoad(payload),
+        // "filteradd" => MessagePayload::FilterAdd(payload),
+        // "filterclear" => MessagePayload::FilterClear(payload),
+        // "merkleblock" => MessagePayload::MerkleBlock(payload),
+        // "cmpctblock" => MessagePayload::CmpctBlock(payload),
+        // "getblocktxn" => MessagePayload::GetBlockTxn(payload),
+        // "blocktxn" => MessagePayload::BlockTxn(payload),
+        // "encinit" => MessagePayload::Encinit(payload),
+        // "encack" => MessagePayload::Encack(payload),
+        // "authchallenge" => MessagePayload::AuthChallenge(payload),
+        // "authreply" => MessagePayload::AuthReply(payload),
+        // "authpropose" => MessagePayload::AuthPropose(payload),
+        // "unknown" => MessagePayload::Unknown(payload),
+        _ => return Err(format!("Unknown command name: {}", command_name)),
+    };
+    Ok(vec![payload])
+}
 
 fn read_u32_le(bytes: &[u8]) -> u32 {
+    assert_eq!(bytes.len(), 4);
+
     let mut result: u32 = 0;
-    for i in 0..4 {
+    for i in 0..3 {
         result |= (bytes[i] as u32) << (i * 8);
     }
     result
@@ -114,15 +154,20 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_with_valid_params() {
+    fn test_read() {
+        let mut mock_read_data = Vec::new();
+        mock_read_data.extend_from_slice(&0x0b110907u32.to_le_bytes()); // magic number
+        mock_read_data.extend_from_slice(&"version\0\0\0\0\0\0\0\0".as_bytes()); // command name
+        mock_read_data.extend_from_slice(&0x1u32.to_le_bytes()); // payload size
+        mock_read_data.extend_from_slice(&0x00000000u32.to_le_bytes()); // checksum
+
         let mut mock = MockTcpStream {
-            read_data: "/get?name=pepito\n".as_bytes().to_vec(),
+            read_data: mock_read_data,
             write_data: Vec::new(),
         };
-
-        let req = parse_internal(&mut mock);
-
-        assert_eq!(req.path, "/get");
-        assert_eq!(req.params.len(), 1);
+        let mut buffer = [0u8; 100];
+        // only write the bytes of mock_read_data
+        mock.read(&mut buffer[..]).unwrap();
+        let a = receive_internal(&mut buffer).unwrap();
     }
 }

@@ -4,6 +4,8 @@ use std::io::Write;
 use std::net::TcpStream;
 use std::time::Duration;
 
+use super::message::Encoding;
+
 pub struct P2PConnection {
     peer_address: String,
     tcp_stream: TcpStream,
@@ -24,17 +26,17 @@ impl P2PConnection {
     }
 
     pub fn send(&mut self, payload: &MessagePayload) -> Result<(), String> {
-        let payload_size = std::mem::size_of::<MessagePayload>(); // let payload_size = payload_str.len();
+        let command_name_bytes = payload.command_name()?.as_bytes();
+        let mut command_name = [0; 12];
+        command_name[..command_name_bytes.len()].copy_from_slice(command_name_bytes);
+        let payload_size = payload.size_of()? as usize;
+        let header = MessageHeader::new(0x0b110907 as u32, command_name, payload_size as u32);
+        let header_size = header.size_of()? as usize;
+        let total_size = header_size + payload_size as usize;
 
-        let header = MessageHeader::new(payload_size as u32);
-        let header_str = header.to_string();
-        let header_size = std::mem::size_of::<MessageHeader>(); //let header_size = header_str.len();
-
-        let total_size: usize = header_size + payload_size;
         let mut buffer = vec![0; total_size];
-
-        //   buffer[..header_size].copy_from_slice(header_str.as_bytes());
-        //  buffer[header_size..].copy_from_slice(payload_str.as_bytes());
+        header.encode(&mut buffer[..header_size])?;
+        payload.encode(&mut buffer[header_size..])?;
         self.tcp_stream
             .write(&buffer[..])
             .map_err(|e| e.to_string())?;

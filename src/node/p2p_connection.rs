@@ -1,10 +1,12 @@
 use crate::node::message::{MessageHeader, MessagePayload};
-use bs58::{decode, encode};
-use std::io::Write;
-use std::io::{Cursor, Read};
+use std::io::{Cursor, Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
 use std::vec;
+
+use bitcoin_hashes::sha256;
+use bitcoin_hashes::Hash;
+use bs58::{decode, encode};
 
 use super::message::Encoding;
 
@@ -64,8 +66,8 @@ fn receive_internal(buf: &mut [u8]) -> Result<Vec<MessagePayload>, String> {
     let command_name = String::from_utf8_lossy(&buf[4..16])
         .trim_end_matches('\0')
         .to_owned();
-    let payload_vec = &buf[16..20];
-    let payload_size = read_u32_le(payload_vec);
+    let payload_size = read_u32_le(&buf[16..20]);
+    let _checksum = sha256::Hash::hash(&buf[20..24]);
 
     // Check the magic number
     if magic_number != 0x0b110907 {
@@ -73,8 +75,10 @@ fn receive_internal(buf: &mut [u8]) -> Result<Vec<MessagePayload>, String> {
     }
     //Read payload
     let mut payload: Vec<u8> = vec![0; payload_size as usize];
-    let mut cursor = Cursor::new(&mut buf[20..]);
+
+    let mut cursor = Cursor::new(&mut buf[24..]);
     cursor.read_exact(&mut payload).unwrap();
+
     // match with the command name and create instance of the payload
     let payload = match command_name.as_str() {
         "version" => MessagePayload::Version(2), //MessagePayload::Version(0).decode(buffer) // we must a dummy valid in argument?
@@ -117,7 +121,8 @@ fn read_u32_le(bytes: &[u8]) -> u32 {
     assert_eq!(bytes.len(), 4);
 
     let mut result: u32 = 0;
-    for i in 0..3 {
+
+    for i in 0..4 {
         result |= (bytes[i] as u32) << (i * 8);
     }
     result
@@ -156,10 +161,13 @@ mod tests {
     #[test]
     fn test_read() {
         let mut mock_read_data = Vec::new();
-        mock_read_data.extend_from_slice(&0x0b110907u32.to_le_bytes()); // magic number
-        mock_read_data.extend_from_slice(&"version\0\0\0\0\0\0\0\0".as_bytes()); // command name
-        mock_read_data.extend_from_slice(&0x1u32.to_le_bytes()); // payload size
-        mock_read_data.extend_from_slice(&0x00000000u32.to_le_bytes()); // checksum
+
+        mock_read_data.extend(0x0b110907u32.to_le_bytes()); // magic number
+        mock_read_data.extend("version\0\0\0\0\0".as_bytes()); // command name
+        mock_read_data.extend(0x4u32.to_le_bytes()); // payload size
+        mock_read_data.extend(0x5df6e0e2u32.to_le_bytes()); // checksum
+
+        mock_read_data.extend(0xf0f0f000u32.to_le_bytes()); // payload
 
         let mut mock = MockTcpStream {
             read_data: mock_read_data,

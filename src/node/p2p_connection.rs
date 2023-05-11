@@ -86,7 +86,7 @@ fn receive_internal(buf: &mut [u8]) -> Result<Vec<MessagePayload>, String> {
 
     // match with the command name and create instance of the payload
     let payload = match command_name.as_str() {
-        "version" => MessagePayload::Version(2), //MessagePayload::Version(0).decode(buffer) // we must a dummy valid in argument?
+        "version" => MessagePayload::Verack, //MessagePayload::Version(0).decode(buffer) // we must a dummy valid in argument?
         "verack" => MessagePayload::Verack,
         // "ping" => MessagePayload::Ping(payload),
         // "pong" => MessagePayload::Pong(payload),

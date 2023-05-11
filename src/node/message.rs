@@ -1,4 +1,6 @@
 use std::io::Write;
+use bitcoin_hashes::sha256;
+use bitcoin_hashes::Hash;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum MessagePayload {
@@ -8,7 +10,8 @@ pub enum MessagePayload {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct MessageHeader {
-    magic_number: u32, //indicate the network type
+    magic_number: u32,
+    //indicate the network type
     command_name: [u8; 12],
     payload_size: u32,
 }
@@ -27,6 +30,7 @@ pub trait Encoding<T> {
     fn size_of(&self) -> Result<u64, String>;
     fn encode(&self, buffer: &mut [u8]) -> Result<(), String>;
     fn command_name(&self) -> Result<&str, String>;
+    fn checksum(&self) -> Result<[u8; 4], String>;
 }
 
 impl Encoding<MessageHeader> for MessageHeader {
@@ -46,14 +50,26 @@ impl Encoding<MessageHeader> for MessageHeader {
     }
 
     fn size_of(&self) -> Result<u64, String> {
-        Ok(std::mem::size_of::<MessageHeader>() as u64)
+        let size = std::mem::size_of::<MessageHeader>() as u64;
+        Ok(size + 4)
     }
     fn command_name(&self) -> Result<&str, String> {
         Ok("")
     }
+
+    fn checksum(&self) -> Result<[u8; 4], String> {
+        Ok([0xe2, 0xe0, 0xf6, 0x5d]) //0x5df6e0e2
+    }
 }
 
 impl Encoding<MessageHeader> for MessagePayload {
+    fn size_of(&self) -> Result<u64, String> {
+        match self {
+            MessagePayload::Version(_) => Ok(std::mem::size_of::<u32>() as u64),
+            MessagePayload::Verack => Ok(0),
+        }
+    }
+
     fn encode(&self, buffer: &mut [u8]) -> Result<(), String> {
         match self {
             MessagePayload::Version(version) => {
@@ -63,17 +79,23 @@ impl Encoding<MessageHeader> for MessagePayload {
         }
         Ok(())
     }
-
-    fn size_of(&self) -> Result<u64, String> {
-        match self {
-            MessagePayload::Version(_) => Ok(std::mem::size_of::<u32>() as u64),
-            MessagePayload::Verack => Ok(0),
-        }
-    }
     fn command_name(&self) -> Result<&str, String> {
         match self {
             MessagePayload::Version(_) => Ok("version"),
             MessagePayload::Verack => Ok("verack"),
+        }
+    }
+
+    fn checksum(&self) -> Result<[u8; 4], String> {
+        match self {
+            MessagePayload::Version(version) => {
+                let bytes = version.to_le_bytes();
+                let hash = sha256::Hash::hash(&bytes);
+                let mut checksum = [0u8; 4];
+                checksum.copy_from_slice(&hash[..4]);
+                Ok(checksum)
+            }
+            MessagePayload::Verack => Ok([0x5d, 0xf6, 0xe0, 0xe2]),
         }
     }
 }

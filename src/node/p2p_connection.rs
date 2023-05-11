@@ -40,7 +40,11 @@ impl P2PConnection {
 
         let mut buffer = vec![0; total_size];
         header.encode(&mut buffer[..header_size])?;
+        let payload_checksum = payload.checksum()?;
+        buffer[20..24].copy_from_slice(&payload_checksum[..]);
+        //write payload message
         payload.encode(&mut buffer[header_size..])?;
+
         self.tcp_stream
             .write(&buffer[..])
             .map_err(|e| e.to_string())?;
@@ -60,6 +64,7 @@ impl P2PConnection {
         // |payloads| (self.peer_address.clone(), payloads)
     }
 }
+
 fn receive_internal(buf: &mut [u8]) -> Result<Vec<MessagePayload>, String> {
     // Parse the header fields
     let magic_number = read_u32_le(&buf[0..4]);
@@ -130,7 +135,6 @@ fn read_u32_le(bytes: &[u8]) -> u32 {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
     use std::io;
 

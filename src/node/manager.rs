@@ -1,4 +1,4 @@
-use crate::node::message::{MessagePayload,PayloadVersion};
+use crate::node::message::{MessagePayload, PayloadVersion};
 use crate::node::p2p_connection::P2PConnection;
 use std::net::{IpAddr, TcpListener, ToSocketAddrs};
 pub struct NodeNetwork {
@@ -141,7 +141,10 @@ mod tests {
             .collect();
         node_manager.connect(first_address_from_dns.clone())?;
 
-        let payload_version_message = MessagePayload::Version(PayloadVersion::default_version(first_address_from_dns.get(0).unwrap(), &"127.0.0.1:18333".to_string()));
+        let payload_version_message = MessagePayload::Version(PayloadVersion::default_version(
+            first_address_from_dns.get(0).unwrap(),
+            &"127.0.0.1:18333".to_string(),
+        ));
         node_manager.broadcast(&payload_version_message);
 
         let received_messages = node_manager.receive_all();

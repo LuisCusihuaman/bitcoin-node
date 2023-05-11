@@ -135,7 +135,7 @@ impl PayloadVersion {
             0, // Same format as the "services" field above.
             addr_recv_ipv6_from_ipv4,
             addr_recv_port,
-            0,  //Unnamed transmitting node
+            0, //Unnamed transmitting node
             addr_trans_ipv6_from_ipv4,
             addr_recv_port,
             0, // If the nonce is 0, the nonce field is ignored.
@@ -176,7 +176,9 @@ fn ipv4_to_ipv6_format(addr_recv: &String) -> ([u8; 16], u16) {
 impl Encoding<MessageHeader> for MessagePayload {
     fn size_of(&self) -> Result<u64, String> {
         match self {
-            MessagePayload::Version(_ /*version and used for user_agent_bytes and user_agent*/) => {
+            MessagePayload::Version(
+                _, /*version and used for user_agent_bytes and user_agent*/
+            ) => {
                 let mut size = 0;
                 size += 4; // version
                 size += 8; // services
@@ -192,7 +194,7 @@ impl Encoding<MessageHeader> for MessagePayload {
                 size += 0; // "" hardcoded
                 size += 4; // start_height
                 size += 1; // relay
-            
+
                 Ok(size)
             }
             MessagePayload::Verack => Ok(0),
@@ -202,12 +204,27 @@ impl Encoding<MessageHeader> for MessagePayload {
     fn encode(&self, buffer: &mut [u8]) -> Result<(), String> {
         match self {
             MessagePayload::Version(version) => {
-                buffer[0..4].copy_from_slice(&1u32.to_le_bytes());
+
+                buffer[0..4].copy_from_slice(&version.version.to_le_bytes()); // 4 bytes
+                buffer[4..12].copy_from_slice(&version.services.to_le_bytes()); // 8 bytes
+                buffer[12..20].copy_from_slice(&version.timestamp.to_le_bytes()); // 8 bytes
+                buffer[20..28].copy_from_slice(&version.addr_recv_services.to_le_bytes()); // 8 bytes
+                buffer[28..44].copy_from_slice(&version.addr_recv_ip_address); // 16 bytes
+                buffer[44..46].copy_from_slice(&version.addr_recv_port.to_be_bytes()); // 2 bytes
+                buffer[46..54].copy_from_slice(&version.addr_trans_services.to_le_bytes()); // 8 bytes
+                buffer[54..70].copy_from_slice(&version.addr_trans_ip_address); // 16 bytes
+                buffer[70..72].copy_from_slice(&version.addr_trans_port.to_be_bytes()); // 2 bytes
+                buffer[72..80].copy_from_slice(&version.nonce.to_le_bytes()); // 8 bytes
+                // buffer[86..86].copy_from_slice(&version.user_agent_bytes.as_bytes()); // varios
+                // buffer[86..86].copy_from_slice(&version.user_agent.as_bytes()); // varios
+                buffer[80..84].copy_from_slice(&version.start_height.to_le_bytes()); // 4 bytes
+                buffer[84..85].copy_from_slice(&version.relay.to_le_bytes()); // 1 bytes
             }
             MessagePayload::Verack => {}
         }
         Ok(())
     }
+
     fn command_name(&self) -> Result<&str, String> {
         match self {
             MessagePayload::Version(_) => Ok("version"),

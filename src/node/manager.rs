@@ -21,7 +21,7 @@ impl NodeNetwork {
     pub fn receive_from_all_peers(&mut self) -> Vec<(String, Vec<MessagePayload>)> {
         self.peer_connections
             .iter_mut()
-            .map(|connection| connection.receive())
+            .map(|connection| connection.receive().unwrap())
             .collect()
     }
 }

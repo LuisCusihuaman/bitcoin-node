@@ -120,8 +120,10 @@ impl PayloadVersion {
             .as_secs();
         let user_agent = String::default();
         let user_agent_bytes = user_agent.len().to_string();
-        let addr_recv_ipv6_from_ipv4: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0, 0, 0, 0];
-        let addr_trans_ipv6_from_ipv4: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0, 0, 0, 0];
+        let addr_recv_ipv6_from_ipv4: [u8; 16] =
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0, 0, 0, 0];
+        let addr_trans_ipv6_from_ipv4: [u8; 16] =
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0, 0, 0, 0];
         let addr_recv_port = 18333;
         let addr_trans_port = 18333;
 
@@ -135,7 +137,7 @@ impl PayloadVersion {
             0, //Unnamed transmitting node
             addr_trans_ipv6_from_ipv4,
             addr_trans_port,
-            0, // If the nonce is 0, the nonce field is ignored.
+            0,                // If the nonce is 0, the nonce field is ignored.
             user_agent_bytes, // is a var int
             user_agent,
             0,
@@ -211,7 +213,7 @@ impl Encoding<MessageHeader> for MessagePayload {
                 buffer[54..70].copy_from_slice(&version.addr_trans_ip_address); // 16 bytes
                 buffer[70..72].copy_from_slice(&version.addr_trans_port.to_be_bytes()); // 2 bytes
                 buffer[72..80].copy_from_slice(&version.nonce.to_le_bytes()); // 8 bytes
-                //buffer[80..81].copy_from_slice(&version.user_agent_bytes.as_bytes()); // REVISAR VARIOS
+                                                                              //buffer[80..81].copy_from_slice(&version.user_agent_bytes.as_bytes()); // REVISAR VARIOS
                 buffer[81..85].copy_from_slice(&version.start_height.to_le_bytes()); // 4 bytes
                 buffer[85..86].copy_from_slice(&version.relay.to_le_bytes()); // 1 bytes
             }

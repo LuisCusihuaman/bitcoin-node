@@ -52,20 +52,17 @@ impl P2PConnection {
         buffer_total[24..].copy_from_slice(&buffer_payload[..]);
 
         self.tcp_stream
-            .write(&&buffer_total[..])
+            .write(&buffer_total[..])
             .map_err(|e| e.to_string())?;
         Ok(())
     }
-    pub fn receive(&mut self) -> (String, Vec<MessagePayload>) {
+    pub fn receive(&mut self) -> Result<(String, Vec<MessagePayload>), String> {
         let mut buffer = [0u8; 1000];
-        self.tcp_stream
-            .read(&mut buffer)
-            .map_err(|e| e.to_string())
-            .unwrap();
-        (
+        self.tcp_stream.read(&mut buffer).map_err(|e| e.to_string());
+        Ok((
             self.peer_address.clone(),
             receive_internal(&mut buffer).unwrap(),
-        )
+        ))
 
         // |payloads| (self.peer_address.clone(), payloads)
     }
@@ -191,10 +188,11 @@ mod tests {
     }
 
     #[test]
-    fn send_and_read() {
+    fn send_and_read() -> Result<(), String> {
         let mut conn = P2PConnection::connect(&"195.201.126.87:18333".to_string()).unwrap();
         let payload_version_message = MessagePayload::Version(PayloadVersion::default_version());
         conn.send(&payload_version_message).unwrap();
-        let received_messages: (String, Vec<MessagePayload>) = conn.receive();
+        let received_messages: (String, Vec<MessagePayload>) = conn.receive()?;
+        Ok(())
     }
 }

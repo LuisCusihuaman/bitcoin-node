@@ -32,7 +32,6 @@ pub trait Encoding<T> {
     fn size_of(&self) -> Result<u64, String>;
     fn encode(&self, buffer: &mut [u8]) -> Result<(), String>;
     fn command_name(&self) -> Result<&str, String>;
-    fn checksum(&self) -> Result<[u8; 4], String>;
 }
 
 impl Encoding<MessageHeader> for MessageHeader {
@@ -57,10 +56,6 @@ impl Encoding<MessageHeader> for MessageHeader {
     }
     fn command_name(&self) -> Result<&str, String> {
         Ok("")
-    }
-
-    fn checksum(&self) -> Result<[u8; 4], String> {
-        Ok([0xe2, 0xe0, 0xf6, 0x5d]) //0x5df6e0e2
     }
 }
 
@@ -125,8 +120,8 @@ impl PayloadVersion {
             .as_secs();
         let user_agent = String::default();
         let user_agent_bytes = user_agent.len().to_string();
-        let addr_recv_ipv6_from_ipv4: [u8; 16] = [0x0b, 0x11, 0x09, 0x07, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0, 0, 0, 0];
-        let addr_trans_ipv6_from_ipv4: [u8; 16] = [0x0b, 0x11, 0x09, 0x07, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0, 0, 0, 0];
+        let addr_recv_ipv6_from_ipv4: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0, 0, 0, 0];
+        let addr_trans_ipv6_from_ipv4: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0, 0, 0, 0];
         let addr_recv_port = 18333;
         let addr_trans_port = 18333;
 
@@ -192,7 +187,7 @@ impl Encoding<MessageHeader> for MessagePayload {
                 size += 16; // addr_trans_ip_address
                 size += 2; // addr_trans_port
                 size += 8; // nonce
-                size += 0; // user_agent_bytes hardcoded
+                size += 1; // user_agent_bytes hardcoded
                 size += 0; // "" hardcoded
                 size += 4; // start_height
                 size += 1; // relay
@@ -216,10 +211,9 @@ impl Encoding<MessageHeader> for MessagePayload {
                 buffer[54..70].copy_from_slice(&version.addr_trans_ip_address); // 16 bytes
                 buffer[70..72].copy_from_slice(&version.addr_trans_port.to_be_bytes()); // 2 bytes
                 buffer[72..80].copy_from_slice(&version.nonce.to_le_bytes()); // 8 bytes
-                // buffer[86..86].copy_from_slice(&version.user_agent_bytes.as_bytes()); // varios
-                // buffer[86..86].copy_from_slice(&version.user_agent.as_bytes()); // varios
-                buffer[80..84].copy_from_slice(&version.start_height.to_le_bytes()); // 4 bytes
-                buffer[84..85].copy_from_slice(&version.relay.to_le_bytes()); // 1 bytes
+                //buffer[80..81].copy_from_slice(&version.user_agent_bytes.as_bytes()); // REVISAR VARIOS
+                buffer[81..85].copy_from_slice(&version.start_height.to_le_bytes()); // 4 bytes
+                buffer[85..86].copy_from_slice(&version.relay.to_le_bytes()); // 1 bytes
             }
             MessagePayload::Verack => {}
         }
@@ -230,19 +224,6 @@ impl Encoding<MessageHeader> for MessagePayload {
         match self {
             MessagePayload::Version(_) => Ok("version"),
             MessagePayload::Verack => Ok("verack"),
-        }
-    }
-
-    fn checksum(&self) -> Result<[u8; 4], String> {
-        match self {
-            MessagePayload::Version(version) => {
-                let bytes = version.version.to_le_bytes();
-                let hash = sha256::Hash::hash(&bytes);
-                let mut checksum = [0u8; 4];
-                checksum.copy_from_slice(&hash[..4]);
-                Ok(checksum)
-            }
-            MessagePayload::Verack => Ok([0x5d, 0xf6, 0xe0, 0xe2]),
         }
     }
 }

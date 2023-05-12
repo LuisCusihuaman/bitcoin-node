@@ -20,9 +20,6 @@ impl P2PConnection {
         // TODO: save the peers that not pass the timeout
         let tcp_stream = TcpStream::connect_timeout(&addr.parse().unwrap(), Duration::from_secs(5))
             .map_err(|e| e.to_string())?;
-        tcp_stream
-            .set_nonblocking(true)
-            .map_err(|e| e.to_string())?;
         Ok(Self {
             peer_address: addr.clone(),
             tcp_stream,
@@ -51,9 +48,9 @@ impl P2PConnection {
         Ok(())
     }
     pub fn receive(&mut self) -> (String, Vec<MessagePayload>) {
-        let mut buf = [0u8; 24];
+        let mut buf = [0u8; 10_000];
         self.tcp_stream
-            .read_exact(&mut buf)
+            .read(&mut buf)
             .map_err(|e| e.to_string())
             .unwrap();
         (
@@ -137,6 +134,7 @@ fn read_u32_le(bytes: &[u8]) -> u32 {
 mod tests {
     use super::*;
     use std::io;
+    use crate::node::message::PayloadVersion;
 
     /// MockTcpStream es una mock que implementa los traits Read y Write, los mismos que implementa el TcpStream
     struct MockTcpStream {
@@ -181,5 +179,13 @@ mod tests {
         // only write the bytes of mock_read_data
         mock.read(&mut buffer[..]).unwrap();
         let a = receive_internal(&mut buffer).unwrap();
+    }
+
+    #[test]
+    fn send_and_read() {
+        let mut conn = P2PConnection::connect(&"195.201.126.87:18333".to_string()).unwrap();
+        let payload_version_message = MessagePayload::Version(PayloadVersion::default_version());
+        conn.send(&payload_version_message).unwrap();
+        let received_messages: (String, Vec<MessagePayload>) = conn.receive();
     }
 }

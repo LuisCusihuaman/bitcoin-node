@@ -37,7 +37,7 @@ pub trait Encoding<T> {
 
 impl Encoding<MessageHeader> for MessageHeader {
     fn encode(&self, buffer: &mut [u8]) -> Result<(), String> {
-        buffer[0..4].copy_from_slice(&self.magic_number.to_le_bytes());
+        buffer[0..4].copy_from_slice(&self.magic_number.to_be_bytes());
 
         // Write the command name as an ASCII string followed by null padding
         let command_name_bytes = self.command_name.as_ref();
@@ -118,15 +118,17 @@ impl PayloadVersion {
         }
     }
 
-    pub fn default_version(addr_recv: &String, addr_trans: &String) -> Self {
-        let (addr_recv_ipv6_from_ipv4, addr_recv_port) = ipv4_to_ipv6_format(addr_recv);
-        let (addr_trans_ipv6_from_ipv4, addr_recv_port) = ipv4_to_ipv6_format(addr_trans);
+    pub fn default_version() -> Self {
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
         let user_agent = String::default();
         let user_agent_bytes = user_agent.len().to_string();
+        let addr_recv_ipv6_from_ipv4: [u8; 16] = [0x0b, 0x11, 0x09, 0x07, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0, 0, 0, 0];
+        let addr_trans_ipv6_from_ipv4: [u8; 16] = [0x0b, 0x11, 0x09, 0x07, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0, 0, 0, 0];
+        let addr_recv_port = 18333;
+        let addr_trans_port = 18333;
 
         Self::new(
             70015, //Bitcoin Core 0.13.2 (Jan 2017)
@@ -137,7 +139,7 @@ impl PayloadVersion {
             addr_recv_port,
             0, //Unnamed transmitting node
             addr_trans_ipv6_from_ipv4,
-            addr_recv_port,
+            addr_trans_port,
             0, // If the nonce is 0, the nonce field is ignored.
             user_agent_bytes, // is a var int
             user_agent,
@@ -190,7 +192,7 @@ impl Encoding<MessageHeader> for MessagePayload {
                 size += 16; // addr_trans_ip_address
                 size += 2; // addr_trans_port
                 size += 8; // nonce
-                size += 0; // user_agent_bytes hardoded
+                size += 0; // user_agent_bytes hardcoded
                 size += 0; // "" hardcoded
                 size += 4; // start_height
                 size += 1; // relay
@@ -204,7 +206,6 @@ impl Encoding<MessageHeader> for MessagePayload {
     fn encode(&self, buffer: &mut [u8]) -> Result<(), String> {
         match self {
             MessagePayload::Version(version) => {
-
                 buffer[0..4].copy_from_slice(&version.version.to_le_bytes()); // 4 bytes
                 buffer[4..12].copy_from_slice(&version.services.to_le_bytes()); // 8 bytes
                 buffer[12..20].copy_from_slice(&version.timestamp.to_le_bytes()); // 8 bytes

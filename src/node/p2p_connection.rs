@@ -15,6 +15,11 @@ pub struct P2PConnection {
     tcp_stream: TcpStream,
 }
 
+fn double_sha256(data: &[u8]) -> sha256::Hash {
+    let hash = sha256::Hash::hash(data);
+    sha256::Hash::hash(hash.as_byte_array())
+}
+
 impl P2PConnection {
     pub fn connect(addr: &String) -> Result<Self, String> {
         // TODO: save the peers that not pass the timeout
@@ -25,7 +30,6 @@ impl P2PConnection {
             tcp_stream,
         })
     }
-
     pub fn send(&mut self, payload: &MessagePayload) -> Result<(), String> {
         let command_name_bytes = payload.command_name()?.as_bytes();
         let mut command_name = [0; 12];
@@ -35,27 +39,32 @@ impl P2PConnection {
         let header_size = header.size_of()? as usize;
         let total_size = header_size + payload_size as usize;
 
-        let mut buffer = vec![0; total_size];
-        header.encode(&mut buffer[..header_size])?;
-        let payload_checksum = payload.checksum()?;
-        buffer[20..24].copy_from_slice(&payload_checksum[..]);
-        //write payload message
-        payload.encode(&mut buffer[header_size..])?;
+        let mut buffer_total = vec![0; total_size];
+        header.encode(&mut buffer_total[..header_size])?;
+        let mut buffer_payload = vec![0; payload_size];
+        payload.encode(&mut buffer_payload[..])?;
+
+        let hash = double_sha256(&buffer_payload);
+        let mut payload_checksum: [u8; 4] = [0u8; 4];
+        payload_checksum.copy_from_slice(&hash[..4]);
+
+        buffer_total[20..24].copy_from_slice(&payload_checksum[..]);
+        buffer_total[24..].copy_from_slice(&buffer_payload[..]);
 
         self.tcp_stream
-            .write(&buffer[..])
+            .write(&&buffer_total[..])
             .map_err(|e| e.to_string())?;
         Ok(())
     }
     pub fn receive(&mut self) -> (String, Vec<MessagePayload>) {
-        let mut buf = [0u8; 10_000];
+        let mut buffer = [0u8; 1000];
         self.tcp_stream
-            .read(&mut buf)
+            .read(&mut buffer)
             .map_err(|e| e.to_string())
             .unwrap();
         (
             self.peer_address.clone(),
-            receive_internal(&mut buf).unwrap(),
+            receive_internal(&mut buffer).unwrap(),
         )
 
         // |payloads| (self.peer_address.clone(), payloads)
@@ -133,8 +142,8 @@ fn read_u32_le(bytes: &[u8]) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io;
     use crate::node::message::PayloadVersion;
+    use std::io;
 
     /// MockTcpStream es una mock que implementa los traits Read y Write, los mismos que implementa el TcpStream
     struct MockTcpStream {

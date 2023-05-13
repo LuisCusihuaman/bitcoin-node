@@ -1,4 +1,4 @@
-use crate::node::message::{MessageHeader, MessagePayload};
+use crate::node::message::{MessageHeader, MessagePayload, Encoding};
 use std::io::{Cursor, Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
@@ -8,7 +8,6 @@ use bitcoin_hashes::sha256;
 use bitcoin_hashes::Hash;
 use bs58::{decode, encode};
 
-use super::message::Encoding;
 
 pub struct P2PConnection {
     peer_address: String,
@@ -68,60 +67,25 @@ impl P2PConnection {
     }
 }
 
+fn decode_payload<T: Encoding<T>>(cmd: &String, data: &[u8]) -> Result<Option<T>, String> {
+    T::decode(cmd, &data[..]).map(|t| Some(t))
+}
+
+
 fn receive_internal(buf: &mut [u8]) -> Result<Vec<MessagePayload>, String> {
     // Parse the header fields
     let magic_number = read_u32_le(&buf[0..4]);
     let command_name = String::from_utf8_lossy(&buf[4..16])
         .trim_end_matches('\0')
         .to_owned();
-    let payload_size = read_u32_le(&buf[16..20]);
-    let _checksum = sha256::Hash::hash(&buf[20..24]);
+    let payload_size = read_u32_le(&buf[16..20]) as usize;
 
     // Check the magic number
-    if magic_number != 0x0b110907 {
+    if 118034699 != magic_number {
         return Err(format!("Invalid magic number: 0x{:08x}", magic_number));
     }
-    //Read payload
-    let mut payload: Vec<u8> = vec![0; payload_size as usize];
+    let payload = decode_payload(&command_name, &buf[24..payload_size]).unwrap().unwrap();
 
-    let mut cursor = Cursor::new(&mut buf[24..]);
-    cursor.read_exact(&mut payload).unwrap();
-
-    // match with the command name and create instance of the payload
-    let payload = match command_name.as_str() {
-        "version" => MessagePayload::Verack, //MessagePayload::Version(0).decode(buffer) // we must a dummy valid in argument?
-        "verack" => MessagePayload::Verack,
-        // "ping" => MessagePayload::Ping(payload),
-        // "pong" => MessagePayload::Pong(payload),
-        // "addr" => MessagePayload::Addr(payload),
-        // "inv" => MessagePayload::Inv(payload),
-        // "getdata" => MessagePayload::GetData(payload),
-        // "notfound" => MessagePayload::NotFound(payload),
-        // "getblocks" => MessagePayload::GetBlocks(payload),
-        // "getheaders" => MessagePayload::GetHeaders(payload),
-        // "tx" => MessagePayload::Tx(payload),
-        // "block" => MessagePayload::Block(payload),
-        // "headers" => MessagePayload::Headers(payload),
-        // "getaddr" => MessagePayload::GetAddr(payload),
-        // "mempool" => MessagePayload::Mempool(payload),
-        // "reject" => MessagePayload::Reject(payload),
-        // "sendheaders" => MessagePayload::SendHeaders(payload),
-        // "feefilter" => MessagePayload::FeeFilter(payload),
-        // "filterload" => MessagePayload::FilterLoad(payload),
-        // "filteradd" => MessagePayload::FilterAdd(payload),
-        // "filterclear" => MessagePayload::FilterClear(payload),
-        // "merkleblock" => MessagePayload::MerkleBlock(payload),
-        // "cmpctblock" => MessagePayload::CmpctBlock(payload),
-        // "getblocktxn" => MessagePayload::GetBlockTxn(payload),
-        // "blocktxn" => MessagePayload::BlockTxn(payload),
-        // "encinit" => MessagePayload::Encinit(payload),
-        // "encack" => MessagePayload::Encack(payload),
-        // "authchallenge" => MessagePayload::AuthChallenge(payload),
-        // "authreply" => MessagePayload::AuthReply(payload),
-        // "authpropose" => MessagePayload::AuthPropose(payload),
-        // "unknown" => MessagePayload::Unknown(payload),
-        _ => return Err(format!("Unknown command name: {}", command_name)),
-    };
     Ok(vec![payload])
 }
 
@@ -135,6 +99,7 @@ fn read_u32_le(bytes: &[u8]) -> u32 {
     }
     result
 }
+
 
 #[cfg(test)]
 mod tests {

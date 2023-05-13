@@ -32,9 +32,15 @@ pub trait Encoding<T> {
     fn size_of(&self) -> Result<u64, String>;
     fn encode(&self, buffer: &mut [u8]) -> Result<(), String>;
     fn command_name(&self) -> Result<&str, String>;
+    fn decode(cmd: &String, buffer: &[u8]) -> Result<T, String>;
 }
 
 impl Encoding<MessageHeader> for MessageHeader {
+    fn size_of(&self) -> Result<u64, String> {
+        let size = std::mem::size_of::<MessageHeader>() as u64;
+        Ok(size + 4)
+    }
+
     fn encode(&self, buffer: &mut [u8]) -> Result<(), String> {
         buffer[0..4].copy_from_slice(&self.magic_number.to_be_bytes());
 
@@ -49,13 +55,18 @@ impl Encoding<MessageHeader> for MessageHeader {
 
         Ok(())
     }
-
-    fn size_of(&self) -> Result<u64, String> {
-        let size = std::mem::size_of::<MessageHeader>() as u64;
-        Ok(size + 4)
-    }
     fn command_name(&self) -> Result<&str, String> {
         Ok("")
+    }
+
+    fn decode(cmd: &String, buffer: &[u8]) -> Result<Self, String> {
+        let mut buffer: [u8; 12] = [0u8; 12];
+        buffer.copy_from_slice("".as_bytes());
+        Ok(MessageHeader {
+            magic_number: 118034699,
+            command_name: buffer,
+            payload_size: 0,
+        })
     }
 }
 
@@ -172,7 +183,7 @@ fn ipv4_to_ipv6_format(addr_recv: &String) -> ([u8; 16], u16) {
     }
 }
 
-impl Encoding<MessageHeader> for MessagePayload {
+impl Encoding<MessagePayload> for MessagePayload {
     fn size_of(&self) -> Result<u64, String> {
         match self {
             MessagePayload::Version(
@@ -213,7 +224,7 @@ impl Encoding<MessageHeader> for MessagePayload {
                 buffer[54..70].copy_from_slice(&version.addr_trans_ip_address); // 16 bytes
                 buffer[70..72].copy_from_slice(&version.addr_trans_port.to_be_bytes()); // 2 bytes
                 buffer[72..80].copy_from_slice(&version.nonce.to_le_bytes()); // 8 bytes
-                                                                              //buffer[80..81].copy_from_slice(&version.user_agent_bytes.as_bytes()); // REVISAR VARIOS
+                //buffer[80..81].copy_from_slice(&version.user_agent_bytes.as_bytes()); // REVISAR VARIOS
                 buffer[81..85].copy_from_slice(&version.start_height.to_le_bytes()); // 4 bytes
                 buffer[85..86].copy_from_slice(&version.relay.to_le_bytes()); // 1 bytes
             }
@@ -228,6 +239,18 @@ impl Encoding<MessageHeader> for MessagePayload {
             MessagePayload::Verack => Ok("verack"),
         }
     }
+
+    fn decode(cmd: &String, buffer: &[u8]) -> Result<Self, String> {
+        match cmd.as_str() {
+            "version" => decode_version(buffer),
+            "verack" => Ok(MessagePayload::Verack),
+            _ => Err("Unknown command".to_string()),
+        }
+    }
+}
+
+fn decode_version(buffer: &[u8]) -> Result<MessagePayload, String> {
+    Ok(MessagePayload::Verack)
 }
 
 #[cfg(test)]

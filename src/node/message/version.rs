@@ -1,4 +1,5 @@
-use crate::node::message::{get_offset, MessagePayload, read_be, read_le};
+use crate::node::message::MessagePayload;
+use crate::utils::{read_be, read_le, get_offset};
 
 type CompactSizeUint = String;
 

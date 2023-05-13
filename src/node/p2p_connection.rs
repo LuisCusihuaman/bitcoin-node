@@ -1,4 +1,5 @@
-use crate::node::message::{MessageHeader, MessagePayload, Encoding, read_le};
+use crate::node::message::{MessageHeader, MessagePayload, Encoding};
+use crate::utils::read_le;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;

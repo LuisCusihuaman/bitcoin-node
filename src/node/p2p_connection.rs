@@ -1,12 +1,11 @@
 use crate::node::message::{MessageHeader, MessagePayload, Encoding, read_le};
-use std::io::{Cursor, Read, Write};
+use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
 use std::vec;
 
 use bitcoin_hashes::sha256;
 use bitcoin_hashes::Hash;
-use bs58::{decode, encode};
 
 
 pub struct P2PConnection {
@@ -57,7 +56,7 @@ impl P2PConnection {
     }
     pub fn receive(&mut self) -> Result<(String, MessagePayload), String> {
         let mut buffer = [0u8; 1000];
-        self.tcp_stream.read(&mut buffer).map_err(|e| e.to_string());
+        self.tcp_stream.read(&mut buffer).map_err(|e| e.to_string())?;
         Ok((
             self.peer_address.clone(),
             receive_internal(&mut buffer).unwrap(),
@@ -137,7 +136,7 @@ mod tests {
         let mut buffer = [0u8; 100];
         // only write the bytes of mock_read_data
         mock.read(&mut buffer[..]).unwrap();
-        let a = receive_internal(&mut buffer).unwrap();
+        let _ = receive_internal(&mut buffer).unwrap();
     }
 
     #[test]

@@ -1,6 +1,6 @@
 use crate::node::message::{MessagePayload, PayloadVersion};
 use crate::node::p2p_connection::P2PConnection;
-use std::net::{IpAddr, TcpListener, ToSocketAddrs};
+use std::net::{IpAddr, ToSocketAddrs};
 
 pub struct NodeNetwork {
     pub peer_connections: Vec<P2PConnection>,
@@ -146,8 +146,7 @@ mod tests {
         node_manager.broadcast(&payload_version_message);
 
         let received_messages = node_manager.receive_all();
-        let (received_peer_adress, received_payloads) = received_messages.first().unwrap();
-        // assert_eq!(received_peer_adress, first_address_from_dns.first().unwrap());
+        let (_, received_payloads) = received_messages.first().unwrap();
         assert_eq!(*received_payloads, payload_version_message);
         Ok(())
     }

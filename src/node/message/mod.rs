@@ -1,8 +1,3 @@
-use bitcoin_hashes::sha256;
-use bitcoin_hashes::Hash;
-use std::io;
-use std::io::{Write,Read};
-
 type CompactSizeUint = String;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -60,7 +55,7 @@ impl Encoding<MessageHeader> for MessageHeader {
         Ok("")
     }
 
-    fn decode(cmd: &String, buffer: &[u8]) -> Result<Self, String> {
+    fn decode(_cmd: &String, _buffer: &[u8]) -> Result<Self, String> {
         let mut buffer: [u8; 12] = [0u8; 12];
         buffer.copy_from_slice("".as_bytes());
         Ok(MessageHeader {
@@ -225,7 +220,7 @@ impl Encoding<MessagePayload> for MessagePayload {
                 buffer[54..70].copy_from_slice(&version.addr_trans_ip_address); // 16 bytes
                 buffer[70..72].copy_from_slice(&version.addr_trans_port.to_be_bytes()); // 2 bytes
                 buffer[72..80].copy_from_slice(&version.nonce.to_le_bytes()); // 8 bytes
-                                                                              //buffer[80..81].copy_from_slice(&version.user_agent_bytes.as_bytes()); // REVISAR VARIOS
+                //buffer[80..81].copy_from_slice(&version.user_agent_bytes.as_bytes()); // REVISAR VARIOS
                 buffer[81..85].copy_from_slice(&version.start_height.to_le_bytes()); // 4 bytes
                 buffer[85..86].copy_from_slice(&version.relay.to_le_bytes()); // 1 bytes
             }
@@ -251,7 +246,6 @@ impl Encoding<MessagePayload> for MessagePayload {
 }
 
 
-
 fn decode_version(buffer: &[u8]) -> Result<MessagePayload, String> {
     let mut addr_recv_ip_address: [u8; 16] = [0u8; 16];
     addr_recv_ip_address.copy_from_slice(&buffer[28..44]);
@@ -260,7 +254,7 @@ fn decode_version(buffer: &[u8]) -> Result<MessagePayload, String> {
 
     let ua_b_ffset = get_offset(&buffer[80..81]);
     let payload_size = buffer.len();
-    let version =read_le(&buffer[0..4]) as u32; // 4 bytes
+    let version = read_le(&buffer[0..4]) as u32; // 4 bytes
     let services = read_le(&buffer[4..12]) as u64; // 8 bytes
     let timestamp = read_le(&buffer[12..20]) as u64; // 8 bytes
     let addr_recv_services = read_le(&buffer[20..28]) as u64; // 8 bytes
@@ -288,20 +282,19 @@ fn decode_version(buffer: &[u8]) -> Result<MessagePayload, String> {
         user_agent_bytes.to_string(),
         user_agent,
         start_height,
-        relay
+        relay,
     );
     Ok(MessagePayload::Version(message_payload))
 }
 
 fn get_offset(buff: &[u8]) -> usize {
-
     let i: u8 = buff[0];
 
     if i == 0xfdu8 as u8 {
         2 as usize
-    } else if i == 0xfeu8 as u8{
+    } else if i == 0xfeu8 as u8 {
         4 as usize
-    } else if i == 0xffu8 as u8{
+    } else if i == 0xffu8 as u8 {
         8 as usize
     } else {
         1 as usize // EDU PROBA CON 1 XD O.o
@@ -318,7 +311,7 @@ pub fn read_le(bytes: &[u8]) -> usize {
     result
 }
 
-pub fn read_be(buffer: &[u8]) -> usize{
+pub fn read_be(buffer: &[u8]) -> usize {
     let mut result = 0;
     for i in 0..buffer.len() {
         result += (buffer[i] as usize) << (8 * (buffer.len() - i - 1));

@@ -1,4 +1,4 @@
-use crate::node::message::{MessageHeader, MessagePayload, Encoding};
+use crate::node::message::{MessageHeader, MessagePayload, Encoding, read_le};
 use std::io::{Cursor, Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
@@ -55,7 +55,7 @@ impl P2PConnection {
             .map_err(|e| e.to_string())?;
         Ok(())
     }
-    pub fn receive(&mut self) -> Result<(String, Vec<MessagePayload>), String> {
+    pub fn receive(&mut self) -> Result<(String, MessagePayload), String> {
         let mut buffer = [0u8; 1000];
         self.tcp_stream.read(&mut buffer).map_err(|e| e.to_string());
         Ok((
@@ -72,32 +72,20 @@ fn decode_payload<T: Encoding<T>>(cmd: &String, data: &[u8]) -> Result<Option<T>
 }
 
 
-fn receive_internal(buf: &mut [u8]) -> Result<Vec<MessagePayload>, String> {
+fn receive_internal(buf: &mut [u8]) -> Result<MessagePayload, String> {
     // Parse the header fields
-    let magic_number = read_u32_le(&buf[0..4]);
+    let magic_number = read_le(&buf[0..4]);
     let command_name = String::from_utf8_lossy(&buf[4..16])
-        .trim_end_matches('\0')
-        .to_owned();
-    let payload_size = read_u32_le(&buf[16..20]) as usize;
+        .trim_end_matches('\0').to_owned();
+    let payload_size = read_le(&buf[16..20]) as usize;
 
     // Check the magic number
     if 118034699 != magic_number {
         return Err(format!("Invalid magic number: 0x{:08x}", magic_number));
     }
-    let payload = decode_payload(&command_name, &buf[24..payload_size]).unwrap().unwrap();
+    let payload = decode_payload(&command_name, &buf[24..(24 + payload_size)]).unwrap().unwrap();
 
-    Ok(vec![payload])
-}
-
-fn read_u32_le(bytes: &[u8]) -> u32 {
-    assert_eq!(bytes.len(), 4);
-
-    let mut result: u32 = 0;
-
-    for i in 0..4 {
-        result |= (bytes[i] as u32) << (i * 8);
-    }
-    result
+    Ok(payload)
 }
 
 
@@ -157,7 +145,10 @@ mod tests {
         let mut conn = P2PConnection::connect(&"195.201.126.87:18333".to_string()).unwrap();
         let payload_version_message = MessagePayload::Version(PayloadVersion::default_version());
         conn.send(&payload_version_message).unwrap();
-        let received_messages: (String, Vec<MessagePayload>) = conn.receive()?;
+        let received_messages = conn.receive()?;
+        if let MessagePayload::Version(payload_version) = received_messages.1 {
+            assert_eq!(payload_version.addr_trans_port, 0 /* default_version */);
+        }
         Ok(())
     }
 }

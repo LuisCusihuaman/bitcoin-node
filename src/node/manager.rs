@@ -18,7 +18,7 @@ impl NodeNetwork {
         }
     }
 
-    pub fn receive_from_all_peers(&mut self) -> Vec<(String, Vec<MessagePayload>)> {
+    pub fn receive_from_all_peers(&mut self) -> Vec<(String, MessagePayload)> {
         self.peer_connections
             .iter_mut()
             .map(|connection| connection.receive().unwrap())
@@ -93,7 +93,7 @@ impl NodeManager {
         self.node_network.send_to_all_peers(&payload);
     }
 
-    pub fn receive_all(&mut self) -> Vec<(String, Vec<MessagePayload>)> {
+    pub fn receive_all(&mut self) -> Vec<(String, MessagePayload)> {
         self.node_network.receive_from_all_peers()
     }
 }
@@ -148,7 +148,7 @@ mod tests {
         let received_messages = node_manager.receive_all();
         let (received_peer_adress, received_payloads) = received_messages.first().unwrap();
         // assert_eq!(received_peer_adress, first_address_from_dns.first().unwrap());
-        assert_eq!(*received_payloads, vec![payload_version_message]);
+        assert_eq!(*received_payloads, payload_version_message);
         Ok(())
     }
 }

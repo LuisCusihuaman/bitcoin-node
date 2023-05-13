@@ -91,7 +91,7 @@ fn receive_internal(buf: &mut [u8]) -> Result<MessagePayload, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::node::message::PayloadVersion;
+    use crate::node::message::version::PayloadVersion;
     use std::io;
 
     /// MockTcpStream es una mock que implementa los traits Read y Write, los mismos que implementa el TcpStream
@@ -121,12 +121,10 @@ mod tests {
     #[test]
     fn test_read() {
         let mut mock_read_data = Vec::new();
-
         mock_read_data.extend(0x0b110907u32.to_le_bytes()); // magic number
         mock_read_data.extend("version\0\0\0\0\0".as_bytes()); // command name
         mock_read_data.extend(0x4u32.to_le_bytes()); // payload size
         mock_read_data.extend(0x5df6e0e2u32.to_le_bytes()); // checksum
-
         mock_read_data.extend(0xf0f0f000u32.to_le_bytes()); // payload
 
         let mut mock = MockTcpStream {

@@ -1,4 +1,5 @@
-use crate::node::message::{MessagePayload, PayloadVersion};
+use crate::node::message::{MessagePayload};
+use crate::node::message::version::PayloadVersion;
 use crate::node::p2p_connection::P2PConnection;
 use std::net::{IpAddr, ToSocketAddrs};
 

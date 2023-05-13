@@ -22,6 +22,27 @@ pub struct PayloadVersion {
 }
 
 impl PayloadVersion {
+    pub fn size(&self) -> u64 {
+        let mut size = 0;
+        size += 4; // version
+        size += 8; // services
+        size += 8; // timestamp
+        size += 8; // addr_recv_services
+        size += 16; // addr_recv_ip_address
+        size += 2; // addr_recv_port
+        size += 8; // addr_trans_services
+        size += 16; // addr_trans_ip_address
+        size += 2; // addr_trans_port
+        size += 8; // nonce
+        size += 1; // user_agent_bytes hardcoded
+        size += 0; // "" hardcoded
+        size += 4; // start_height
+        size += 1; // relay
+        size
+    }
+}
+
+impl PayloadVersion {
     pub fn encode(&self, buffer: &mut [u8]) -> Result<(), String> {
         buffer[0..4].copy_from_slice(&self.version.to_le_bytes()); // 4 bytes
         buffer[4..12].copy_from_slice(&self.services.to_le_bytes()); // 8 bytes

@@ -25,6 +25,19 @@ impl MessageHeader {
             command_name,
         }
     }
+    pub fn encode(&self, buffer: &mut [u8]) -> Result<(), String> {
+        buffer[0..4].copy_from_slice(&self.magic_number.to_be_bytes());
+
+        // Write the command name as an ASCII string followed by null padding
+        let command_name_bytes = self.command_name.as_ref();
+        //let padding_size = 12 - command_name_bytes.len();
+        buffer[4..16].copy_from_slice(command_name_bytes);
+        buffer[4 + command_name_bytes.len()..16].fill(0x00);
+
+        // Write the payload size in little-endian byte order
+        buffer[16..20].copy_from_slice(&self.payload_size.to_le_bytes());
+        Ok(())
+    }
 }
 
 pub trait Encoding<T> {
@@ -41,19 +54,9 @@ impl Encoding<MessageHeader> for MessageHeader {
     }
 
     fn encode(&self, buffer: &mut [u8]) -> Result<(), String> {
-        buffer[0..4].copy_from_slice(&self.magic_number.to_be_bytes());
-
-        // Write the command name as an ASCII string followed by null padding
-        let command_name_bytes = self.command_name.as_ref();
-        //let padding_size = 12 - command_name_bytes.len();
-        buffer[4..16].copy_from_slice(command_name_bytes);
-        buffer[4 + command_name_bytes.len()..16].fill(0x00);
-
-        // Write the payload size in little-endian byte order
-        buffer[16..20].copy_from_slice(&self.payload_size.to_le_bytes());
-
-        Ok(())
+        self.encode(buffer)
     }
+
     fn command_name(&self) -> Result<&str, String> {
         Ok("")
     }

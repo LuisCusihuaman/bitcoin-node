@@ -1,5 +1,6 @@
 use crate::node::message::version::PayloadVersion;
 use crate::node::message::version::decode_version;
+use crate::utils::read_le;
 
 pub mod version;
 
@@ -12,9 +13,9 @@ pub enum MessagePayload {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct MessageHeader {
-    magic_number: u32,
-    command_name: [u8; 12],
-    payload_size: u32,
+    pub magic_number: u32,
+    pub command_name: [u8; 12],
+    pub payload_size: u32,
 }
 
 impl MessageHeader {
@@ -61,14 +62,13 @@ impl Encoding<MessageHeader> for MessageHeader {
         Ok("")
     }
 
-    fn decode(_cmd: &String, _buffer: &[u8]) -> Result<Self, String> {
-        let mut buffer: [u8; 12] = [0u8; 12];
-        buffer.copy_from_slice("".as_bytes());
-        Ok(MessageHeader {
-            magic_number: 118034699,
-            command_name: buffer,
-            payload_size: 0,
-        })
+    fn decode(_cmd: &String, buffer: &[u8]) -> Result<Self, String> {
+        let magic_number = read_le(&buffer[0..4]) as u32;
+        let mut buff_tmp: [u8; 12] = [0u8; 12];
+        buff_tmp.copy_from_slice(&buffer[4..16]);
+        //let command_name = String::from_utf8_lossy(&buf[4..16]).trim_end_matches('\0').to_owned();
+        let payload_size = read_le(&buffer[16..20]) as u32;
+        Ok(MessageHeader { magic_number, command_name: buff_tmp, payload_size })
     }
 }
 

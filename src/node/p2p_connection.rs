@@ -67,23 +67,19 @@ impl P2PConnection {
     }
 }
 
-fn decode_payload<T: Encoding<T>>(cmd: &String, data: &[u8]) -> Result<Option<T>, String> {
+fn decode_message<T: Encoding<T>>(cmd: &String, data: &[u8]) -> Result<Option<T>, String> {
     T::decode(cmd, &data[..]).map(|t| Some(t))
 }
 
 
 fn receive_internal(buf: &mut [u8]) -> Result<MessagePayload, String> {
     // Parse the header fields
-    let magic_number = read_le(&buf[0..4]);
-    let command_name = String::from_utf8_lossy(&buf[4..16])
-        .trim_end_matches('\0').to_owned();
-    let payload_size = read_le(&buf[16..20]) as usize;
-
-    // Check the magic number
-    if 118034699 != magic_number {
-        return Err(format!("Invalid magic number: 0x{:08x}", magic_number));
+    let header: MessageHeader = decode_message(&String::default(), &buf[..24]).unwrap().unwrap();
+    if header.magic_number != 118034699 {
+        return Err(format!("Invalid magic number: 0x{:08x}", header.magic_number));
     }
-    let payload = decode_payload(&command_name, &buf[24..(24 + payload_size)]).unwrap().unwrap();
+    let command_name = String::from_utf8_lossy(&header.command_name).trim_end_matches('\0').to_owned();
+    let payload = decode_message(&command_name, &buf[24..(24 + header.payload_size as usize)]).unwrap().unwrap();
 
     Ok(payload)
 }

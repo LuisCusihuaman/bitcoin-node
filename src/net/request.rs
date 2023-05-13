@@ -52,33 +52,8 @@ fn parse_internal<T: Read + Write>(stream: T) -> Request {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
-    use std::io;
-
-    /// MockTcpStream es una mock que implementa los traits Read y Write, los mismos que implementa el TcpStream
-    struct MockTcpStream {
-        read_data: Vec<u8>,
-        write_data: Vec<u8>,
-    }
-
-    impl Read for MockTcpStream {
-        /// Lee bytes del stream hasta completar el buffer y devuelve cuantos bytes fueron leidos
-        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-            self.read_data.as_slice().read(buf)
-        }
-    }
-
-    impl Write for MockTcpStream {
-        /// Escribe el valor del buffer en el stream y devuelve cuantos bytes fueron escritos
-        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            self.write_data.write(buf)
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            self.write_data.flush()
-        }
-    }
+    use crate::utils::MockTcpStream;
 
     #[test]
     fn test_parse_with_valid_params() {

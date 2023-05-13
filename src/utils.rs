@@ -1,3 +1,6 @@
+use std::io;
+use std::io::{Read, Write};
+
 pub fn get_offset(buff: &[u8]) -> usize {
     let i: u8 = buff[0];
 
@@ -53,6 +56,31 @@ fn ipv4_to_ipv6_format(addr_recv: &String) -> ([u8; 16], u16) {
             (ipv6, port)
         }
         Err(_) => ([0u8; 16], 0),
+    }
+}
+
+
+/// MockTcpStream es una mock que implementa los traits Read y Write, los mismos que implementa el TcpStream
+pub struct MockTcpStream {
+    pub(crate) read_data: Vec<u8>,
+    pub(crate) write_data: Vec<u8>,
+}
+
+impl Read for MockTcpStream {
+    /// Lee bytes del stream hasta completar el buffer y devuelve cuantos bytes fueron leidos
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.read_data.as_slice().read(buf)
+    }
+}
+
+impl Write for MockTcpStream {
+    /// Escribe el valor del buffer en el stream y devuelve cuantos bytes fueron escritos
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.write_data.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.write_data.flush()
     }
 }
 

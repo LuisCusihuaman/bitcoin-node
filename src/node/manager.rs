@@ -7,6 +7,7 @@ use crate::net::request::Request;
 use crate::net::response::Response;
 use crate::net::router::Router;
 use crate::net::server::Server;
+use crate::node::message::version::PayloadVersion;
 
 pub struct NodeNetwork {
     pub peer_connections: Vec<P2PConnection>,
@@ -38,27 +39,31 @@ pub struct NodeManager {
 }
 
 impl NodeManager {
-    pub fn run(&mut self) -> Result<(), String> {
-        thread::spawn(move || {
-            let mut router = Router::new();
-            router.branch("/ping", |_req: Request| -> Response {
-                let balance = self.get_balance();
-                Response::json(String::from("pong, balance is: ") + &balance.to_string())
-            });
-            Server::new(router).run("127.0.0.1:8080").unwrap();
-        });
-        thread::sleep(Duration::from_millis(500));
+    pub fn wait_for(&self, p0: Vec<MessagePayload>) -> {
+        todo!()
+    }
+}
 
+impl NodeManager {
+}
+
+impl NodeManager {
+
+}
+
+impl NodeManager {
+    pub fn run(&mut self) -> Result<(), String> {
         loop {
             let received_messages = self.node_network.receive_from_all_peers();
             for (peer_address, message) in received_messages {
-                println!("Received message from peer {}: {:?}", peer_address, message);
+                match message {
+                    MessagePayload::Verack => {
+                        println!("Received verack from {}", peer_address);
+                    }
+                    _ => {}
+                }
             }
         }
-    }
-    fn get_balance(&mut self) -> u64 {
-        self.broadcast(&MessagePayload::Verack);
-        123
     }
 }
 

@@ -1,7 +1,8 @@
 use crate::net::request::Request;
 use crate::net::response::Response;
+use crate::node::manager::NodeManager;
 
-pub type Handler = fn(Request) -> Response;
+pub type Handler = fn(&mut NodeManager, Request) -> Response;
 
 pub struct Route {
     pub pattern: String,
@@ -32,7 +33,6 @@ impl Router {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
 
     fn hand_balance(_req: Request) -> Response {

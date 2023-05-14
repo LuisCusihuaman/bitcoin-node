@@ -14,8 +14,7 @@ pub struct Server {
 fn handler_handshake(node_manager: &mut NodeManager, req: Request) -> Response {
     let payload_version_message = MessagePayload::Version(PayloadVersion::default_version());
     node_manager.broadcast(&payload_version_message);
-    node_manager.wait_for(vec![MessagePayload::Verack])
-    let balance = node_manager.get_initial_nodes();
+    let _ = node_manager.wait_for(vec!["verack"]);
     Response::json(String::from("pong"))
 }
 
@@ -38,7 +37,6 @@ impl Server {
         self.node_manager.connect(
             node_network_ips.iter()
                 .map(|ip| format!("{}:18333", ip))
-                .take(1)
                 .collect()
         )?;
         //self.node_manager.handshake();

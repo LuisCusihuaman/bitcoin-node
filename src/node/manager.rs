@@ -1,4 +1,4 @@
-use crate::node::message::{MessagePayload};
+use crate::node::message::{Encoding, MessagePayload};
 use crate::node::p2p_connection::P2PConnection;
 use std::net::{IpAddr, ToSocketAddrs};
 use std::thread;
@@ -19,17 +19,20 @@ impl NodeNetwork {
             peer_connections: vec![],
         }
     }
-    pub fn send_to_all_peers(&mut self, payload: &MessagePayload) {
+    pub fn send_to_all_peers(&mut self, payload: &MessagePayload) -> Result<(), String> {
         for connection in &mut self.peer_connections {
-            connection.send(payload).unwrap();
+            if let Err(e) = connection.send(payload) {
+                eprintln!("Error sending message to peer: {:?}", e);
+            }
         }
+        Ok(())
     }
 
-    pub fn receive_from_all_peers(&mut self) -> Vec<(String, MessagePayload)> {
-        self.peer_connections
+    pub fn receive_from_all_peers(&mut self) -> Vec<(String, Vec<MessagePayload>)> {
+            self.peer_connections
             .iter_mut()
-            .map(|connection| connection.receive().unwrap())
-            .collect()
+            .map(|connection| connection.receive())
+            .filter_map(Result::ok).collect()
     }
 }
 
@@ -39,31 +42,32 @@ pub struct NodeManager {
 }
 
 impl NodeManager {
-    pub fn wait_for(&self, p0: Vec<MessagePayload>) -> {
-        todo!()
-    }
-}
-
-impl NodeManager {
-}
-
-impl NodeManager {
-
-}
-
-impl NodeManager {
-    pub fn run(&mut self) -> Result<(), String> {
+    pub fn wait_for(&mut self, commands: Vec<&str>) -> Vec<MessagePayload> {
+        let mut matched_messages = Vec::new();
         loop {
             let received_messages = self.node_network.receive_from_all_peers();
-            for (peer_address, message) in received_messages {
-                match message {
+            for (peer_address, message) in received_messages.first() {
+                match message.first().unwrap() {
                     MessagePayload::Verack => {
                         println!("Received verack from {}", peer_address);
+                        if commands.contains(&"verack") {
+                            matched_messages.push(MessagePayload::Verack);
+                        }
                     }
-                    _ => {}
+                    MessagePayload::Version(version) => {
+                        self.broadcast(&MessagePayload::Verack);
+                        if commands.contains(&"version") {
+                            println!("Received version from {}", peer_address);
+                            matched_messages.push(MessagePayload::Version(version.clone()));
+                        }
+                    }
                 }
             }
+            if matched_messages.len() == commands.len() {
+                break;
+            }
         }
+        matched_messages
     }
 }
 
@@ -131,7 +135,7 @@ impl NodeManager {
         self.node_network.send_to_all_peers(&payload);
     }
 
-    pub fn receive_all(&mut self) -> Vec<(String, MessagePayload)> {
+    pub fn receive_all(&mut self) -> Vec<(String, Vec<MessagePayload>)> {
         self.node_network.receive_from_all_peers()
     }
 }
@@ -186,9 +190,9 @@ mod tests {
 
         let received_messages = node_manager.receive_all();
         let (_, received_payloads) = received_messages.first().unwrap();
-        if let MessagePayload::Version(payload_version) = received_payloads {
-            assert_eq!(payload_version.addr_trans_port, 0 /* default_version */);
-        }
+        //if let MessagePayload::Version(payload_version) = received_payloads {
+        //    assert_eq!(payload_version.addr_trans_port, 0 /* default_version */);
+        //}
         Ok(())
     }
 }

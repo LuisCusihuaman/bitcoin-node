@@ -102,7 +102,7 @@ impl Encoding<MessagePayload> for MessagePayload {
         match cmd.as_str() {
             "version" => decode_version(buffer),
             "verack" => Ok(MessagePayload::Verack),
-            _ => Err("Unknown command".to_string()),
+            _ => Err("Unknown command: ".to_owned() + cmd),
         }
     }
 }

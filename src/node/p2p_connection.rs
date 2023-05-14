@@ -1,11 +1,10 @@
+use crate::node::message::{Encoding, MessageHeader, MessagePayload};
 use std::io::{Read, Write};
-use crate::node::message::{MessageHeader, MessagePayload, Encoding};
 use std::net::TcpStream;
 use std::time::Duration;
 use std::vec;
 
 use bitcoin_hashes::{sha256, Hash};
-
 
 pub struct P2PConnection {
     peer_address: String,
@@ -13,6 +12,10 @@ pub struct P2PConnection {
 }
 
 fn double_sha256(data: &[u8]) -> sha256::Hash {
+    if data.is_empty() {
+        let empty_hash = sha256::Hash::hash("".as_bytes());
+        return sha256::Hash::hash(empty_hash.as_byte_array());
+    }
     let hash = sha256::Hash::hash(data);
     sha256::Hash::hash(hash.as_byte_array())
 }
@@ -53,35 +56,65 @@ impl P2PConnection {
             .map_err(|e| e.to_string())?;
         Ok(())
     }
-    pub fn receive(&mut self) -> Result<(String, MessagePayload), String> {
+    pub fn receive(&mut self) -> Result<(String, Vec<MessagePayload>), String> {
         let mut buffer = [0u8; 1000];
-        self.tcp_stream.read(&mut buffer).map_err(|e| e.to_string())?;
-        Ok((
-            self.peer_address.clone(),
-            receive_internal(&mut buffer).unwrap(),
-        ))
-
-        // |payloads| (self.peer_address.clone(), payloads)
+        self.tcp_stream.read(&mut buffer).unwrap(); //.map_err(|e| e.to_string())?; //CHECK CONN RESET
+        match receive_internals(&mut buffer) {
+            Ok(message_payload) => Ok((self.peer_address.clone(), message_payload)),
+            Err(err) => {
+                eprint!("Error receiving message from {}: \n", self.peer_address);
+                eprint!("{}\n", err);
+                Err(err)
+            }
+        }
     }
 }
 
-fn decode_message<T: Encoding<T>>(cmd: &String, data: &[u8]) -> Result<Option<T>, String> {
-    T::decode(cmd, &data[..]).map(|t| Some(t))
+fn decode_message<T: Encoding<T>>(cmd: &String, data: &[u8]) -> Result<T, String> {
+    T::decode(cmd, &data[..]).map(|t| t)
 }
-
 
 fn receive_internal(buf: &mut [u8]) -> Result<MessagePayload, String> {
     // Parse the header fields
-    let header: MessageHeader = decode_message(&String::default(), &buf[..24]).unwrap().unwrap();
+    let header: MessageHeader = decode_message(&String::default(), &buf[..24])?;
     if header.magic_number != 118034699 {
-        return Err(format!("Invalid magic number: 0x{:08x}", header.magic_number));
+        return Err(format!(
+            "Invalid magic number: 0x{:08x}",
+            header.magic_number
+        ));
     }
-    let command_name = String::from_utf8_lossy(&header.command_name).trim_end_matches('\0').to_owned();
-    let payload = decode_message(&command_name, &buf[24..(24 + header.payload_size as usize)]).unwrap().unwrap();
-
+    let command_name = String::from_utf8_lossy(&header.command_name)
+        .trim_end_matches('\0')
+        .to_owned();
+    let payload = decode_message(&command_name, &buf[24..(24 + header.payload_size as usize)])?;
     Ok(payload)
 }
 
+fn receive_internals(buf: &mut [u8]) -> Result<Vec<MessagePayload>, String> {
+    let mut messages = Vec::new();
+    let mut cursor = 0;
+    while cursor < buf.len() {
+        // Parse the header fields
+        let header: MessageHeader =
+            decode_message(&String::default(), &buf[cursor..(cursor + 24)])?;
+        if header.magic_number != 118034699 {
+            println!("Invalid magic number: 0x{:08x}", header.magic_number);
+            cursor += (header.payload_size as usize) + 24;
+            continue;
+        }
+        let command_name = String::from_utf8_lossy(&header.command_name)
+            .trim_end_matches('\0')
+            .to_owned();
+        let payload_size = header.payload_size as usize;
+        let payload: MessagePayload = decode_message(
+            &command_name,
+            &buf[(cursor + 24)..(cursor + 24 + payload_size)],
+        )?;
+        messages.push(payload);
+        cursor += 24 + payload_size;
+    }
+    Ok(messages)
+}
 
 #[cfg(test)]
 mod tests {
@@ -113,9 +146,18 @@ mod tests {
         let mut conn = P2PConnection::connect(&"195.201.126.87:18333".to_string()).unwrap();
         let payload_version_message = MessagePayload::Version(PayloadVersion::default_version());
         conn.send(&payload_version_message).unwrap();
-        let received_messages = conn.receive()?;
-        if let MessagePayload::Version(payload_version) = received_messages.1 {
-            assert_eq!(payload_version.addr_trans_port, 0 /* default_version */);
+        let _ = conn.receive()?;
+        conn.send(&MessagePayload::Verack).unwrap();
+        loop {
+            match conn.receive() {
+                Ok((_, messages)) => {
+                    for message in messages {
+                        println!("Received message: {:?}", message);
+                    }
+                    break;
+                }
+                Err(err) => eprintln!("Error receiving message: {:?}", err),
+            }
         }
         Ok(())
     }

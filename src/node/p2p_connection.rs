@@ -4,8 +4,7 @@ use std::net::TcpStream;
 use std::time::Duration;
 use std::vec;
 
-use bitcoin_hashes::sha256;
-use bitcoin_hashes::Hash;
+use bitcoin_hashes::{sha256, Hash};
 
 
 pub struct P2PConnection {

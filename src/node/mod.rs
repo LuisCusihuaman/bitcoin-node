@@ -1,3 +1,4 @@
 pub mod manager;
 mod p2p_connection;
-mod message;
+pub mod message;
+//mod main;

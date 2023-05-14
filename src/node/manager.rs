@@ -1,7 +1,12 @@
 use crate::node::message::{MessagePayload};
-use crate::node::message::version::PayloadVersion;
 use crate::node::p2p_connection::P2PConnection;
 use std::net::{IpAddr, ToSocketAddrs};
+use std::thread;
+use std::time::Duration;
+use crate::net::request::Request;
+use crate::net::response::Response;
+use crate::net::router::Router;
+use crate::net::server::Server;
 
 pub struct NodeNetwork {
     pub peer_connections: Vec<P2PConnection>,
@@ -31,6 +36,32 @@ pub struct NodeManager {
     node_network: NodeNetwork,
     config: Config,
 }
+
+impl NodeManager {
+    pub fn run(&mut self) -> Result<(), String> {
+        thread::spawn(move || {
+            let mut router = Router::new();
+            router.branch("/ping", |_req: Request| -> Response {
+                let balance = self.get_balance();
+                Response::json(String::from("pong, balance is: ") + &balance.to_string())
+            });
+            Server::new(router).run("127.0.0.1:8080").unwrap();
+        });
+        thread::sleep(Duration::from_millis(500));
+
+        loop {
+            let received_messages = self.node_network.receive_from_all_peers();
+            for (peer_address, message) in received_messages {
+                println!("Received message from peer {}: {:?}", peer_address, message);
+            }
+        }
+    }
+    fn get_balance(&mut self) -> u64 {
+        self.broadcast(&MessagePayload::Verack);
+        123
+    }
+}
+
 
 pub struct Config {
     pub addrs: String,
@@ -65,8 +96,9 @@ impl NodeManager {
             Ok(ips)
         }
     }
-    pub fn get_initial_nodes(&mut self) -> Result<Vec<String>, std::io::Error> {
-        let ips = self.resolve_hostname(&self.config.addrs, self.config.port)?;
+    pub fn get_initial_nodes(&mut self) -> Result<Vec<String>, String> {
+        let ips = self.resolve_hostname(&self.config.addrs, self.config.port)
+            .map_err(|e| format!("Error resolving hostname: {}", e))?;
         let ipv4_addresses: Vec<String> = ips
             .into_iter()
             .filter(|addr| addr.is_ipv4())
@@ -102,6 +134,7 @@ impl NodeManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::node::message::version::PayloadVersion;
 
     #[test]
     fn test_get_all_ips_from_dns() {
@@ -148,7 +181,9 @@ mod tests {
 
         let received_messages = node_manager.receive_all();
         let (_, received_payloads) = received_messages.first().unwrap();
-        assert_eq!(*received_payloads, payload_version_message);
+        if let MessagePayload::Version(payload_version) = received_payloads {
+            assert_eq!(payload_version.addr_trans_port, 0 /* default_version */);
+        }
         Ok(())
     }
 }

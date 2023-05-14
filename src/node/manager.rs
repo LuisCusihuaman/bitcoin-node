@@ -1,13 +1,13 @@
-use crate::node::message::{Encoding, MessagePayload};
-use crate::node::p2p_connection::P2PConnection;
-use std::net::{IpAddr, ToSocketAddrs};
-use std::thread;
-use std::time::Duration;
 use crate::net::request::Request;
 use crate::net::response::Response;
 use crate::net::router::Router;
 use crate::net::server::Server;
 use crate::node::message::version::PayloadVersion;
+use crate::node::message::{Encoding, MessagePayload};
+use crate::node::p2p_connection::P2PConnection;
+use std::net::{IpAddr, ToSocketAddrs};
+use std::thread;
+use std::time::Duration;
 
 pub struct NodeNetwork {
     pub peer_connections: Vec<P2PConnection>,
@@ -29,10 +29,10 @@ impl NodeNetwork {
     }
 
     pub fn receive_from_all_peers(&mut self) -> Vec<(String, Vec<MessagePayload>)> {
-            self.peer_connections
+        self.peer_connections
             .iter_mut()
             .map(|connection| connection.receive())
-            .filter_map(Result::ok).collect()
+            .collect()
     }
 }
 
@@ -71,7 +71,6 @@ impl NodeManager {
     }
 }
 
-
 pub struct Config {
     pub addrs: String,
     pub port: u16,
@@ -106,7 +105,8 @@ impl NodeManager {
         }
     }
     pub fn get_initial_nodes(&mut self) -> Result<Vec<String>, String> {
-        let ips = self.resolve_hostname(&self.config.addrs, self.config.port)
+        let ips = self
+            .resolve_hostname(&self.config.addrs, self.config.port)
             .map_err(|e| format!("Error resolving hostname: {}", e))?;
         let ipv4_addresses: Vec<String> = ips
             .into_iter()

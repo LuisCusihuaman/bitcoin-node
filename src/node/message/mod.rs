@@ -1,9 +1,8 @@
-use crate::node::message::version::PayloadVersion;
 use crate::node::message::version::decode_version;
+use crate::node::message::version::PayloadVersion;
 use crate::utils::read_le;
 
 pub mod version;
-
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum MessagePayload {
@@ -68,10 +67,13 @@ impl Encoding<MessageHeader> for MessageHeader {
         buff_tmp.copy_from_slice(&buffer[4..16]);
         //let command_name = String::from_utf8_lossy(&buf[4..16]).trim_end_matches('\0').to_owned();
         let payload_size = read_le(&buffer[16..20]) as u32;
-        Ok(MessageHeader { magic_number, command_name: buff_tmp, payload_size })
+        Ok(MessageHeader {
+            magic_number,
+            command_name: buff_tmp,
+            payload_size,
+        })
     }
 }
-
 
 impl Encoding<MessagePayload> for MessagePayload {
     fn size_of(&self) -> Result<u64, String> {
@@ -106,5 +108,3 @@ impl Encoding<MessagePayload> for MessagePayload {
         }
     }
 }
-
-

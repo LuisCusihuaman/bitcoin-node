@@ -56,17 +56,11 @@ impl P2PConnection {
             .map_err(|e| e.to_string())?;
         Ok(())
     }
-    pub fn receive(&mut self) -> Result<(String, Vec<MessagePayload>), String> {
+    pub fn receive(&mut self) -> (String, Vec<MessagePayload>) {
         let mut buffer = [0u8; 1000];
         self.tcp_stream.read(&mut buffer).unwrap(); //.map_err(|e| e.to_string())?; //CHECK CONN RESET
-        match receive_internals(&mut buffer) {
-            Ok(message_payload) => Ok((self.peer_address.clone(), message_payload)),
-            Err(err) => {
-                eprint!("Error receiving message from {}: \n", self.peer_address);
-                eprint!("{}\n", err);
-                Err(err)
-            }
-        }
+        let messages = receive_internals(&mut buffer);
+        (self.peer_address.clone(), messages)
     }
 }
 
@@ -90,30 +84,42 @@ fn receive_internal(buf: &mut [u8]) -> Result<MessagePayload, String> {
     Ok(payload)
 }
 
-fn receive_internals(buf: &mut [u8]) -> Result<Vec<MessagePayload>, String> {
+fn receive_internals(buf: &mut [u8]) -> Vec<MessagePayload> {
     let mut messages = Vec::new();
     let mut cursor = 0;
     while cursor < buf.len() {
         // Parse the header fields
         let header: MessageHeader =
-            decode_message(&String::default(), &buf[cursor..(cursor + 24)])?;
+            match decode_message(&String::default(), &buf[cursor..(cursor + 24)]) {
+                Ok(header) => header,
+                Err(_err) => continue,
+            };
+
         if header.magic_number != 118034699 {
             println!("Invalid magic number: 0x{:08x}", header.magic_number);
             cursor += (header.payload_size as usize) + 24;
-            continue;
+            break;
         }
         let command_name = String::from_utf8_lossy(&header.command_name)
             .trim_end_matches('\0')
             .to_owned();
         let payload_size = header.payload_size as usize;
-        let payload: MessagePayload = decode_message(
+
+        match decode_message(
             &command_name,
             &buf[(cursor + 24)..(cursor + 24 + payload_size)],
-        )?;
-        messages.push(payload);
+        ) {
+            Ok(payload) => {
+                messages.push(payload);
+            }
+            Err(err) => {
+                println!("Error decoding message: {}", err);
+            }
+        }
         cursor += 24 + payload_size;
     }
-    Ok(messages)
+
+    messages
 }
 
 #[cfg(test)]
@@ -121,6 +127,7 @@ mod tests {
     use super::*;
     use crate::node::message::version::PayloadVersion;
     use crate::utils::MockTcpStream;
+    use std::thread;
 
     #[test]
     fn test_read() {
@@ -146,19 +153,17 @@ mod tests {
         let mut conn = P2PConnection::connect(&"195.201.126.87:18333".to_string()).unwrap();
         let payload_version_message = MessagePayload::Version(PayloadVersion::default_version());
         conn.send(&payload_version_message).unwrap();
-        let _ = conn.receive()?;
         conn.send(&MessagePayload::Verack).unwrap();
-        loop {
-            match conn.receive() {
-                Ok((_, messages)) => {
-                    for message in messages {
-                        println!("Received message: {:?}", message);
-                    }
-                    break;
-                }
-                Err(err) => eprintln!("Error receiving message: {:?}", err),
-            }
+
+        thread::sleep(Duration::from_secs(1));
+
+        let (_, messages) = conn.receive();
+
+        for message in messages.iter() {
+            println!("Received message: {:?}", message.command_name()?);
         }
+
+        assert_ne!(messages.len(), 0);
         Ok(())
     }
 }

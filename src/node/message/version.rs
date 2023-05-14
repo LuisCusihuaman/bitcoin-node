@@ -1,5 +1,5 @@
 use crate::node::message::MessagePayload;
-use crate::utils::{read_be, read_le, get_offset};
+use crate::utils::{get_offset, read_be, read_le};
 
 type CompactSizeUint = String;
 
@@ -54,7 +54,7 @@ impl PayloadVersion {
         buffer[54..70].copy_from_slice(&self.addr_trans_ip_address); // 16 bytes
         buffer[70..72].copy_from_slice(&self.addr_trans_port.to_be_bytes()); // 2 bytes
         buffer[72..80].copy_from_slice(&self.nonce.to_le_bytes()); // 8 bytes
-        //buffer[80..81].copy_from_slice(&version.user_agent_bytes.as_bytes()); // REVISAR VARIOS
+                                                                   //buffer[80..81].copy_from_slice(&version.user_agent_bytes.as_bytes()); // REVISAR VARIOS
         buffer[81..85].copy_from_slice(&self.start_height.to_le_bytes()); // 4 bytes
         buffer[85..86].copy_from_slice(&self.relay.to_le_bytes()); // 1 bytes
         Ok(())
@@ -146,10 +146,11 @@ pub fn decode_version(buffer: &[u8]) -> Result<MessagePayload, String> {
     let addr_trans_port = read_be(&buffer[70..72]) as u16; // 2 bytes
     let nonce = read_le(&buffer[72..80]) as u64; //  8 bytes // HASTA ACA ES FIJO
     let user_agent_bytes = read_le(&buffer[80..(80 + ua_b_ffset)]);
-    let user_agent = String::from_utf8(buffer[(80 + ua_b_ffset)..(80 + ua_b_ffset + user_agent_bytes)].to_vec()).unwrap();
+    let user_agent =
+        String::from_utf8(buffer[(80 + ua_b_ffset)..(80 + ua_b_ffset + user_agent_bytes)].to_vec())
+            .unwrap();
     let start_height = read_le(&buffer[(payload_size - 5)..(payload_size - 1)]) as u32;
     let relay = read_le(&buffer[(payload_size - 1)..payload_size]) as u8;
-
 
     let message_payload = PayloadVersion::new(
         version,

@@ -4,7 +4,6 @@ use app::net::router::Router;
 use app::net::server::Server;
 use app::node::manager::{Config, NodeManager};
 
-
 fn main() {
     let mut router = Router::new();
     let mut server = Server::new(router);

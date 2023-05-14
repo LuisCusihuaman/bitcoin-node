@@ -1,10 +1,10 @@
 use crate::net::request::Request;
-use crate::net::router::{Handler, Router};
-use std::net::{TcpListener, TcpStream};
 use crate::net::response::Response;
+use crate::net::router::{Handler, Router};
 use crate::node::manager::{Config, NodeManager};
-use crate::node::message::MessagePayload;
 use crate::node::message::version::PayloadVersion;
+use crate::node::message::MessagePayload;
+use std::net::{TcpListener, TcpStream};
 
 pub struct Server {
     router: Router,
@@ -35,9 +35,10 @@ impl Server {
 
         let node_network_ips = self.node_manager.get_initial_nodes()?;
         self.node_manager.connect(
-            node_network_ips.iter()
+            node_network_ips
+                .iter()
                 .map(|ip| format!("{}:18333", ip))
-                .collect()
+                .collect(),
         )?;
         //self.node_manager.handshake();
         println!("Listening to {}", addr);

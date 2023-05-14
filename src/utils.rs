@@ -33,7 +33,6 @@ pub fn read_be(buffer: &[u8]) -> usize {
     result
 }
 
-
 /// MockTcpStream es una mock que implementa los traits Read y Write, los mismos que implementa el TcpStream
 pub struct MockTcpStream {
     pub(crate) read_data: Vec<u8>,
@@ -57,4 +56,3 @@ impl Write for MockTcpStream {
         self.write_data.flush()
     }
 }
-

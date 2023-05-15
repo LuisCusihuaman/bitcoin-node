@@ -11,13 +11,6 @@ pub struct Server {
     node_manager: NodeManager,
 }
 
-fn handler_handshake(node_manager: &mut NodeManager, req: Request) -> Response {
-    let payload_version_message = MessagePayload::Version(PayloadVersion::default_version());
-    node_manager.broadcast(&payload_version_message);
-    let _ = node_manager.wait_for(vec!["verack"]);
-    Response::json(String::from("pong"))
-}
-
 impl Server {
     pub fn new(router: Router) -> Server {
         Server {
@@ -31,21 +24,20 @@ impl Server {
 
     pub fn run(&mut self, addr: &str) -> Result<(), String> {
         let listener = TcpListener::bind(addr).unwrap();
-        self.router.branch("/balance", handler_handshake);
-
         let node_network_ips = self.node_manager.get_initial_nodes()?;
         self.node_manager.connect(
             node_network_ips
                 .iter()
                 .map(|ip| format!("{}:18333", ip))
+                .take(1)
                 .collect(),
         )?;
-        //self.node_manager.handshake();
+        self.node_manager.handshake();
         println!("Listening to {}", addr);
+        //here can trigger another thread with a loop to receive all messages for keep connection alive with other nodes
         let connection = listener.accept().map_err(|e| e.to_string())?;
         let mut client_stream: TcpStream = connection.0;
         self.handle(&mut client_stream);
-
         Ok(())
     }
 

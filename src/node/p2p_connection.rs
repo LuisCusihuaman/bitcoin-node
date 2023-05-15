@@ -7,8 +7,15 @@ use std::vec;
 use bitcoin_hashes::{sha256, Hash};
 
 pub struct P2PConnection {
-    peer_address: String,
+    pub handshaked: bool,
+    pub(crate) peer_address: String,
     tcp_stream: TcpStream,
+}
+
+impl P2PConnection {
+    pub fn done_the_handshake(&mut self) {
+        self.handshaked = true;
+    }
 }
 
 fn double_sha256(data: &[u8]) -> sha256::Hash {
@@ -26,6 +33,7 @@ impl P2PConnection {
         let tcp_stream = TcpStream::connect_timeout(&addr.parse().unwrap(), Duration::from_secs(5))
             .map_err(|e| e.to_string())?;
         Ok(Self {
+            handshaked: false,
             peer_address: addr.clone(),
             tcp_stream,
         })

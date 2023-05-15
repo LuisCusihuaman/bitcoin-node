@@ -7,11 +7,27 @@ use crate::node::message::{Encoding, MessagePayload};
 use crate::node::p2p_connection::P2PConnection;
 use std::net::{IpAddr, ToSocketAddrs};
 use std::thread;
+use std::thread::Thread;
 use std::time::Duration;
 
 pub struct NodeNetwork {
     pub peer_connections: Vec<P2PConnection>,
 }
+
+impl NodeNetwork {
+    pub fn handshake_complete(&mut self, peer_address: &String) {
+        println!("Handshake complete with peer: {}", peer_address);
+        // added handshaked attribute of P2PConnection turned into true, filter first by peer_address
+        if let Some(peer_connection) = self
+            .peer_connections
+            .iter_mut()
+            .find(|connection| connection.peer_address == *peer_address)
+        {
+            peer_connection.done_the_handshake();
+        }
+    }
+}
+
 
 impl NodeNetwork {
     pub fn new() -> NodeNetwork {
@@ -29,6 +45,7 @@ impl NodeNetwork {
     }
 
     pub fn receive_from_all_peers(&mut self) -> Vec<(String, Vec<MessagePayload>)> {
+        thread::sleep(Duration::from_millis(500));
         self.peer_connections
             .iter_mut()
             .map(|connection| connection.receive())
@@ -42,23 +59,31 @@ pub struct NodeManager {
 }
 
 impl NodeManager {
+    pub fn handshake(&mut self) {
+        let payload_version_message = MessagePayload::Version(PayloadVersion::default_version());
+        self.broadcast(&payload_version_message);
+        self.wait_for(vec!["version", "verack"]);
+    }
+}
+
+impl NodeManager {
     pub fn wait_for(&mut self, commands: Vec<&str>) -> Vec<MessagePayload> {
         let mut matched_messages = Vec::new();
-        
         let received_messages = self.node_network.receive_from_all_peers();
         let (peer_address, messages_from_first_peer) = received_messages.first().unwrap();
-        for message in messages_from_first_peer{
+        for message in messages_from_first_peer {
             match message {
                 MessagePayload::Verack => {
                     println!("Received verack from {}", peer_address);
+                    self.node_network.handshake_complete(peer_address);
                     if commands.contains(&"verack") {
                         matched_messages.push(MessagePayload::Verack);
                     }
                 }
                 MessagePayload::Version(version) => {
                     self.broadcast(&MessagePayload::Verack);
+                    println!("Received version from {}", peer_address);
                     if commands.contains(&"version") {
-                        println!("Received version from {}", peer_address);
                         matched_messages.push(MessagePayload::Version(version.clone()));
                     }
                 }

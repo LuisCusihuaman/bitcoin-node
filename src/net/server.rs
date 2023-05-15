@@ -1,3 +1,4 @@
+use crate::logger::Logger;
 use crate::net::request::Request;
 use crate::net::response::Response;
 use crate::net::router::{Handler, Router};
@@ -5,8 +6,6 @@ use crate::node::manager::{Config, NodeManager};
 use crate::node::message::version::PayloadVersion;
 use crate::node::message::MessagePayload;
 use std::net::{TcpListener, TcpStream};
-use crate::logger::Logger;
-
 
 pub struct Server<'a> {
     router: Router,
@@ -19,10 +18,13 @@ impl Server<'_> {
         Server {
             router,
             logger,
-            node_manager: NodeManager::new(Config {
-                addrs: "seed.testnet.bitcoin.sprovoost.nl".to_string(),
-                port: 80,
-            }, logger),
+            node_manager: NodeManager::new(
+                Config {
+                    addrs: "seed.testnet.bitcoin.sprovoost.nl".to_string(),
+                    port: 80,
+                },
+                logger,
+            ),
         }
     }
 

@@ -1,6 +1,6 @@
+use bitcoin_hashes::{sha256, Hash};
 use std::io;
 use std::io::{Read, Write};
-use bitcoin_hashes::{sha256, Hash};
 
 pub fn get_offset(buff: &[u8]) -> usize {
     let i: u8 = buff[0];
@@ -12,7 +12,7 @@ pub fn get_offset(buff: &[u8]) -> usize {
     } else if i == 0xffu8 as u8 {
         8 as usize
     } else {
-        1 as usize // EDU PROBA CON 1 XD O.o
+        1 as usize
     }
 }
 
@@ -43,7 +43,6 @@ pub fn double_sha256(data: &[u8]) -> sha256::Hash {
     sha256::Hash::hash(hash.as_byte_array())
 }
 
-
 pub fn copy_bytes_to_array(source: &[u8], target: &mut [u8]) {
     target.copy_from_slice(source);
 }
@@ -69,25 +68,28 @@ pub fn read_string(buffer: &[u8], offset: usize, length: usize) -> String {
     String::from_utf8(buffer[offset..offset + length].to_vec()).unwrap()
 }
 
-
 pub fn read_varint<R: Read>(reader: &mut R) -> Result<usize, String> {
     let mut buffer = [0u8; 8];
-    reader.read_exact(&mut buffer[0..1])
+    reader
+        .read_exact(&mut buffer[0..1])
         .map_err(|err| format!("Failed to read varint: {}", err))?;
 
     let value = match buffer[0] {
         0xfd => {
-            reader.read(&mut buffer[0..2])
+            reader
+                .read(&mut buffer[0..2])
                 .map_err(|err| format!("Failed to read varint: {}", err))?;
             u64::from_le_bytes([buffer[0], buffer[1], 0, 0, 0, 0, 0, 0])
         }
         0xfe => {
-            reader.read(&mut buffer[0..4])
+            reader
+                .read(&mut buffer[0..4])
                 .map_err(|err| format!("Failed to read varint: {}", err))?;
             u64::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3], 0, 0, 0, 0])
         }
         0xff => {
-            reader.read(&mut buffer[0..8])
+            reader
+                .read(&mut buffer[0..8])
                 .map_err(|err| format!("Failed to read varint: {}", err))?;
             u64::from_le_bytes([
                 buffer[0], buffer[1], buffer[2], buffer[3], buffer[4], buffer[5], buffer[6],
@@ -97,10 +99,8 @@ pub fn read_varint<R: Read>(reader: &mut R) -> Result<usize, String> {
         _ => u64::from(buffer[0]),
     };
 
-
     Ok(value as usize)
 }
-
 
 /// MockTcpStream es una mock que implementa los traits Read y Write, los mismos que implementa el TcpStream
 pub struct MockTcpStream {
@@ -125,7 +125,6 @@ impl Write for MockTcpStream {
         self.write_data.flush()
     }
 }
-
 
 #[cfg(test)]
 mod tests {

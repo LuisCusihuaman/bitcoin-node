@@ -19,7 +19,10 @@ impl Logger {
     }
     pub fn new(config: &Config) -> Result<Self, Box<dyn Error>> {
         let file = File::create(&config.logfile)?;
-        Ok(Self { file: RefCell::new(file), only_stdout: false })
+        Ok(Self {
+            file: RefCell::new(file),
+            only_stdout: false,
+        })
     }
 
     pub fn log(&self, msg: String) {
@@ -31,7 +34,6 @@ impl Logger {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -39,7 +41,12 @@ mod tests {
 
     #[test]
     fn test_log() {
-        let config = Config { logfile: "test.log".to_owned(), direccion_ip: "".to_string(), puerto: "".to_string(), dns: "".to_string() };
+        let config = Config {
+            logfile: "test.log".to_owned(),
+            direccion_ip: "".to_string(),
+            puerto: "".to_string(),
+            dns: "".to_string(),
+        };
         let logger = Logger::new(&config).unwrap();
         logger.log("test message".to_owned());
 

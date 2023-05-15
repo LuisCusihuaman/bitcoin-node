@@ -10,7 +10,6 @@ use std::io;
 use app::config::Config;
 use app::logger::Logger;
 
-
 fn main() -> Result<(), Box<dyn Error>> {
     let filepath = env::args().nth(1).ok_or_else(|| {
         io::Error::new(

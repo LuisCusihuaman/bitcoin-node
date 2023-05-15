@@ -1,5 +1,8 @@
 use crate::node::message::MessagePayload;
-use crate::utils::{copy_bytes_to_array, get_offset, read_be, read_le, read_string, read_u16_be, read_u32_le, read_u64_le, read_varint};
+use crate::utils::{
+    copy_bytes_to_array, get_offset, read_be, read_le, read_string, read_u16_be, read_u32_le,
+    read_u64_le, read_varint,
+};
 
 type CompactSizeUint = String;
 
@@ -54,7 +57,7 @@ impl PayloadVersion {
         buffer[54..70].copy_from_slice(&self.addr_trans_ip_address); // 16 bytes
         buffer[70..72].copy_from_slice(&self.addr_trans_port.to_be_bytes()); // 2 bytes
         buffer[72..80].copy_from_slice(&self.nonce.to_le_bytes()); // 8 bytes
-        //buffer[80..81].copy_from_slice(&version.user_agent_bytes.as_bytes()); // REVISAR VARIOS
+                                                                   //buffer[80..81].copy_from_slice(&version.user_agent_bytes.as_bytes()); // REVISAR VARIOS
         buffer[81..85].copy_from_slice(&self.start_height.to_le_bytes()); // 4 bytes
         buffer[85..86].copy_from_slice(&self.relay.to_le_bytes()); // 1 bytes
         Ok(())

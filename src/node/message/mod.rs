@@ -1,13 +1,16 @@
+use crate::node::message::get_headers::PayloadGetHeaders;
 use crate::node::message::version::decode_version;
 use crate::node::message::version::PayloadVersion;
 use crate::utils::read_le;
 
+pub mod get_headers;
 pub mod version;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum MessagePayload {
     Version(PayloadVersion),
     Verack,
+    GetHeaders(PayloadGetHeaders),
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -80,6 +83,7 @@ impl Encoding<MessagePayload> for MessagePayload {
         match self {
             MessagePayload::Version(version) => Ok(version.size()),
             MessagePayload::Verack => Ok(0),
+            MessagePayload::GetHeaders(get_headers) => Ok(get_headers.size()),
         }
     }
 
@@ -89,6 +93,9 @@ impl Encoding<MessagePayload> for MessagePayload {
                 version.encode(buffer)?;
             }
             MessagePayload::Verack => {}
+            MessagePayload::GetHeaders(get_headers) => {
+                get_headers.encode(buffer)?;
+            }
         }
         Ok(())
     }
@@ -97,6 +104,7 @@ impl Encoding<MessagePayload> for MessagePayload {
         match self {
             MessagePayload::Version(_) => Ok("version"),
             MessagePayload::Verack => Ok("verack"),
+            MessagePayload::GetHeaders(_) => Ok("getheaders"),
         }
     }
 

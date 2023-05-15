@@ -1,24 +1,24 @@
 use crate::node::message::MessagePayload;
-use crate::utils::{get_offset, read_be, read_le};
+use crate::utils::{copy_bytes_to_array, get_offset, read_be, read_le, read_string, read_u16_be, read_u32_le, read_u64_le, read_varint};
 
 type CompactSizeUint = String;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PayloadVersion {
     pub version: u32,
-    services: u64,
-    timestamp: u64,
-    addr_recv_services: u64,
-    addr_recv_ip_address: [u8; 16],
-    addr_recv_port: u16,
-    addr_trans_services: u64,
+    pub(crate) services: u64,
+    pub(crate) timestamp: u64,
+    pub(crate) addr_recv_services: u64,
+    pub(crate) addr_recv_ip_address: [u8; 16],
+    pub(crate) addr_recv_port: u16,
+    pub(crate) addr_trans_services: u64,
     pub addr_trans_ip_address: [u8; 16],
     pub addr_trans_port: u16,
-    nonce: u64,
-    user_agent_bytes: CompactSizeUint,
-    user_agent: String,
-    start_height: u32,
-    relay: u8,
+    pub(crate) nonce: u64,
+    pub(crate) user_agent_bytes: CompactSizeUint,
+    pub(crate) user_agent: String,
+    pub(crate) start_height: u32,
+    pub(crate) relay: u8,
 }
 
 impl PayloadVersion {
@@ -54,7 +54,7 @@ impl PayloadVersion {
         buffer[54..70].copy_from_slice(&self.addr_trans_ip_address); // 16 bytes
         buffer[70..72].copy_from_slice(&self.addr_trans_port.to_be_bytes()); // 2 bytes
         buffer[72..80].copy_from_slice(&self.nonce.to_le_bytes()); // 8 bytes
-                                                                   //buffer[80..81].copy_from_slice(&version.user_agent_bytes.as_bytes()); // REVISAR VARIOS
+        //buffer[80..81].copy_from_slice(&version.user_agent_bytes.as_bytes()); // REVISAR VARIOS
         buffer[81..85].copy_from_slice(&self.start_height.to_le_bytes()); // 4 bytes
         buffer[85..86].copy_from_slice(&self.relay.to_le_bytes()); // 1 bytes
         Ok(())
@@ -131,26 +131,23 @@ impl PayloadVersion {
 
 pub fn decode_version(buffer: &[u8]) -> Result<MessagePayload, String> {
     let mut addr_recv_ip_address: [u8; 16] = [0u8; 16];
-    addr_recv_ip_address.copy_from_slice(&buffer[28..44]);
+    copy_bytes_to_array(&buffer[28..44], &mut addr_recv_ip_address);
     let mut addr_trans_ip_address: [u8; 16] = [0u8; 16];
-    addr_trans_ip_address.copy_from_slice(&buffer[54..70]);
+    copy_bytes_to_array(&buffer[54..70], &mut addr_trans_ip_address);
 
-    let ua_b_ffset = get_offset(&buffer[80..81]);
     let payload_size = buffer.len();
-    let version = read_le(&buffer[0..4]) as u32; // 4 bytes
-    let services = read_le(&buffer[4..12]) as u64; // 8 bytes
-    let timestamp = read_le(&buffer[12..20]) as u64; // 8 bytes
-    let addr_recv_services = read_le(&buffer[20..28]) as u64; // 8 bytes
-    let addr_recv_port = read_be(&buffer[44..46]) as u16; // 2 bytes
-    let addr_trans_services = read_le(&buffer[46..54]) as u64; // 8 bytes
-    let addr_trans_port = read_be(&buffer[70..72]) as u16; // 2 bytes
-    let nonce = read_le(&buffer[72..80]) as u64; //  8 bytes // HASTA ACA ES FIJO
-    let user_agent_bytes = read_le(&buffer[80..(80 + ua_b_ffset)]);
-    let user_agent =
-        String::from_utf8(buffer[(80 + ua_b_ffset)..(80 + ua_b_ffset + user_agent_bytes)].to_vec())
-            .unwrap();
-    let start_height = read_le(&buffer[(payload_size - 5)..(payload_size - 1)]) as u32;
-    let relay = read_le(&buffer[(payload_size - 1)..payload_size]) as u8;
+    let version = read_u32_le(buffer, 0);
+    let services = read_u64_le(buffer, 4);
+    let timestamp = read_u64_le(buffer, 12);
+    let addr_recv_services = read_u64_le(buffer, 20);
+    let addr_recv_port = read_u16_be(buffer, 44);
+    let addr_trans_services = read_u64_le(buffer, 46);
+    let addr_trans_port = read_u16_be(buffer, 70);
+    let nonce = read_u64_le(buffer, 72);
+    let user_agent_bytes = read_varint(&mut &buffer[80..])?; // Read variable-length user_agent_bytes 😎
+    let user_agent = read_string(buffer, 81, user_agent_bytes); // WHY I USE 81!!! AND NOT 80 :CC DOCS SAY START AFTER 80 🤔
+    let start_height = read_u32_le(buffer, payload_size - 5);
+    let relay = buffer[payload_size - 1];
 
     let message_payload = PayloadVersion::new(
         version,
@@ -163,7 +160,7 @@ pub fn decode_version(buffer: &[u8]) -> Result<MessagePayload, String> {
         addr_recv_ip_address,
         addr_trans_port,
         nonce,
-        user_agent_bytes.to_string(),
+        user_agent.len().to_string(),
         user_agent,
         start_height,
         relay,

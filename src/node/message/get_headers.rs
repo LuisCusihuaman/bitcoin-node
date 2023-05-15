@@ -1,5 +1,7 @@
 use crate::utils::{get_offset, read_be, read_le};
 
+use super::MessagePayload;
+
 type CompactSizeUint = String;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -43,4 +45,8 @@ impl PayloadGetHeaders {
             stop_hash,
         }
     }
+}
+
+pub fn decode_headers(buffer: &[u8]) -> Result<MessagePayload, String> {
+    Ok(MessagePayload::Verack)
 }

@@ -1,5 +1,6 @@
 use crate::node::message::get_headers::PayloadGetHeaders;
 use crate::node::message::version::decode_version;
+use crate::node::message::get_headers::decode_headers;
 use crate::node::message::version::PayloadVersion;
 use crate::utils::read_le;
 
@@ -111,6 +112,7 @@ impl Encoding<MessagePayload> for MessagePayload {
     fn decode(cmd: &String, buffer: &[u8]) -> Result<Self, String> {
         match cmd.as_str() {
             "version" => decode_version(buffer),
+            "headers" => decode_headers(buffer),
             "verack" => Ok(MessagePayload::Verack),
             _ => Err("Unknown command: ".to_owned() + cmd),
         }

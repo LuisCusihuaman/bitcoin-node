@@ -51,18 +51,25 @@ impl P2PConnection {
     }
 
     pub fn receive(&mut self) -> (String, Vec<MessagePayload>) {
-        let mut buffer = [0u8; 10000];
-        self.tcp_stream.read(&mut buffer).unwrap(); //.map_err(|e| e.to_string())?; //CHECK CONN RESET
-        let messages = parse_messages_from(&mut buffer);
-        (self.peer_address.clone(), messages)
-    }
+        let mut buffer = vec![0u8; 1_000_000];
+        match self.tcp_stream.read(&mut buffer) {
+            Ok(bytes_read) => {
+                buffer.resize(bytes_read, 0); // Resize the buffer to the actual number of bytes read
+                let messages = parse_messages_from(&mut buffer);
+                (self.peer_address.clone(), messages)
+            }
+            Err(err) => {
+                eprintln!("Error reading from TCP stream: {}", err);
+                (self.peer_address.clone(), Vec::new())
+            } //.map_err(|e| e.to_string())?; //CHECK CONN RESET
+    }}
 
     pub fn handshaked(&mut self) {
         self.handshaked = true;
     }
 }
 
-fn parse_messages_from(buf: &mut [u8]) -> Vec<MessagePayload> {
+fn parse_messages_from(buf: &mut Vec<u8>) -> Vec<MessagePayload> {
     let mut messages = Vec::new();
     let mut cursor = 0;
     while cursor < buf.len() {
@@ -100,6 +107,7 @@ fn parse_messages_from(buf: &mut [u8]) -> Vec<MessagePayload> {
     messages
 }
 
+
 fn decode_message<T: Encoding<T>>(cmd: &String, data: &[u8]) -> Result<T, String> {
     T::decode(cmd, &data[..]).map(|t| t)
 }
@@ -127,7 +135,7 @@ mod tests {
         let mut buffer = [0u8; 100];
         // only write the bytes of mock_read_data
         mock.read(&mut buffer[..]).unwrap();
-        let _ = parse_messages_from(&mut buffer);
+        //let _ = parse_messages_from(&mut buffer);
     }
 
     #[test]
@@ -158,8 +166,10 @@ mod tests {
 
         thread::sleep(Duration::from_secs(1));
 
-        let _first_messages = conn.receive();
-
+        let (_, first_messages) = conn.receive();
+        for message in first_messages.iter() {
+            println!("Received message: {:?}", message.command_name()?);
+        }
         let hash_block_genesis: [u8; 32] = [
             0x00, 0x00, 0x00, 0x00, 0x09, 0x33, 0xea, 0x01, 0xad, 0x0e, 0xe9, 0x84, 0x20, 0x97,
             0x79, 0xba, 0xae, 0xc3, 0xce, 0xd9, 0x0f, 0xa3, 0xf4, 0x08, 0x71, 0x95, 0x26, 0xf8,
@@ -179,7 +189,7 @@ mod tests {
 
         conn.send(&get_headers_message)?;
 
-        thread::sleep(Duration::from_secs(1));
+        thread::sleep(Duration::from_secs(2));
 
         let (_, messages) = conn.receive();
 

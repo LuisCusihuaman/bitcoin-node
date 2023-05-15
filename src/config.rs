@@ -15,6 +15,14 @@ pub struct Config {
 }
 
 impl Config {
+    pub fn new() -> Self {
+        Self {
+            logfile: String::from(""),
+            direccion_ip: String::from(""),
+            puerto: String::from(""),
+            dns: String::from(""),
+        }
+    }
     // Abro el archivo
     pub fn from_file(path: &str) -> Result<Self, Box<dyn Error>> {
         let file = File::open(path)?;

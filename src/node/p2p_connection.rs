@@ -1,10 +1,10 @@
+use crate::node::message::get_headers::PayloadGetHeaders;
 use crate::node::message::{Encoding, MessageHeader, MessagePayload};
+use crate::utils::double_sha256;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
 use std::vec;
-use crate::utils::double_sha256;
-
 
 pub struct P2PConnection {
     pub handshaked: bool,
@@ -51,7 +51,7 @@ impl P2PConnection {
     }
 
     pub fn receive(&mut self) -> (String, Vec<MessagePayload>) {
-        let mut buffer = [0u8; 1000];
+        let mut buffer = [0u8; 10000];
         self.tcp_stream.read(&mut buffer).unwrap(); //.map_err(|e| e.to_string())?; //CHECK CONN RESET
         let messages = parse_messages_from(&mut buffer);
         (self.peer_address.clone(), messages)
@@ -104,7 +104,6 @@ fn decode_message<T: Encoding<T>>(cmd: &String, data: &[u8]) -> Result<T, String
     T::decode(cmd, &data[..]).map(|t| t)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -133,7 +132,7 @@ mod tests {
 
     #[test]
     fn send_and_read() -> Result<(), String> {
-        let mut conn = P2PConnection::connect(&"195.201.126.87:18333".to_string()).unwrap();
+        let mut conn = P2PConnection::connect(&"5.9.73.173:18333".to_string()).unwrap();
         let payload_version_message = MessagePayload::Version(PayloadVersion::default_version());
         conn.send(&payload_version_message).unwrap();
         conn.send(&MessagePayload::Verack).unwrap();
@@ -147,6 +146,47 @@ mod tests {
         }
 
         assert_ne!(messages.len(), 0);
+        Ok(())
+    }
+
+    #[test]
+    fn send_get_headers_recive() -> Result<(), String> {
+        let mut conn = P2PConnection::connect(&"5.9.73.173:18333".to_string()).unwrap();
+        let payload_version_message = MessagePayload::Version(PayloadVersion::default_version());
+        conn.send(&payload_version_message).unwrap();
+        conn.send(&MessagePayload::Verack).unwrap();
+
+        thread::sleep(Duration::from_secs(1));
+
+        let _first_messages = conn.receive();
+
+        let hash_block_genesis: [u8; 32] = [
+            0x00, 0x00, 0x00, 0x00, 0x09, 0x33, 0xea, 0x01, 0xad, 0x0e, 0xe9, 0x84, 0x20, 0x97,
+            0x79, 0xba, 0xae, 0xc3, 0xce, 0xd9, 0x0f, 0xa3, 0xf4, 0x08, 0x71, 0x95, 0x26, 0xf8,
+            0xd7, 0x7f, 0x49, 0x43,
+        ];
+        // Python -> testnet_genesis_block = bytes.fromhex('000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943')
+        // TODO pasar de hex a array de 32 elementos(bytes)
+
+        let stop_hash = [0u8; 32];
+
+        let get_headers_message = MessagePayload::GetHeaders(PayloadGetHeaders::new(
+            70015,
+            1,
+            hash_block_genesis,
+            stop_hash,
+        ));
+
+        conn.send(&get_headers_message)?;
+
+        thread::sleep(Duration::from_secs(1));
+
+        let (_, messages) = conn.receive();
+
+        for message in messages.iter() {
+            println!("Received message: {:?}", message.command_name()?);
+        }
+
         Ok(())
     }
 }

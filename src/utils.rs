@@ -1,5 +1,6 @@
 use std::io;
 use std::io::{Read, Write};
+use bitcoin_hashes::{sha256, Hash};
 
 pub fn get_offset(buff: &[u8]) -> usize {
     let i: u8 = buff[0];
@@ -31,6 +32,15 @@ pub fn read_be(buffer: &[u8]) -> usize {
         result += (buffer[i] as usize) << (8 * (buffer.len() - i - 1));
     }
     result
+}
+
+pub fn double_sha256(data: &[u8]) -> sha256::Hash {
+    if data.is_empty() {
+        let empty_hash = sha256::Hash::hash("".as_bytes());
+        return sha256::Hash::hash(empty_hash.as_byte_array());
+    }
+    let hash = sha256::Hash::hash(data);
+    sha256::Hash::hash(hash.as_byte_array())
 }
 
 /// MockTcpStream es una mock que implementa los traits Read y Write, los mismos que implementa el TcpStream

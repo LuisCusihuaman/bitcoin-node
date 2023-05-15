@@ -11,12 +11,24 @@ use std::thread::Thread;
 use std::time::Duration;
 use crate::logger::Logger;
 
+pub struct Config {
+    pub addrs: String,
+    pub port: u16,
+}
+
 pub struct NodeNetwork<'a> {
     pub peer_connections: Vec<P2PConnection>,
     logger: &'a Logger,
 }
 
+
 impl NodeNetwork<'_> {
+    pub fn new(logger: &Logger) -> NodeNetwork {
+        NodeNetwork {
+            peer_connections: vec![],
+            logger,
+        }
+    }
     pub fn handshake_complete(&mut self, peer_address: &String) {
         self.logger.log(format!("Handshake complete with peer: {}", peer_address));
         // added handshaked attribute of P2PConnection turned into true, filter first by peer_address
@@ -26,16 +38,6 @@ impl NodeNetwork<'_> {
             .find(|connection| connection.peer_address == *peer_address)
         {
             peer_connection.handshaked();
-        }
-    }
-}
-
-
-impl NodeNetwork<'_> {
-    pub fn new(logger: &Logger) -> NodeNetwork {
-        NodeNetwork {
-            peer_connections: vec![],
-            logger,
         }
     }
     pub fn send_to_all_peers(&mut self, payload: &MessagePayload) -> Result<(), String> {
@@ -63,14 +65,18 @@ pub struct NodeManager<'a> {
 }
 
 impl NodeManager<'_> {
+    pub fn new(config: Config, logger: &Logger) -> NodeManager {
+        NodeManager {
+            config,
+            node_network: NodeNetwork::new(logger),
+            logger,
+        }
+    }
     pub fn handshake(&mut self) {
         let payload_version_message = MessagePayload::Version(PayloadVersion::default_version());
         self.broadcast(&payload_version_message);
         self.wait_for(vec!["version", "verack"]);
     }
-}
-
-impl NodeManager<'_> {
     pub fn wait_for(&mut self, commands: Vec<&str>) -> Vec<MessagePayload> {
         let mut matched_messages = Vec::new();
         let received_messages = self.node_network.receive_from_all_peers();
@@ -94,21 +100,6 @@ impl NodeManager<'_> {
             }
         }
         matched_messages
-    }
-}
-
-pub struct Config {
-    pub addrs: String,
-    pub port: u16,
-}
-
-impl NodeManager<'_> {
-    pub fn new(config: Config, logger: &Logger) -> NodeManager {
-        NodeManager {
-            config,
-            node_network: NodeNetwork::new(logger),
-            logger,
-        }
     }
     fn resolve_hostname(&self, hostname: &str, port: u16) -> Result<Vec<IpAddr>, std::io::Error> {
         // resolve the hostname to a list of SocketAddr objects
@@ -157,11 +148,11 @@ impl NodeManager<'_> {
         }
         Ok(())
     }
-
     pub fn broadcast(&mut self, payload: &MessagePayload) {
-        self.node_network.send_to_all_peers(&payload);
+        if let Err(e) = self.node_network.send_to_all_peers(&payload) {
+            self.logger.log(format!("Error sending message to peer: {:?}", e));
+        }
     }
-
     pub fn receive_all(&mut self) -> Vec<(String, Vec<MessagePayload>)> {
         self.node_network.receive_from_all_peers()
     }

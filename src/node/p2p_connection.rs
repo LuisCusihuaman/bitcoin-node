@@ -3,28 +3,13 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
 use std::vec;
+use crate::utils::double_sha256;
 
-use bitcoin_hashes::{sha256, Hash};
 
 pub struct P2PConnection {
     pub handshaked: bool,
-    pub(crate) peer_address: String,
+    pub peer_address: String,
     tcp_stream: TcpStream,
-}
-
-impl P2PConnection {
-    pub fn done_the_handshake(&mut self) {
-        self.handshaked = true;
-    }
-}
-
-fn double_sha256(data: &[u8]) -> sha256::Hash {
-    if data.is_empty() {
-        let empty_hash = sha256::Hash::hash("".as_bytes());
-        return sha256::Hash::hash(empty_hash.as_byte_array());
-    }
-    let hash = sha256::Hash::hash(data);
-    sha256::Hash::hash(hash.as_byte_array())
 }
 
 impl P2PConnection {
@@ -64,35 +49,20 @@ impl P2PConnection {
             .map_err(|e| e.to_string())?;
         Ok(())
     }
+
     pub fn receive(&mut self) -> (String, Vec<MessagePayload>) {
         let mut buffer = [0u8; 1000];
         self.tcp_stream.read(&mut buffer).unwrap(); //.map_err(|e| e.to_string())?; //CHECK CONN RESET
-        let messages = receive_internals(&mut buffer);
+        let messages = parse_messages_from(&mut buffer);
         (self.peer_address.clone(), messages)
     }
-}
 
-fn decode_message<T: Encoding<T>>(cmd: &String, data: &[u8]) -> Result<T, String> {
-    T::decode(cmd, &data[..]).map(|t| t)
-}
-
-fn receive_internal(buf: &mut [u8]) -> Result<MessagePayload, String> {
-    // Parse the header fields
-    let header: MessageHeader = decode_message(&String::default(), &buf[..24])?;
-    if header.magic_number != 118034699 {
-        return Err(format!(
-            "Invalid magic number: 0x{:08x}",
-            header.magic_number
-        ));
+    pub fn handshaked(&mut self) {
+        self.handshaked = true;
     }
-    let command_name = String::from_utf8_lossy(&header.command_name)
-        .trim_end_matches('\0')
-        .to_owned();
-    let payload = decode_message(&command_name, &buf[24..(24 + header.payload_size as usize)])?;
-    Ok(payload)
 }
 
-fn receive_internals(buf: &mut [u8]) -> Vec<MessagePayload> {
+fn parse_messages_from(buf: &mut [u8]) -> Vec<MessagePayload> {
     let mut messages = Vec::new();
     let mut cursor = 0;
     while cursor < buf.len() {
@@ -130,6 +100,11 @@ fn receive_internals(buf: &mut [u8]) -> Vec<MessagePayload> {
     messages
 }
 
+fn decode_message<T: Encoding<T>>(cmd: &String, data: &[u8]) -> Result<T, String> {
+    T::decode(cmd, &data[..]).map(|t| t)
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -153,7 +128,7 @@ mod tests {
         let mut buffer = [0u8; 100];
         // only write the bytes of mock_read_data
         mock.read(&mut buffer[..]).unwrap();
-        let _ = receive_internal(&mut buffer).unwrap();
+        let _ = parse_messages_from(&mut buffer);
     }
 
     #[test]

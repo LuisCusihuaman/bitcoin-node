@@ -44,27 +44,24 @@ pub struct NodeManager {
 impl NodeManager {
     pub fn wait_for(&mut self, commands: Vec<&str>) -> Vec<MessagePayload> {
         let mut matched_messages = Vec::new();
-        loop {
-            let received_messages = self.node_network.receive_from_all_peers();
-            for (peer_address, message) in received_messages.first() {
-                match message.first().unwrap() {
-                    MessagePayload::Verack => {
-                        println!("Received verack from {}", peer_address);
-                        if commands.contains(&"verack") {
-                            matched_messages.push(MessagePayload::Verack);
-                        }
-                    }
-                    MessagePayload::Version(version) => {
-                        self.broadcast(&MessagePayload::Verack);
-                        if commands.contains(&"version") {
-                            println!("Received version from {}", peer_address);
-                            matched_messages.push(MessagePayload::Version(version.clone()));
-                        }
+        
+        let received_messages = self.node_network.receive_from_all_peers();
+        let (peer_address, messages_from_first_peer) = received_messages.first().unwrap();
+        for message in messages_from_first_peer{
+            match message {
+                MessagePayload::Verack => {
+                    println!("Received verack from {}", peer_address);
+                    if commands.contains(&"verack") {
+                        matched_messages.push(MessagePayload::Verack);
                     }
                 }
-            }
-            if matched_messages.len() == commands.len() {
-                break;
+                MessagePayload::Version(version) => {
+                    self.broadcast(&MessagePayload::Verack);
+                    if commands.contains(&"version") {
+                        println!("Received version from {}", peer_address);
+                        matched_messages.push(MessagePayload::Version(version.clone()));
+                    }
+                }
             }
         }
         matched_messages

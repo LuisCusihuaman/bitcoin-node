@@ -5,20 +5,24 @@ use crate::node::manager::{Config, NodeManager};
 use crate::node::message::version::PayloadVersion;
 use crate::node::message::MessagePayload;
 use std::net::{TcpListener, TcpStream};
+use crate::logger::Logger;
 
-pub struct Server {
+
+pub struct Server<'a> {
     router: Router,
-    node_manager: NodeManager,
+    node_manager: NodeManager<'a>,
+    logger: &'a Logger,
 }
 
-impl Server {
-    pub fn new(router: Router) -> Server {
+impl Server<'_> {
+    pub fn new(router: Router, logger: &Logger) -> Server {
         Server {
             router,
+            logger,
             node_manager: NodeManager::new(Config {
                 addrs: "seed.testnet.bitcoin.sprovoost.nl".to_string(),
                 port: 80,
-            }),
+            }, logger),
         }
     }
 
@@ -33,7 +37,7 @@ impl Server {
                 .collect(),
         )?;
         self.node_manager.handshake();
-        println!("Listening to {}", addr);
+        self.logger.log(format!("Server listening on {}", addr));
         //here can trigger another thread with a loop to receive all messages for keep connection alive with other nodes
         let connection = listener.accept().map_err(|e| e.to_string())?;
         let mut client_stream: TcpStream = connection.0;

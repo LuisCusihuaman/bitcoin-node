@@ -8,17 +8,20 @@ use std::{
     thread::{self, JoinHandle},
     time::Duration,
 };
+use app::logger::Logger;
+use app::node::manager::NodeManager;
 
 #[test]
 fn test_al_pedir_un_balance_el_router_devuelve_resultado_esperado() -> std::io::Result<()> {
     // GIVEN
     let mut router = Router::new();
-    router.branch("/ping", |_req: Request| -> Response {
+    router.branch("/ping", |_node_manager: &mut NodeManager, _req: Request| -> Response {
         Response::json(String::from("pong"))
     });
     let addrs = "127.0.0.1:8990";
     let handle = thread::spawn(move || {
-        Server::new(router).run(&addrs);
+        let logger = Logger::stdout();
+        Server::new(router, &logger).run(&addrs).unwrap();
     });
     thread::sleep(Duration::from_millis(500));
 

@@ -9,30 +9,33 @@ use std::net::{IpAddr, ToSocketAddrs};
 use std::thread;
 use std::thread::Thread;
 use std::time::Duration;
+use crate::logger::Logger;
 
-pub struct NodeNetwork {
+pub struct NodeNetwork<'a> {
     pub peer_connections: Vec<P2PConnection>,
+    logger: &'a Logger,
 }
 
-impl NodeNetwork {
+impl NodeNetwork<'_> {
     pub fn handshake_complete(&mut self, peer_address: &String) {
-        println!("Handshake complete with peer: {}", peer_address);
+        self.logger.log(format!("Handshake complete with peer: {}", peer_address));
         // added handshaked attribute of P2PConnection turned into true, filter first by peer_address
         if let Some(peer_connection) = self
             .peer_connections
             .iter_mut()
             .find(|connection| connection.peer_address == *peer_address)
         {
-            peer_connection.done_the_handshake();
+            peer_connection.handshaked();
         }
     }
 }
 
 
-impl NodeNetwork {
-    pub fn new() -> NodeNetwork {
+impl NodeNetwork<'_> {
+    pub fn new(logger: &Logger) -> NodeNetwork {
         NodeNetwork {
             peer_connections: vec![],
+            logger,
         }
     }
     pub fn send_to_all_peers(&mut self, payload: &MessagePayload) -> Result<(), String> {
@@ -53,12 +56,13 @@ impl NodeNetwork {
     }
 }
 
-pub struct NodeManager {
-    node_network: NodeNetwork,
+pub struct NodeManager<'a> {
+    node_network: NodeNetwork<'a>,
     config: Config,
+    logger: &'a Logger,
 }
 
-impl NodeManager {
+impl NodeManager<'_> {
     pub fn handshake(&mut self) {
         let payload_version_message = MessagePayload::Version(PayloadVersion::default_version());
         self.broadcast(&payload_version_message);
@@ -66,7 +70,7 @@ impl NodeManager {
     }
 }
 
-impl NodeManager {
+impl NodeManager<'_> {
     pub fn wait_for(&mut self, commands: Vec<&str>) -> Vec<MessagePayload> {
         let mut matched_messages = Vec::new();
         let received_messages = self.node_network.receive_from_all_peers();
@@ -74,7 +78,7 @@ impl NodeManager {
         for message in messages_from_first_peer {
             match message {
                 MessagePayload::Verack => {
-                    println!("Received verack from {}", peer_address);
+                    self.logger.log(format!("Received verack from {}", peer_address));
                     self.node_network.handshake_complete(peer_address);
                     if commands.contains(&"verack") {
                         matched_messages.push(MessagePayload::Verack);
@@ -82,7 +86,7 @@ impl NodeManager {
                 }
                 MessagePayload::Version(version) => {
                     self.broadcast(&MessagePayload::Verack);
-                    println!("Received version from {}", peer_address);
+                    self.logger.log(format!("Received version from {}", peer_address));
                     if commands.contains(&"version") {
                         matched_messages.push(MessagePayload::Version(version.clone()));
                     }
@@ -98,11 +102,12 @@ pub struct Config {
     pub port: u16,
 }
 
-impl NodeManager {
-    pub fn new(config: Config) -> NodeManager {
+impl NodeManager<'_> {
+    pub fn new(config: Config, logger: &Logger) -> NodeManager {
         NodeManager {
             config,
-            node_network: NodeNetwork::new(),
+            node_network: NodeNetwork::new(logger),
+            logger,
         }
     }
     fn resolve_hostname(&self, hostname: &str, port: u16) -> Result<Vec<IpAddr>, std::io::Error> {
@@ -145,7 +150,7 @@ impl NodeManager {
                 }
                 Err(_) => {
                     //TODO: only continue on timeout error
-                    //println!("Error connecting to peer {}: {}", addr, e);
+                    //self.logger.log(format!("Error connecting to peer {}: {}", addr, e));
                     continue;
                 }
             }
@@ -169,20 +174,22 @@ mod tests {
 
     #[test]
     fn test_get_all_ips_from_dns() {
+        let logger = Logger::stdout();
         let mut node_manager = NodeManager::new(Config {
             addrs: "seed.testnet.bitcoin.sprovoost.nl".to_string(),
             port: 80,
-        });
+        }, &logger);
         let node_network_ips = node_manager.get_initial_nodes().unwrap();
         assert_ne!(node_network_ips.len(), 0);
     }
 
     #[test]
     fn test_connect_node_with_external_nodes_not_refuse_connection() -> Result<(), String> {
+        let logger = Logger::stdout();
         let mut node_manager = NodeManager::new(Config {
             addrs: "seed.testnet.bitcoin.sprovoost.nl".to_string(),
             port: 80,
-        });
+        }, &logger);
         let node_network_ips = node_manager.get_initial_nodes().unwrap();
         node_manager.connect(
             node_network_ips
@@ -195,10 +202,11 @@ mod tests {
 
     #[test]
     fn test_node_send_and_recive() -> Result<(), String> {
+        let logger = Logger::stdout();
         let mut node_manager = NodeManager::new(Config {
             addrs: "seed.testnet.bitcoin.sprovoost.nl".to_string(),
             port: 80,
-        });
+        }, &logger);
         let node_network_ips = node_manager.get_initial_nodes().unwrap();
         let first_address_from_dns: Vec<String> = node_network_ips
             .iter()

@@ -9,19 +9,19 @@ type CompactSizeUint = String;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PayloadVersion {
     pub version: u32,
-    pub(crate) services: u64,
-    pub(crate) timestamp: u64,
-    pub(crate) addr_recv_services: u64,
-    pub(crate) addr_recv_ip_address: [u8; 16],
-    pub(crate) addr_recv_port: u16,
-    pub(crate) addr_trans_services: u64,
+    pub services: u64,
+    pub timestamp: u64,
+    pub addr_recv_services: u64,
+    pub addr_recv_ip_address: [u8; 16],
+    pub addr_recv_port: u16,
+    pub addr_trans_services: u64,
     pub addr_trans_ip_address: [u8; 16],
     pub addr_trans_port: u16,
-    pub(crate) nonce: u64,
-    pub(crate) user_agent_bytes: CompactSizeUint,
-    pub(crate) user_agent: String,
-    pub(crate) start_height: u32,
-    pub(crate) relay: u8,
+    pub nonce: u64,
+    pub user_agent_bytes: CompactSizeUint,
+    pub user_agent: String,
+    pub start_height: u32,
+    pub relay: u8,
 }
 
 impl PayloadVersion {

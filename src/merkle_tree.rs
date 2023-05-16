@@ -1,5 +1,6 @@
 // Implementacion de merkle tree
 use bitcoin_hashes::{sha256, Hash, HashEngine};
+use bs58::alphabet::Error;
 
 pub struct MerkleTree {
     root: String,
@@ -22,7 +23,12 @@ impl MerkleTree{
         self.leaves[..].to_vec()
     }
 
+    // Generates the merkle root from the vector of leaves
     pub fn generate_merkle_tree(&mut self, data: Vec<&str>) {
+
+        if data.len() == 0{
+            return;
+        }
        
         // Guardo las hojas
         for d in data {
@@ -69,9 +75,8 @@ impl MerkleTree{
     // Recibe una lista de hashes y devuelve una lista que es la mitad de largo
     // Estos hashes pueden ser hojas o nodos
     pub fn merkle_parent_level(&self, mut hashes: Vec<sha256::Hash>)-> Vec<sha256::Hash>{
-        if hashes.len() == 1 {
-            panic!("Cannot take a parent level with only 1 item"); // ARREGLAR
-        }
+        
+    
 
         if hashes.len() % 2 == 1 {
             // Si la cantidad de hashes es impar, duplico el ultimo
@@ -96,12 +101,14 @@ impl MerkleTree{
 
     // To get the Merkle root we calculate successive Merkle parent levels until we get a single hash
     pub fn merkle_root(&mut self, mut hashes: Vec<sha256::Hash>){
-        if hashes.len() == 0 {
-            panic!("Cannot take a root with no items"); // ARREGLAR
+
+        if hashes.len() <= 1{
+            return;
         }
 
         while hashes.len() > 1 {
             hashes = self.merkle_parent_level(hashes);
+        
         }
 
         self.root = hashes[0].to_string();

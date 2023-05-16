@@ -1,6 +1,6 @@
 // Implementacion de merkle tree
 use bitcoin_hashes::{sha256, Hash, HashEngine};
-use bs58::alphabet::Error;
+use crate::error::Error;
 
 pub struct MerkleTree {
     root: String,
@@ -15,12 +15,23 @@ impl MerkleTree{
         }
     }
 
-    pub fn get_root(&self) -> String {
-        String::from(&self.root)
+    pub fn get_root(&self) -> Result<String, Error> {
+        if self.root == "" {
+            return Err(Error::MerkleTreeNotGenerated(String::from(
+                "No se ha generado el Merkle Tree",
+            )));
+        }
+        Ok(String::from(&self.root))
     }
 
-    pub fn get_leaves(&self) -> Vec<String> {
-        self.leaves[..].to_vec()
+    pub fn get_leaves(&self) -> Result<Vec<String>, Error> {
+        if self.leaves.is_empty() {
+            return Err(Error::MerkleTreeNotGenerated(String::from(
+                "No se ha generado el Merkle Tree",
+            )));
+        }
+
+        Ok(self.leaves[..].to_vec())
     }
 
     // Generates the merkle root from the vector of leaves
@@ -54,7 +65,10 @@ impl MerkleTree{
             hashed_leaves.push(hash);
         }
 
-        self.merkle_root(hashed_leaves);
+        self.root = match self.merkle_root(hashed_leaves) {
+            Ok(root) => root.to_string(),
+            Err(_) => "Invalid Root".to_string(),
+        }
 
     }
 
@@ -74,15 +88,15 @@ impl MerkleTree{
 
     // Recibe una lista de hashes y devuelve una lista que es la mitad de largo
     // Estos hashes pueden ser hojas o nodos
-    pub fn merkle_parent_level(&self, mut hashes: Vec<sha256::Hash>)-> Vec<sha256::Hash>{
-        
-    
+    pub fn merkle_parent_level(&self, mut hashes: Vec<sha256::Hash>)-> Result <Vec<sha256::Hash>, Error>{
 
         if hashes.len() % 2 == 1 {
             // Si la cantidad de hashes es impar, duplico el ultimo
             let last = match hashes.last() {
                 Some(last) => last,
-                None => panic!("No last element"), // ARREGLAR
+                None => return Err(Error::CantInvalidaNodos(String::from(
+                    "No se puede tener un unico nodo como hijo",
+                ))),
             };
             hashes.push(last.clone());
         }
@@ -96,22 +110,28 @@ impl MerkleTree{
             i += 2;
         }
 
-        parent_level
+        Ok(parent_level)
     }
 
     // To get the Merkle root we calculate successive Merkle parent levels until we get a single hash
-    pub fn merkle_root(&mut self, mut hashes: Vec<sha256::Hash>){
+    pub fn merkle_root(&mut self, mut hashes: Vec<sha256::Hash>) -> Result< String , Error>{
 
         if hashes.len() <= 1{
-            return;
+            return Err(Error::CantInvalidaNodos(String::from(
+                "No se puede tener un unico nodo en el arbol",
+            )));
         }
 
-        while hashes.len() > 1 {
-            hashes = self.merkle_parent_level(hashes);
+       while hashes.len() > 1 {
+           match self.merkle_parent_level(hashes) {
+               Ok(parent_level) => hashes = parent_level,
+               Err(_) => return Err(Error::CantInvalidaNodos(String::from(
+                "No se puede tener un unico nodo como hijo",
+            ))),
+           }
+       }    
         
-        }
-
-        self.root = hashes[0].to_string();
+        Ok(hashes[0].to_string())
     }
 
  
@@ -131,20 +151,21 @@ mod tests {
     use super::*;
 
     #[test]
+    #[should_panic]
     fn test_create_merkle_tree_with_empty_root() {
 
         let merkle_tree = MerkleTree::new();
         let expected = "";
 
-        assert_eq!(merkle_tree.get_root(), expected );
+        merkle_tree.get_root().unwrap();
     }
 
     #[test]
+    #[should_panic]
     fn test_create_merkle_tree_with_empty_leaves(){
         let merkle_tree = MerkleTree::new();
-        let expected = 0;
 
-        assert_eq!(merkle_tree.get_leaves().len(), expected );
+        merkle_tree.get_leaves().unwrap();
     }
 
 
@@ -158,7 +179,7 @@ mod tests {
         
         merkle_tree.generate_merkle_tree(data);
 
-        assert_eq!(merkle_tree.get_leaves().len(),4 );
+        assert_eq!(merkle_tree.get_leaves().unwrap().len(),4 );
     }
 
     // Relleno las hojas hasta que tengan multiplo de 2
@@ -171,7 +192,7 @@ mod tests {
         
         merkle_tree.generate_merkle_tree(data);
 
-        assert_eq!(merkle_tree.get_leaves().len(), 6 );
+        assert_eq!(merkle_tree.get_leaves().unwrap().len(), 6 );
     }
 
     #[test]
@@ -212,7 +233,7 @@ mod tests {
 
         let expected_len = hashes.len() / 2;
 
-        let parent_level = merkle_tree.merkle_parent_level(hashes);
+        let parent_level = merkle_tree.merkle_parent_level(hashes).unwrap();
 
 
         assert_eq!(parent_level.len(), expected_len);
@@ -230,7 +251,7 @@ mod tests {
 
         let expected_len = (hashes.len()+1) / 2;
 
-        let parent_level = merkle_tree.merkle_parent_level(hashes);
+        let parent_level = merkle_tree.merkle_parent_level(hashes).unwrap();
 
         assert_eq!(parent_level.len(), expected_len);
     } 
@@ -251,7 +272,7 @@ mod tests {
         merkle_tree.generate_merkle_tree(hex_hashes);
 
 
-        assert_eq!(merkle_tree.get_root(), expected_root ); 
+        assert_eq!(merkle_tree.get_root().unwrap(), expected_root ); 
     }
 
     #[test]
@@ -268,7 +289,7 @@ mod tests {
 
         merkle_tree.generate_merkle_tree(hex_hashes);
 
-        assert_eq!(merkle_tree.get_root(), expected_root ); 
+        assert_eq!(merkle_tree.get_root().unwrap(), expected_root ); 
     }
 
 
@@ -279,9 +300,9 @@ mod tests {
         
         let hashes = vec![merkle_tree.hash256("1"), merkle_tree.hash256("2"), merkle_tree.hash256("3"), merkle_tree.hash256("4")];
         
-        merkle_tree.merkle_root(hashes);
+        let root = merkle_tree.merkle_root(hashes).unwrap();
 
-        assert_eq!(merkle_tree.get_root().is_empty(), false );
+        assert_eq!(root.is_empty(), false );
     }
 
 
@@ -293,7 +314,7 @@ mod tests {
         
         merkle_tree.generate_merkle_tree(data);
 
-        assert_eq!(merkle_tree.get_root().is_empty(), false );
+        assert_eq!(merkle_tree.get_root().unwrap().is_empty(), false );
     }
 
     // Ejemplo del libro
@@ -313,7 +334,7 @@ mod tests {
         
     merkle_tree.generate_merkle_tree(hex_hashes);
 
-    assert_eq!(merkle_tree.get_root(), expected_root );   
+    assert_eq!(merkle_tree.get_root().unwrap(), expected_root );   
     }
 
     

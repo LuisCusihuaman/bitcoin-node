@@ -2,7 +2,8 @@
 pub enum Error {
     FaltaParametro(String),
     ArchivoInvalido(String),
-    // Posibles errores
+    CantInvalidaNodos(String),
+    MerkleTreeNotGenerated(String),
     // NoNodesAvailable
     // NoInternetConnection
     // etc

@@ -3,6 +3,7 @@ use crate::net::request::Request;
 use crate::net::response::Response;
 use crate::net::router::Router;
 use crate::net::server::Server;
+use crate::node::block::Block;
 use crate::node::message::version::PayloadVersion;
 use crate::node::message::{Encoding, MessagePayload};
 use crate::node::p2p_connection::P2PConnection;
@@ -63,6 +64,7 @@ pub struct NodeManager<'a> {
     node_network: NodeNetwork<'a>,
     config: Config,
     logger: &'a Logger,
+    blocks: Vec<Block>,
 }
 
 impl NodeManager<'_> {
@@ -71,6 +73,7 @@ impl NodeManager<'_> {
             config,
             node_network: NodeNetwork::new(logger),
             logger,
+            blocks: vec![], // inicializar el block genesis (con el config)
         }
     }
     pub fn handshake(&mut self) {
@@ -99,6 +102,9 @@ impl NodeManager<'_> {
                     if commands.contains(&"version") {
                         matched_messages.push(MessagePayload::Version(version.clone()));
                     }
+                }
+                MessagePayload::BlockHeader(blocks) => {
+                    self.blocks.extend(blocks.clone());
                 }
                 _ => {}
             }

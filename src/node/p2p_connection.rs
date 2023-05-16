@@ -62,7 +62,8 @@ impl P2PConnection {
                 eprintln!("Error reading from TCP stream: {}", err);
                 (self.peer_address.clone(), Vec::new())
             } //.map_err(|e| e.to_string())?; //CHECK CONN RESET
-    }}
+        }
+    }
 
     pub fn handshaked(&mut self) {
         self.handshaked = true;
@@ -88,7 +89,14 @@ fn parse_messages_from(buf: &mut Vec<u8>) -> Vec<MessagePayload> {
         let command_name = String::from_utf8_lossy(&header.command_name)
             .trim_end_matches('\0')
             .to_owned();
-        let payload_size = header.payload_size as usize;
+
+        let mut payload_size = header.payload_size as usize;
+
+        payload_size = if buf.len() < (payload_size + 24) {
+            (buf.len() - 24) as usize
+        } else {
+            payload_size
+        };
 
         match decode_message(
             &command_name,
@@ -106,7 +114,6 @@ fn parse_messages_from(buf: &mut Vec<u8>) -> Vec<MessagePayload> {
 
     messages
 }
-
 
 fn decode_message<T: Encoding<T>>(cmd: &String, data: &[u8]) -> Result<T, String> {
     T::decode(cmd, &data[..]).map(|t| t)
@@ -158,7 +165,8 @@ mod tests {
     }
 
     #[test]
-    fn send_get_headers_recive() -> Result<(), String> {
+    fn send_first_get_headers_and_response() -> Result<(), String> {
+        // Handshake
         let mut conn = P2PConnection::connect(&"5.9.73.173:18333".to_string()).unwrap();
         let payload_version_message = MessagePayload::Version(PayloadVersion::default_version());
         conn.send(&payload_version_message).unwrap();
@@ -170,13 +178,13 @@ mod tests {
         for message in first_messages.iter() {
             println!("Received message: {:?}", message.command_name()?);
         }
+
+        // Create getheaders message
         let hash_block_genesis: [u8; 32] = [
             0x00, 0x00, 0x00, 0x00, 0x09, 0x33, 0xea, 0x01, 0xad, 0x0e, 0xe9, 0x84, 0x20, 0x97,
             0x79, 0xba, 0xae, 0xc3, 0xce, 0xd9, 0x0f, 0xa3, 0xf4, 0x08, 0x71, 0x95, 0x26, 0xf8,
             0xd7, 0x7f, 0x49, 0x43,
         ];
-        // Python -> testnet_genesis_block = bytes.fromhex('000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943')
-        // TODO pasar de hex a array de 32 elementos(bytes)
 
         let stop_hash = [0u8; 32];
 
@@ -187,16 +195,13 @@ mod tests {
             stop_hash,
         ));
 
+        // Send getheaders message
         conn.send(&get_headers_message)?;
 
-        thread::sleep(Duration::from_secs(2));
+        // Receive headers message
+        let (_ip_address, _response) = conn.receive();
 
-        let (_, messages) = conn.receive();
-
-        for message in messages.iter() {
-            println!("Received message: {:?}", message.command_name()?);
-        }
-
+        // TODO check response
         Ok(())
     }
 }

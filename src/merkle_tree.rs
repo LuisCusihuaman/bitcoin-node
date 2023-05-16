@@ -76,8 +76,8 @@ impl MerkleTree{
     */
 
     // Convierte el input en un hash
-    fn hash256(&self, data: &str) -> sha256::Hash {
-        sha256::Hash::hash(data.as_bytes())
+    fn hash256(&self, data: &[u8]) -> sha256::Hash {
+        sha256::Hash::hash(data)
     }
 
     // Takes the binary hashes and calculates the hash256
@@ -148,23 +148,26 @@ mod tests {
 
     #[test]
     fn test_generates_hash_number_correctly(){
-        let hash = MerkleTree::new().hash256("1");
+        let hash = MerkleTree::new().hash256("1".as_bytes());
 
         assert!(hash.to_string().is_empty() == false);
     }
 
     #[test]
-    fn test_generates_merkle_parent_correctly(){
+    fn test_generates_merkle_node_parent_correctly(){
         let merkle_tree = MerkleTree::new();
-        let left_hash = merkle_tree.hash256("1");
-        let right_hash = merkle_tree.hash256("2");
+        let left_hash = merkle_tree.hash256("1".as_bytes());
+        let right_hash = merkle_tree.hash256("2".as_bytes());
 
+        // Concatenated va a tener el resultado de concatenar en bytes Hash(1)+Hash(2)
+        let mut concatenated = Vec::new();
+        concatenated.extend_from_slice(left_hash.as_ref());
+        concatenated.extend_from_slice(right_hash.as_ref());
+
+        let expected_hash = merkle_tree.hash256(&concatenated);
 
         let parent = merkle_tree.merkle_parent(left_hash.as_ref(), right_hash.as_ref());
-
         
-        let expected_hash = merkle_tree.hash256("12");
-
         assert_eq!(parent, expected_hash);
     }
 

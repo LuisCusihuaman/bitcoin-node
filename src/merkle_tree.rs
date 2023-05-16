@@ -57,8 +57,6 @@ impl MerkleTree{
             self.hashed_leaves.push(hash);
         }
 
-        //self.armar_arbol_rec();
-
     }
 
        // Convierte el input en un hash
@@ -103,60 +101,18 @@ impl MerkleTree{
         parent_level
     }
 
-/* 
-    def merkle_parent_level(hashes):
-        '''Takes a list of binary hashes and returns a list that's half
-        the length'''
-        if len(hashes) == 1:
-        raise RuntimeError('Cannot take a parent level with only 1 item')
-        if len(hashes) % 2 == 1:
-        hashes.append(hashes[-1])
-        parent_level = []
-        for i in range(0, len(hashes), 2):
-        parent = merkle_parent(hashes[i], hashes[i + 1])
-        parent_level.append(parent)
-        return parent_level
-*/
-/*
-    fn armar_arbol_rec(&self){
-        let mut new_tree = Vec::new();
-        let mut i = 0;
-        while (i < self.hashed_leaves.len()) {
-            let mut hash = Sha256::new();
-            hash.input_str(&self.hashed_leaves[i]);
-            let mut hash = hash.result_str();
-            new_tree.push(hash);
-            i += 2;
+    // To get the Merkle root we calculate successive Merkle parent levels until we get a single hash
+    pub fn merkle_root(&mut self, mut hashes: Vec<sha256::Hash>){
+        if hashes.len() == 0 {
+            panic!("Cannot take a root with no items"); // ARREGLAR
         }
-        tree = new_tree;
+
+        while hashes.len() > 1 {
+            hashes = self.merkle_parent_level(hashes);
+        }
+
+        self.root = hashes[0].to_string();
     }
-
-*/
-/*
-        // Creo el arbol
-        let mut tree = Vec::new();
-        let mut i = 0;
-        while (i < self.leaves.len()) {
-            tree.push(self.leaves[i].clone());
-            i += 1;
-        }
-
-        // Creo el arbol
-        while (tree.len() > 1) {
-            let mut new_tree = Vec::new();
-            let mut i = 0;
-            while (i < tree.len()) {
-                let mut hash = Sha256::new();
-                hash.input_str(&tree[i]);
-                let mut hash = hash.result_str();
-                new_tree.push(hash);
-                i += 2;
-            }
-            tree = new_tree;       
-        }
-    }
-
-    */
 
  
 
@@ -276,18 +232,20 @@ mod tests {
         assert_eq!(parent_level.len(), expected_len);
     } 
 
-/*
+
     // Genero el root correctamente
     #[test]
     fn test_creates_root_correctly(){
         let mut merkle_tree = MerkleTree::new();
+        let mut hashes = Vec::new();
+        hashes.push(merkle_tree.hash256("1".as_bytes()));
+        hashes.push(merkle_tree.hash256("2".as_bytes()));
+        hashes.push(merkle_tree.hash256("3".as_bytes()));
+        hashes.push(merkle_tree.hash256("4".as_bytes()));
         
-        let data = vec!["1","2", "3", "4"];
-        
-        merkle_tree.generate_leaves(data);
+        merkle_tree.merkle_root(hashes);
 
         assert_eq!(merkle_tree.get_root().is_empty(), false );
     }
 
-    */
 }

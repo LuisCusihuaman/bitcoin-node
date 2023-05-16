@@ -76,21 +76,31 @@ impl NodeManager<'_> {
             blocks: vec![], // inicializar el block genesis (con el config)
         }
     }
+
     pub fn handshake(&mut self) {
         let payload_version_message = MessagePayload::Version(PayloadVersion::default_version());
         self.broadcast(&payload_version_message);
         self.wait_for(vec!["version", "verack"]);
     }
+
     pub fn wait_for(&mut self, commands: Vec<&str>) -> Vec<MessagePayload> {
         let mut matched_messages = Vec::new();
         let received_messages = self.node_network.receive_from_all_peers();
-        let (peer_address, messages_from_first_peer) = received_messages.first().unwrap();
+
+        let (peer_address, messages_from_first_peer) = match received_messages.first() {
+            Some((peer_address, messages)) => (peer_address.clone(), messages.clone()),
+            None => {
+                println!("No se conectó");
+                (String::from(""), matched_messages.clone())
+            }
+        };
+
         for message in messages_from_first_peer {
             match message {
                 MessagePayload::Verack => {
                     self.logger
                         .log(format!("Received verack from {}", peer_address));
-                    self.node_network.handshake_complete(peer_address);
+                    self.node_network.handshake_complete(&peer_address);
                     if commands.contains(&"verack") {
                         matched_messages.push(MessagePayload::Verack);
                     }
@@ -104,6 +114,9 @@ impl NodeManager<'_> {
                     }
                 }
                 MessagePayload::BlockHeader(blocks) => {
+                    if commands.contains(&"headers") {
+                        matched_messages.push(MessagePayload::BlockHeader(blocks.clone()));
+                    }
                     self.blocks.extend(blocks.clone());
                 }
                 _ => {}
@@ -111,6 +124,11 @@ impl NodeManager<'_> {
         }
         matched_messages
     }
+
+    pub fn get_blocks(&self) -> Vec<Block> {
+        self.blocks.clone()
+    }
+
     fn resolve_hostname(&self, hostname: &str, port: u16) -> Result<Vec<IpAddr>, std::io::Error> {
         // resolve the hostname to a list of SocketAddr objects
         let addrs = (hostname, port).to_socket_addrs()?;
@@ -132,6 +150,7 @@ impl NodeManager<'_> {
             Ok(ips)
         }
     }
+
     pub fn get_initial_nodes(&mut self) -> Result<Vec<String>, String> {
         let ips = self
             .resolve_hostname(&self.config.addrs, self.config.port)
@@ -143,6 +162,7 @@ impl NodeManager<'_> {
             .collect();
         Ok(ipv4_addresses)
     }
+
     pub fn connect(&mut self, node_network_addresses: Vec<String>) -> Result<(), String> {
         for addr in node_network_addresses.iter() {
             match P2PConnection::connect(addr) {
@@ -158,12 +178,14 @@ impl NodeManager<'_> {
         }
         Ok(())
     }
+
     pub fn broadcast(&mut self, payload: &MessagePayload) {
         if let Err(e) = self.node_network.send_to_all_peers(&payload) {
             self.logger
                 .log(format!("Error sending message to peer: {:?}", e));
         }
     }
+    
     pub fn receive_all(&mut self) -> Vec<(String, Vec<MessagePayload>)> {
         self.node_network.receive_from_all_peers()
     }
@@ -172,6 +194,7 @@ impl NodeManager<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::node::message::get_headers::PayloadGetHeaders;
     use crate::node::message::version::PayloadVersion;
 
     #[test]
@@ -234,6 +257,55 @@ mod tests {
         //if let MessagePayload::Version(payload_version) = received_payloads {
         //    assert_eq!(payload_version.addr_trans_port, 0 /* default_version */);
         //}
+        Ok(())
+    }
+
+    #[test]
+    fn test_node_send_get_headers() -> Result<(), String> {
+        let logger = Logger::stdout();
+        let mut node_manager = NodeManager::new(
+            Config {
+                addrs: "seed.testnet.bitcoin.sprovoost.nl".to_string(),
+                port: 80,
+            },
+            &logger,
+        );
+
+        let node_network_ips = node_manager.get_initial_nodes().unwrap();
+        let first_address_from_dns: Vec<String> = node_network_ips
+            .iter()
+            .map(|ip| format!("{}:18333", ip))
+            .take(1)
+            .collect();
+        node_manager.connect(first_address_from_dns.clone())?;
+
+        node_manager.handshake();
+
+        // Create getheaders message
+        let hash_block_genesis: [u8; 32] = [
+            0x00, 0x00, 0x00, 0x00, 0x09, 0x33, 0xea, 0x01, 0xad, 0x0e, 0xe9, 0x84, 0x20, 0x97,
+            0x79, 0xba, 0xae, 0xc3, 0xce, 0xd9, 0x0f, 0xa3, 0xf4, 0x08, 0x71, 0x95, 0x26, 0xf8,
+            0xd7, 0x7f, 0x49, 0x43,
+        ];
+
+        let stop_hash = [0u8; 32];
+
+        let get_headers_message = MessagePayload::GetHeaders(PayloadGetHeaders::new(
+            70015,
+            1,
+            hash_block_genesis,
+            stop_hash,
+        ));
+
+        // Send getheaders message
+        node_manager.broadcast(&get_headers_message);
+
+        thread::sleep(Duration::from_millis(2000));
+        node_manager.wait_for(vec!["headers"]);
+
+        let blocks = node_manager.get_blocks();
+
+        assert_ne!(blocks.len(), 0);
         Ok(())
     }
 }

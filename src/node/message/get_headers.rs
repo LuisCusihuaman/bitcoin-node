@@ -29,7 +29,7 @@ impl PayloadGetHeaders {
 
     pub fn encode(&self, buffer: &mut [u8]) -> Result<(), String> {
         buffer[0..4].copy_from_slice(&self.version.to_le_bytes()); // 4 bytes
-        buffer[4..5].copy_from_slice(&self.hash_count.to_le_bytes()); // TODO ES VARIABLE
+        buffer[4..5].copy_from_slice(&self.hash_count.to_le_bytes()); // TODO Variable size
         buffer[5..37].copy_from_slice(&self.block_header_hashes); // 8 bytes
         buffer[37..].copy_from_slice(&self.stop_hash); // 8 bytes
         Ok(())

@@ -93,7 +93,7 @@ fn parse_messages_from(buf: &mut Vec<u8>) -> Vec<MessagePayload> {
         let mut payload_size = header.payload_size as usize;
 
         payload_size = if buf.len() < (payload_size + 24) {
-            (buf.len() - 24) as usize
+            (buf.len() - 24 - cursor) as usize
         } else {
             payload_size
         };

@@ -55,12 +55,13 @@ impl P2PConnection {
     }
 
     pub fn receive(&mut self) -> (String, Vec<MessagePayload>) {
-        thread::sleep(Duration::from_millis(500));
         let mut buffer = vec![0u8; 1_000_000];
         let mut received_bytes = Vec::new();
         let mut is_finished = false;
 
         while !is_finished {
+            thread::sleep(Duration::from_millis(500));
+
             match self.tcp_stream.read(&mut buffer) {
                 Ok(bytes_read) => {
                     if bytes_read == 0 {
@@ -68,7 +69,7 @@ impl P2PConnection {
                         is_finished = true;
                     } else {
                         buffer.resize(bytes_read, 0); // Resize the buffer to the actual number of bytes read
-                        received_bytes.extend_from_slice(&buffer[..bytes_read]);
+                        received_bytes.extend(&buffer[..bytes_read]);
                     }
                 }
                 Err(ref err) if err.kind() == std::io::ErrorKind::WouldBlock => {

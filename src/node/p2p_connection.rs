@@ -48,6 +48,7 @@ impl P2PConnection {
         buffer_total[20..24].copy_from_slice(&payload_checksum[..]);
         buffer_total[24..].copy_from_slice(&buffer_payload[..]);
 
+        thread::sleep(Duration::from_millis(500)); // Strategy to not overload server limit rate
         self.tcp_stream
             .write(&buffer_total[..])
             .map_err(|e| e.to_string())?;

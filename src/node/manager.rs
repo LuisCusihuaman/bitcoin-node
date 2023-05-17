@@ -306,51 +306,44 @@ mod tests {
         node_manager.handshake();
 
         // Create getheaders message
-        let mut hash_block_genesis: [u8; 32] = [
+        let mut last_block_prev_hash: [u8; 32] = [
             0x00, 0x00, 0x00, 0x00, 0x09, 0x33, 0xea, 0x01, 0xad, 0x0e, 0xe9, 0x84, 0x20, 0x97,
             0x79, 0xba, 0xae, 0xc3, 0xce, 0xd9, 0x0f, 0xa3, 0xf4, 0x08, 0x71, 0x95, 0x26, 0xf8,
             0xd7, 0x7f, 0x49, 0x43,
         ];
-        hash_block_genesis.reverse();
+        last_block_prev_hash.reverse();
 
         let stop_hash = [0u8; 32];
 
-        let get_headers_message = MessagePayload::GetHeaders(PayloadGetHeaders::new(
-            70015,
-            1,
-            hash_block_genesis,
-            stop_hash,
-        ));
+        let mut is_finished: bool = false;
+        let mut messages: Vec<MessagePayload> = vec![];
 
-        // Send getheaders message
-        node_manager.broadcast(&get_headers_message);
+        while !is_finished {
+            let payload_get_headers =
+                PayloadGetHeaders::new(70015, 1, last_block_prev_hash, stop_hash);
+            let get_headers_message = MessagePayload::GetHeaders(payload_get_headers);
 
-        // Wait for headers message and parsing
-        node_manager.wait_for(vec!["headers"]);
+            node_manager.broadcast(&get_headers_message);
 
-        let blocks = node_manager.get_blocks();
+            messages = node_manager.wait_for(vec!["headers"]);
 
-        assert!(blocks.len() > 0);
+            last_block_prev_hash = match node_manager.get_blocks().last() {
+                Some(block) => block.get_prev().clone(),
+                None => return Err("No blocks received".to_string()), // Err(Error::NoBlocksReceived)
+            };
+            last_block_prev_hash.reverse();
 
-        // Send getheaders again with last block prev hash
-        let mut last_block_prev_hash = match node_manager.get_blocks().last() {
-            Some(block) => block.get_prev().clone(),
-            None => return Err("No blocks received".to_string()), // Err(Error::NoBlocksReceived)
-        };
+            let blocks_again = node_manager.get_blocks();
 
-        last_block_prev_hash.reverse();
+            println!("{:?}", blocks_again.len());
 
-        let payload_get_headers_2 =
-            PayloadGetHeaders::new(70015, 1, last_block_prev_hash, stop_hash);
-        let get_headers_message_2 = MessagePayload::GetHeaders(payload_get_headers_2);
+            is_finished = messages.is_empty();
+        }
 
-        node_manager.broadcast(&get_headers_message_2);
+        let final_blocks = node_manager.get_blocks();
 
-        // Wait for headers message and parsing
-        thread::sleep(Duration::from_millis(2000));
-        node_manager.wait_for(vec!["headers"]);
-
-        let _blocks_again = node_manager.get_blocks();
+        println!("FINALLLLLLLLLL {:?}", final_blocks.len());
+        // assert!(blocks.len() > 0);
 
         Ok(())
     }

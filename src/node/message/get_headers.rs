@@ -16,7 +16,7 @@ pub struct PayloadGetHeaders {
 }
 
 impl PayloadGetHeaders {
-    pub fn size(&self) -> u64{
+    pub fn size(&self) -> u64 {
         let mut size = 0;
 
         size += 4; // version
@@ -47,11 +47,9 @@ impl PayloadGetHeaders {
             stop_hash,
         }
     }
-
 }
 
 pub fn decode_headers(buffer: &[u8]) -> Result<MessagePayload, String> {
-
     let offset = get_offset(&buffer[..]);
 
     let chunked = buffer[offset..].chunks(80);
@@ -80,9 +78,11 @@ fn decode_header(buffer: &[u8]) -> Option<BlockHeader> {
 
     let mut previous_block_header_hash: [u8; 32] = [0u8; 32];
     copy_bytes_to_array(&buffer[4..36], &mut previous_block_header_hash);
+    previous_block_header_hash.reverse();
 
     let mut merkle_root_hash: [u8; 32] = [0u8; 32];
     copy_bytes_to_array(&buffer[36..68], &mut merkle_root_hash);
+    merkle_root_hash.reverse();
 
     let timestamp = read_le(&buffer[68..72]) as u32;
     let n_bits = read_le(&buffer[72..76]) as u32;
@@ -97,7 +97,6 @@ fn decode_header(buffer: &[u8]) -> Option<BlockHeader> {
         nonce,
     ))
 }
-
 
 fn new_block(block_header: BlockHeader) -> Block {
     let tx_hashes: Vec<[u8; 32]> = Vec::new();

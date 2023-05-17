@@ -3,6 +3,7 @@ use crate::node::message::{Encoding, MessageHeader, MessagePayload};
 use crate::utils::double_sha256;
 use std::io::{Read, Write};
 use std::net::TcpStream;
+use std::thread;
 use std::time::Duration;
 use std::vec;
 
@@ -17,6 +18,9 @@ impl P2PConnection {
         // TODO: save the peers that not pass the timeout
         let tcp_stream = TcpStream::connect_timeout(&addr.parse().unwrap(), Duration::from_secs(5))
             .map_err(|e| e.to_string())?;
+
+        tcp_stream.set_nonblocking(true);
+
         Ok(Self {
             handshaked: false,
             peer_address: addr.clone(),
@@ -51,18 +55,35 @@ impl P2PConnection {
     }
 
     pub fn receive(&mut self) -> (String, Vec<MessagePayload>) {
+        thread::sleep(Duration::from_millis(500));
         let mut buffer = vec![0u8; 1_000_000];
-        match self.tcp_stream.read(&mut buffer) {
-            Ok(bytes_read) => {
-                buffer.resize(bytes_read, 0); // Resize the buffer to the actual number of bytes read
-                let messages = parse_messages_from(&mut buffer);
-                (self.peer_address.clone(), messages)
+        let mut received_bytes = Vec::new();
+        let mut is_finished = false;
+
+        while !is_finished {
+            match self.tcp_stream.read(&mut buffer) {
+                Ok(bytes_read) => {
+                    if bytes_read == 0 {
+                        // Sender has finished sending messages
+                        is_finished = true;
+                    } else {
+                        buffer.resize(bytes_read, 0); // Resize the buffer to the actual number of bytes read
+                        received_bytes.extend_from_slice(&buffer[..bytes_read]);
+                    }
+                }
+                Err(ref err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                    // Resource temporarily unavailable, wait or perform other tasks
+                    break;
+                }
+                Err(err) => {
+                    eprintln!("Error reading from TCP stream: {}", err);
+                    break;
+                }
             }
-            Err(err) => {
-                eprintln!("Error reading from TCP stream: {}", err);
-                (self.peer_address.clone(), Vec::new())
-            } //.map_err(|e| e.to_string())?; //CHECK CONN RESET
         }
+
+        let messages = parse_messages_from(&mut received_bytes);
+        (self.peer_address.clone(), messages)
     }
 
     pub fn handshaked(&mut self) {
@@ -81,14 +102,15 @@ fn parse_messages_from(buf: &mut Vec<u8>) -> Vec<MessagePayload> {
                 Err(_err) => continue,
             };
 
+        let command_name = String::from_utf8_lossy(&header.command_name)
+            .trim_end_matches('\0')
+            .to_owned();
+
         if header.magic_number != 118034699 {
             println!("Invalid magic number: 0x{:08x}", header.magic_number);
             cursor += (header.payload_size as usize) + 24;
             break;
         }
-        let command_name = String::from_utf8_lossy(&header.command_name)
-            .trim_end_matches('\0')
-            .to_owned();
 
         let mut payload_size = header.payload_size as usize;
 

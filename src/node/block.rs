@@ -13,7 +13,7 @@ impl Block {
         }
     }
 
-    pub fn get_prev(&self)-> [u8; 32]{
+    pub fn get_prev(&self) -> [u8; 32] {
         self.block_header.previous_block_header_hash
     }
 }

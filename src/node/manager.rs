@@ -38,7 +38,6 @@ impl NodeNetwork<'_> {
             .iter_mut()
             .find(|connection| connection.peer_address == *peer_address)
         {
-            println!("Handshake complete");
             peer_connection.handshaked();
         }
     }
@@ -52,7 +51,6 @@ impl NodeNetwork<'_> {
     }
 
     pub fn receive_from_all_peers(&mut self) -> Vec<(String, Vec<MessagePayload>)> {
-        thread::sleep(Duration::from_millis(500));
         self.peer_connections
             .iter_mut()
             .map(|connection| connection.receive())
@@ -87,15 +85,13 @@ impl NodeManager<'_> {
         let mut matched_messages = Vec::new();
         let received_messages = self.node_network.receive_from_all_peers();
 
-        
         let (peer_address, messages_from_first_peer) = match received_messages.first() {
-            Some( (peer_address, messages)) => (peer_address.clone(), messages.clone()),
+            Some((peer_address, messages)) => (peer_address.clone(), messages.clone()),
             None => {
                 println!("No se conectó");
                 (String::from(""), matched_messages.clone())
             }
         };
-    
 
         for message in messages_from_first_peer {
             match message {
@@ -187,7 +183,7 @@ impl NodeManager<'_> {
                 .log(format!("Error sending message to peer: {:?}", e));
         }
     }
-    
+
     pub fn receive_all(&mut self) -> Vec<(String, Vec<MessagePayload>)> {
         self.node_network.receive_from_all_peers()
     }
@@ -243,13 +239,7 @@ mod tests {
             },
             &logger,
         );
-        let node_network_ips = node_manager.get_initial_nodes().unwrap();
-        let first_address_from_dns: Vec<String> = node_network_ips
-            .iter()
-            .map(|ip| format!("{}:18333", ip))
-            .take(1)
-            .collect();
-        node_manager.connect(first_address_from_dns.clone())?;
+        node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
 
         let payload_version_message = MessagePayload::Version(PayloadVersion::default_version());
         node_manager.broadcast(&payload_version_message);
@@ -272,23 +262,16 @@ mod tests {
             },
             &logger,
         );
-
-        let node_network_ips = node_manager.get_initial_nodes().unwrap();
-        let first_address_from_dns: Vec<String> = node_network_ips
-            .iter()
-            .map(|ip| format!("{}:18333", ip))
-            .take(1)
-            .collect();
-        node_manager.connect(first_address_from_dns.clone())?;
-
+        node_manager.connect(vec!["69.197.185.106:18333".to_string()])?;
         node_manager.handshake();
 
         // Create getheaders message
-        let hash_block_genesis: [u8; 32] = [
+        let mut hash_block_genesis: [u8; 32] = [
             0x00, 0x00, 0x00, 0x00, 0x09, 0x33, 0xea, 0x01, 0xad, 0x0e, 0xe9, 0x84, 0x20, 0x97,
             0x79, 0xba, 0xae, 0xc3, 0xce, 0xd9, 0x0f, 0xa3, 0xf4, 0x08, 0x71, 0x95, 0x26, 0xf8,
             0xd7, 0x7f, 0x49, 0x43,
         ];
+        hash_block_genesis.reverse();
 
         let stop_hash = [0u8; 32];
 
@@ -302,12 +285,11 @@ mod tests {
         // Send getheaders message
         node_manager.broadcast(&get_headers_message);
 
-        thread::sleep(Duration::from_millis(2000));
         node_manager.wait_for(vec!["headers"]);
 
         let blocks = node_manager.get_blocks();
 
-        assert_ne!(blocks.len(), 0);
+        assert!(blocks.len() > 10);
         Ok(())
     }
 
@@ -321,23 +303,16 @@ mod tests {
             },
             &logger,
         );
-
-        let node_network_ips = node_manager.get_initial_nodes().unwrap();
-        let first_address_from_dns: Vec<String> = node_network_ips
-            .iter()
-            .map(|ip| format!("{}:18333", ip))
-            .take(1)
-            .collect();
-        node_manager.connect(first_address_from_dns.clone())?;
-
+        node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
         node_manager.handshake();
 
         // Create getheaders message
-        let hash_block_genesis: [u8; 32] = [
+        let mut hash_block_genesis: [u8; 32] = [
             0x00, 0x00, 0x00, 0x00, 0x09, 0x33, 0xea, 0x01, 0xad, 0x0e, 0xe9, 0x84, 0x20, 0x97,
             0x79, 0xba, 0xae, 0xc3, 0xce, 0xd9, 0x0f, 0xa3, 0xf4, 0x08, 0x71, 0x95, 0x26, 0xf8,
             0xd7, 0x7f, 0x49, 0x43,
         ];
+        hash_block_genesis.reverse();
 
         let stop_hash = [0u8; 32];
 
@@ -347,28 +322,29 @@ mod tests {
             hash_block_genesis,
             stop_hash,
         ));
-    
 
         // Send getheaders message
         node_manager.broadcast(&get_headers_message);
 
         // Wait for headers message and parsing
-        thread::sleep(Duration::from_millis(2000));
         node_manager.wait_for(vec!["headers"]);
 
-        let last_block = match node_manager.get_blocks().last(){
-            Some(bloque) => bloque.clone(),
-            None => return Err("No blocks received".to_string()), // Err(Error::NoBlocksReceived)
-        };
+        let blocks = node_manager.get_blocks();
 
-        let payload_get_headers_2 = PayloadGetHeaders::new(70015, 1, last_block.get_prev(), stop_hash);
-        let get_headers_message_2 = MessagePayload::GetHeaders(payload_get_headers_2);
-        
-        node_manager.broadcast(&get_headers_message_2);
+        assert!(blocks.len() > 10);
+        // let last_block = match node_manager.get_blocks().last(){
+        //     Some(bloque) => bloque.clone(),
+        //     None => return Err("No blocks received".to_string()), // Err(Error::NoBlocksReceived)
+        // };
 
-        // Wait for headers message and parsing
-        thread::sleep(Duration::from_millis(2000));
-        node_manager.wait_for(vec!["headers"]);
+        // let payload_get_headers_2 = PayloadGetHeaders::new(70015, 1, last_block.get_prev(), stop_hash);
+        // let get_headers_message_2 = MessagePayload::GetHeaders(payload_get_headers_2);
+
+        // node_manager.broadcast(&get_headers_message_2);
+
+        // // Wait for headers message and parsing
+        // thread::sleep(Duration::from_millis(2000));
+        // node_manager.wait_for(vec!["headers"]);
 
         Ok(())
     }

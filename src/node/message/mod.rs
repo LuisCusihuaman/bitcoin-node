@@ -98,7 +98,7 @@ impl Encoding<MessagePayload> for MessagePayload {
             }
             MessagePayload::Verack => {}
             MessagePayload::GetHeaders(get_headers) => {
-                get_headers.encode(buffer)?;
+                get_headers.encode(buffer);
             }
             MessagePayload::BlockHeader(_) => {} // CHEQUEAR No se envía
         }

@@ -16,7 +16,7 @@ pub struct PayloadGetHeaders {
 }
 
 impl PayloadGetHeaders {
-    pub fn size(&self) -> u64 {
+    pub fn size(&self) -> u64{
         let mut size = 0;
 
         size += 4; // version
@@ -27,12 +27,11 @@ impl PayloadGetHeaders {
         size
     }
 
-    pub fn encode(&self, buffer: &mut [u8]) -> Result<(), String> {
+    pub fn encode(&self, buffer: &mut [u8]) {
         buffer[0..4].copy_from_slice(&self.version.to_le_bytes()); // 4 bytes
         buffer[4..5].copy_from_slice(&self.hash_count.to_le_bytes()); // TODO Variable size
         buffer[5..37].copy_from_slice(&self.block_header_hashes); // 8 bytes
         buffer[37..].copy_from_slice(&self.stop_hash); // 8 bytes
-        Ok(())
     }
 
     pub fn new(
@@ -48,10 +47,14 @@ impl PayloadGetHeaders {
             stop_hash,
         }
     }
+
 }
 
 pub fn decode_headers(buffer: &[u8]) -> Result<MessagePayload, String> {
-    let chunked = buffer.chunks(80);
+
+    let offset = get_offset(&buffer[..]);
+
+    let chunked = buffer[offset..].chunks(80);
 
     let mut blocks = vec![];
     let mut block;
@@ -94,6 +97,7 @@ fn decode_header(buffer: &[u8]) -> Option<BlockHeader> {
         nonce,
     ))
 }
+
 
 fn new_block(block_header: BlockHeader) -> Block {
     let tx_hashes: Vec<[u8; 32]> = Vec::new();

@@ -1,11 +1,7 @@
-use std::vec;
-
+use super::MessagePayload;
 use crate::node::block::Block;
 use crate::utils::*;
-
-use super::MessagePayload;
-
-type CompactSizeUint = String;
+use std::vec;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PayloadGetHeaders {
@@ -18,7 +14,6 @@ pub struct PayloadGetHeaders {
 impl PayloadGetHeaders {
     pub fn size(&self) -> u64 {
         let mut size = 0;
-
         size += 4; // version
         size += 1; // TODO Variable size
         size += 32; // TODO Variable size
@@ -51,7 +46,7 @@ impl PayloadGetHeaders {
 
 pub fn decode_headers(buffer: &[u8]) -> Result<MessagePayload, String> {
     let _count = read_varint(&mut &buffer[0..])?;
-    let offset = 3; // get_offset(&buffer[..]);
+    let offset = get_offset(&buffer[..]);
 
     let chunked = buffer[offset..].chunks(81);
     let mut blocks = vec![];
@@ -64,6 +59,7 @@ pub fn decode_headers(buffer: &[u8]) -> Result<MessagePayload, String> {
             None => continue,
         }
     }
+
     Ok(MessagePayload::BlockHeader(blocks))
 }
 

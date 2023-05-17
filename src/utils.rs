@@ -2,20 +2,6 @@ use bitcoin_hashes::{sha256, Hash};
 use std::io;
 use std::io::{Read, Write};
 
-pub fn get_offset(buff: &[u8]) -> usize {
-    let i: u8 = buff[0];
-
-    if i == 0xfdu8 as u8 {
-        2 as usize
-    } else if i == 0xfeu8 as u8 {
-        4 as usize
-    } else if i == 0xffu8 as u8 {
-        8 as usize
-    } else {
-        1 as usize
-    }
-}
-
 pub fn read_le(bytes: &[u8]) -> usize {
     let mut result: usize = 0;
     let len_bytes = bytes.len();
@@ -68,6 +54,20 @@ pub fn read_string(buffer: &[u8], offset: usize, length: usize) -> String {
     String::from_utf8(buffer[offset..offset + length].to_vec()).unwrap()
 }
 
+pub fn get_offset(buff: &[u8]) -> usize {
+    let i: u8 = buff[0];
+
+    if i == 0xfdu8 as u8 {
+        2 + 1 as usize
+    } else if i == 0xfeu8 as u8 {
+        4 + 1 as usize
+    } else if i == 0xffu8 as u8 {
+        8 + 1 as usize
+    } else {
+        1 as usize
+    }
+}
+
 pub fn read_varint<R: Read>(reader: &mut R) -> Result<usize, String> {
     let mut buffer = [0u8; 8];
     reader
@@ -79,18 +79,21 @@ pub fn read_varint<R: Read>(reader: &mut R) -> Result<usize, String> {
             reader
                 .read(&mut buffer[0..2])
                 .map_err(|err| format!("Failed to read varint: {}", err))?;
+
             u64::from_le_bytes([buffer[0], buffer[1], 0, 0, 0, 0, 0, 0])
         }
         0xfe => {
             reader
                 .read(&mut buffer[0..4])
                 .map_err(|err| format!("Failed to read varint: {}", err))?;
+
             u64::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3], 0, 0, 0, 0])
         }
         0xff => {
             reader
                 .read(&mut buffer[0..8])
                 .map_err(|err| format!("Failed to read varint: {}", err))?;
+
             u64::from_le_bytes([
                 buffer[0], buffer[1], buffer[2], buffer[3], buffer[4], buffer[5], buffer[6],
                 buffer[7],

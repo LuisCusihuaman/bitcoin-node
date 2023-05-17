@@ -1,6 +1,6 @@
 use std::vec;
 
-use crate::node::block::{Block, BlockHeader};
+use crate::node::block::Block;
 use crate::utils::*;
 
 use super::MessagePayload;
@@ -50,17 +50,15 @@ impl PayloadGetHeaders {
 }
 
 pub fn decode_headers(buffer: &[u8]) -> Result<MessagePayload, String> {
-    let offset = get_offset(&buffer[..]);
+    let _count = read_varint(&mut &buffer[0..])?;
+    let offset = 3; // get_offset(&buffer[..]);
 
-    let chunked = buffer[offset..].chunks(80);
-
+    let chunked = buffer[offset..].chunks(81);
     let mut blocks = vec![];
-    let mut block;
 
     for bufercito in chunked.clone() {
         match decode_header(bufercito) {
-            Some(header) => {
-                block = new_block(header);
+            Some(block) => {
                 blocks.push(block);
             }
             None => continue,
@@ -69,8 +67,8 @@ pub fn decode_headers(buffer: &[u8]) -> Result<MessagePayload, String> {
     Ok(MessagePayload::BlockHeader(blocks))
 }
 
-fn decode_header(buffer: &[u8]) -> Option<BlockHeader> {
-    if buffer.len() != 80 {
+fn decode_header(buffer: &[u8]) -> Option<Block> {
+    if buffer.len() != 81 {
         return None;
     }
 
@@ -88,18 +86,21 @@ fn decode_header(buffer: &[u8]) -> Option<BlockHeader> {
     let n_bits = read_le(&buffer[72..76]) as u32;
     let nonce = read_le(&buffer[76..80]) as u32;
 
-    Some(BlockHeader::new(
+    let tx_count = read_varint(&mut &buffer[80..]).unwrap();
+
+    let tx_hashes: Vec<[u8; 32]> = if tx_count != 0 {
+        Vec::new() // TODO Block reading
+    } else {
+        Vec::new()
+    };
+
+    Some(Block::new(
         version,
         previous_block_header_hash,
         merkle_root_hash,
         timestamp,
         n_bits,
         nonce,
+        tx_hashes,
     ))
-}
-
-fn new_block(block_header: BlockHeader) -> Block {
-    let tx_hashes: Vec<[u8; 32]> = Vec::new();
-
-    Block::new(tx_hashes, block_header)
 }

@@ -63,7 +63,7 @@ pub fn decode_headers(buffer: &[u8]) -> Result<MessagePayload, String> {
     Ok(MessagePayload::BlockHeader(blocks))
 }
 
-fn decode_header(buffer: &[u8]) -> Option<Block> {
+pub fn decode_header(buffer: &[u8]) -> Option<Block> {
     if buffer.len() != 81 {
         return None;
     }

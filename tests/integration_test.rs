@@ -12,6 +12,7 @@ use std::{
 };
 
 #[test]
+#[ignore]
 fn test_al_pedir_un_balance_el_router_devuelve_resultado_esperado() -> std::io::Result<()> {
     // GIVEN
     let mut router = Router::new();

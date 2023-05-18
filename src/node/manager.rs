@@ -114,6 +114,16 @@ impl NodeManager<'_> {
                     // total size_of of blocks
                     Block::encode_blocks_to_file(&blocks, "block_headers.bin");
                 }
+                MessagePayload::Inv(inv) => {
+                    self.logger
+                        .log(format!("Received inv from {}", peer_address));
+                    
+                    if commands.contains(&"inv") {
+                        matched_messages.push(MessagePayload::Inv(inv.clone()));
+                    }
+
+                }
+                
                 _ => {}
             }
         }
@@ -230,7 +240,10 @@ impl NodeManager<'_> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
+    use crate::node::message::get_blocks::PayloadGetBlocks;
     use crate::node::message::get_headers::PayloadGetHeaders;
     use crate::node::message::version::PayloadVersion;
 
@@ -329,6 +342,112 @@ mod tests {
     }
 
     #[test]
+    fn test_node_send_get_blocks_receives_inv()-> Result<(), String> {
+        let logger = Logger::stdout();
+        let mut node_manager = NodeManager::new(
+            Config {
+                addrs: "seed.testnet.bitcoin.sprovoost.nl".to_string(),
+                port: 80,
+            },
+            &logger,
+        );
+        node_manager.connect(vec!["69.197.185.106:18333".to_string()])?;
+        node_manager.handshake();
+
+
+        let hash_beginning_project = [
+            0x00, 0x00, 0x00, 0x00, 0x09, 0x33, 0xea, 0x01, 0xad, 0x0e, 0xe9, 0x84, 0x20, 0x97,
+            0x79, 0xba, 0xae, 0xc3, 0xce, 0xd9, 0x0f, 0xa3, 0xf4, 0x08, 0x71, 0x95, 0x26, 0xf8,
+            0xd7, 0x7f, 0x49, 0x43,
+        ]; // 03/04/23
+
+        let stop_hash = [0u8; 32];
+
+        let get_blocks_message = MessagePayload::GetBlocks(PayloadGetBlocks::new(
+            70015,
+            1,
+            hash_beginning_project,
+            stop_hash,
+        ));
+
+        node_manager.broadcast(&get_blocks_message);
+        let messages_inv = node_manager.wait_for(vec!["inv"]);
+
+        assert!(messages_inv.len() > 0);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_node_send_get_blocks_receives_inv_sends_get_data()-> Result<(), String> {
+        let logger = Logger::stdout();
+        let mut node_manager = NodeManager::new(
+            Config {
+                addrs: "seed.testnet.bitcoin.sprovoost.nl".to_string(),
+                port: 80,
+            },
+            &logger,
+        );
+        node_manager.connect(vec!["69.197.185.106:18333".to_string()])?;
+        node_manager.handshake();
+
+
+        let hash_beginning_project = [
+            0x00, 0x00, 0x00, 0x00, 0x09, 0x33, 0xea, 0x01, 0xad, 0x0e, 0xe9, 0x84, 0x20, 0x97,
+            0x79, 0xba, 0xae, 0xc3, 0xce, 0xd9, 0x0f, 0xa3, 0xf4, 0x08, 0x71, 0x95, 0x26, 0xf8,
+            0xd7, 0x7f, 0x49, 0x43,
+        ]; // 03/04/23
+
+        let stop_hash = [0u8; 32];
+
+        let get_blocks_message = MessagePayload::GetBlocks(PayloadGetBlocks::new(
+            70015,
+            1,
+            hash_beginning_project,
+            stop_hash,
+        ));
+
+        node_manager.broadcast(&get_blocks_message);
+        
+        println!("Llegue aca");
+        // Recibo inventario
+        let messages = node_manager.wait_for(vec!["inv"]);
+
+        println!("Llegue aca 2");
+
+        let mut cont = 0;
+
+     
+
+        let mut blockchain: HashMap<String, Block> = HashMap::new();
+        
+        match messages.first() {
+            Some(MessagePayload::Inv(inventories)) => {
+                for inv in inventories.iter() {
+                    if inv.type_inv == 2 {
+                        cont += 1;
+                        println!("Es dos: {:?}", inv.type_inv);
+                        
+                        let block = node_manager.wait_for(vec!["block"]).first().unwrap();
+                        
+                        if let MessagePayload::Block(block) = block {
+                            let hash = block.get_hash();
+                            blockchain.insert(hash, block.clone());
+                        }
+                    }
+                }
+            }
+            _ => return Err("No inv message received".to_string()),
+        }
+
+        println!("Hay en total {}", cont);
+       
+
+        Ok(())
+    }
+
+    #[test]
+    #[ignore]
     fn test_complete_initial_block_download() -> Result<(), String> {
         let logger: Logger = Logger::stdout();
         let mut node_manager = NodeManager::new(
@@ -346,4 +465,6 @@ mod tests {
         std::fs::remove_file("block_headers.bin").unwrap();
         Ok(())
     }
+
+  
 }

@@ -14,7 +14,7 @@ pub struct Block {
     timestamp: u32,
     n_bits: u32,
     nonce: u32,
-    tx_hashes: Vec<[u8; 32]>,
+    tx_hashes: Vec<[u8; 32]>, // "tx"
 }
 
 impl Block {

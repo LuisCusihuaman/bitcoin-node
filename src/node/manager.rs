@@ -1,4 +1,4 @@
-use crate::node::block::Block;
+use crate::node::message::block::Block;
 use crate::node::message::version::PayloadVersion;
 use crate::node::message::MessagePayload;
 use crate::node::p2p_connection::P2PConnection;
@@ -417,9 +417,7 @@ mod tests {
 
         let mut cont = 0;
 
-     
-
-        let mut blockchain: HashMap<String, Block> = HashMap::new();
+        // let mut blockchain: HashMap<String, Block> = HashMap::new();
         
         match messages.first() {
             Some(MessagePayload::Inv(inventories)) => {
@@ -427,13 +425,19 @@ mod tests {
                     if inv.type_inv == 2 {
                         cont += 1;
                         println!("Es dos: {:?}", inv.type_inv);
+                        //Construir mensaje get data
                         
-                        let block = node_manager.wait_for(vec!["block"]).first().unwrap();
                         
-                        if let MessagePayload::Block(block) = block {
-                            let hash = block.get_hash();
-                            blockchain.insert(hash, block.clone());
-                        }
+                        // Enviar el mensaje get data
+                        
+
+                        // Esperamos respuesta
+                        let _block = node_manager.wait_for(vec!["block"]).first().unwrap();
+                        
+                        // if let MessagePayload::Block(block) = block {
+                            // let hash = block.get_prev();
+                        //     blockchain.insert(hash, block.clone());
+                        // }
                     }
                 }
             }

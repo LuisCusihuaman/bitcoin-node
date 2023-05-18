@@ -1,10 +1,15 @@
+
+use super::MessagePayload;
+use crate::utils::*;
+use std::vec;
+
 use std::{
     fs::{File, OpenOptions},
     io::Read,
     io::Write,
 };
 
-use super::message::get_headers::decode_header;
+use super::get_headers::decode_header;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Block {
@@ -121,6 +126,53 @@ impl Block {
         // Write the buffer to the file
         file.write_all(&buffer).expect("Failed to write to file");
     }
+}
+
+pub fn decode_block(buffer: &[u8]) -> Result<MessagePayload, String> {
+    
+    let _count = read_varint(&mut &buffer[0..])?;
+    let offset = get_offset(&buffer[..]);
+
+    let chunked = buffer[offset..].chunks(36);
+    let mut inv = vec![];
+
+    for bufercito in chunked.clone() {
+        match decode_internal_block(bufercito) {
+            Some(block) => {
+                inv.push(block);
+            }
+            None => continue,
+        }
+    }
+
+    Ok(MessagePayload::Block(inv))
+}
+
+fn decode_internal_block(buffer: &[u8]) -> Option<Block> {
+    if buffer.len() != 36 {
+        return None;
+    }
+
+    // let type_inv = read_u32_le(&buffer, 0);
+    // let mut hash: [u8; 32] = [0u8; 32];
+    // copy_bytes_to_array(&buffer[4..36], &mut hash);
+    // hash.reverse();
+
+    Some(Block::new(
+        1,
+        [
+            0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
+            217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
+        ],
+        [
+            240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53, 141, 211, 116,
+            95, 60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186,
+        ],
+        1296688928,
+        486604799,
+        1924588547,
+        vec![],
+    ))
 }
 
 #[cfg(test)]

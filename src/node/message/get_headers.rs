@@ -1,5 +1,6 @@
 use super::MessagePayload;
-use crate::node::block::Block;
+use super::block::Block;
+
 use crate::utils::*;
 use std::vec;
 

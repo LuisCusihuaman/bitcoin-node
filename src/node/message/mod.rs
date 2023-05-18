@@ -1,6 +1,6 @@
 use bs58::decode;
 
-use crate::node::block::Block;
+use crate::node::message::block::Block;
 use crate::node::message::get_headers::decode_headers;
 use crate::node::message::get_headers::PayloadGetHeaders;
 use crate::node::message::inv::Inv;
@@ -8,13 +8,17 @@ use crate::node::message::inv::decode_inv;
 use crate::node::message::get_blocks::PayloadGetBlocks;
 use crate::node::message::version::decode_version;
 use crate::node::message::version::PayloadVersion;
+use crate::node::message::block::decode_block;
+use crate::node::message::get_data::PayloadGetData;
 
 use crate::utils::read_le;
 
 pub mod get_headers;
 pub mod get_blocks;
+pub mod get_data;
 pub mod version;
 pub mod inv;
+pub mod block;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum MessagePayload {
@@ -24,7 +28,7 @@ pub enum MessagePayload {
     BlockHeader(Vec<Block>),
     GetBlocks(PayloadGetBlocks),
     Inv(Vec<Inv>),
-    GetData(Vec<Data>),
+    GetData(PayloadGetData),
     Block(Vec<Block>),
 }
 
@@ -102,6 +106,7 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::BlockHeader(_) => Ok(0), // CHEQUEAR No se envía
             MessagePayload::GetBlocks(get_blocks) => Ok(get_blocks.size()),
             MessagePayload::Inv(_) => Ok(0), // No enviamos Inventario por ahora
+            MessagePayload::GetData(get_data) => Ok(get_data.size()),
             MessagePayload::Block(_) => Ok(0),
         }
     }
@@ -120,6 +125,9 @@ impl Encoding<MessagePayload> for MessagePayload {
                 get_blocks.encode(buffer);
             }
             MessagePayload::Inv(_) => {} // TODO No enviamos inv
+            MessagePayload::GetData(get_data) => {
+                get_data.encode(buffer);
+            }
             MessagePayload::Block(_) => {}
         }
         Ok(())
@@ -133,6 +141,7 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::GetBlocks(_) => Ok("getblocks"),
             MessagePayload::BlockHeader(_) => Ok("headers"),
             MessagePayload::Inv(_) => Ok("inv"),
+            MessagePayload::GetData(_) => Ok("getdata"),
             MessagePayload::Block(_) => Ok("block"),
         }
     }

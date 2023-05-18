@@ -1,9 +1,10 @@
-use crate::logger::Logger;
 use crate::node::block::Block;
 use crate::node::message::version::PayloadVersion;
 use crate::node::message::MessagePayload;
 use crate::node::p2p_connection::P2PConnection;
+use crate::{logger::Logger, node::message::get_headers::PayloadGetHeaders};
 
+use std::fs;
 use std::net::{IpAddr, ToSocketAddrs};
 
 pub struct Config {
@@ -183,6 +184,48 @@ impl NodeManager<'_> {
     pub fn receive_all(&mut self) -> Vec<(String, Vec<MessagePayload>)> {
         self.node_network.receive_from_all_peers()
     }
+
+    pub fn initial_block_download(&mut self) -> Result<(), String> {
+        let file_path = "block_headers.bin";
+        if fs::metadata(file_path).is_ok() {
+            // Blocks file already exists, no need to perform initial block download
+            self.blocks = Block::decode_blocks_from_file(file_path);
+            if self.blocks.len() >= 2000 {
+                return Err("Blocks failed to decode".to_string());
+            }
+            return Ok(());
+        }
+        // Create getheaders message
+        let mut last_block_prev_hash: [u8; 32] = [
+            0x00, 0x00, 0x00, 0x00, 0x09, 0x33, 0xea, 0x01, 0xad, 0x0e, 0xe9, 0x84, 0x20, 0x97,
+            0x79, 0xba, 0xae, 0xc3, 0xce, 0xd9, 0x0f, 0xa3, 0xf4, 0x08, 0x71, 0x95, 0x26, 0xf8,
+            0xd7, 0x7f, 0x49, 0x43,
+        ];
+        last_block_prev_hash.reverse();
+
+        let stop_hash = [0u8; 32];
+
+        let mut is_finished: bool = false;
+        let mut messages: Vec<MessagePayload> = vec![];
+
+        while !is_finished {
+            let payload_get_headers =
+                PayloadGetHeaders::new(70015, 1, last_block_prev_hash, stop_hash);
+            let get_headers_message = MessagePayload::GetHeaders(payload_get_headers);
+
+            self.broadcast(&get_headers_message);
+            messages = self.wait_for(vec!["headers"]);
+
+            last_block_prev_hash = match self.blocks.last() {
+                Some(block) => block.get_prev().clone(),
+                None => return Err("No blocks received".to_string()), // Err(Error::NoBlocksReceived)
+            };
+            last_block_prev_hash.reverse();
+            println!("{:?}", self.blocks.len());
+            is_finished = messages.is_empty();
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -276,15 +319,12 @@ mod tests {
             hash_block_genesis,
             stop_hash,
         ));
-
-        // Send getheaders message
         node_manager.broadcast(&get_headers_message);
-
         node_manager.wait_for(vec!["headers"]);
-
         let blocks = node_manager.get_blocks();
 
         assert!(blocks.len() > 0);
+        std::fs::remove_file("block_headers.bin").unwrap();
         Ok(())
     }
 
@@ -300,35 +340,10 @@ mod tests {
         );
         node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
         node_manager.handshake();
+        node_manager.initial_block_download()?;
 
-        // Create getheaders message
-        let mut last_block_prev_hash: [u8; 32] = [
-            0x00, 0x00, 0x00, 0x00, 0x09, 0x33, 0xea, 0x01, 0xad, 0x0e, 0xe9, 0x84, 0x20, 0x97,
-            0x79, 0xba, 0xae, 0xc3, 0xce, 0xd9, 0x0f, 0xa3, 0xf4, 0x08, 0x71, 0x95, 0x26, 0xf8,
-            0xd7, 0x7f, 0x49, 0x43,
-        ];
-        last_block_prev_hash.reverse();
-
-        let stop_hash = [0u8; 32];
-
-        for _ in 0..3 {
-            let payload_get_headers =
-                PayloadGetHeaders::new(70015, 1, last_block_prev_hash, stop_hash);
-            let get_headers_message = MessagePayload::GetHeaders(payload_get_headers);
-
-            node_manager.broadcast(&get_headers_message);
-
-            node_manager.wait_for(vec!["headers"]);
-
-            last_block_prev_hash = match node_manager.get_blocks().last() {
-                Some(block) => block.get_prev().clone(),
-                None => return Err("No blocks received".to_string()), // Err(Error::NoBlocksReceived)
-            };
-            last_block_prev_hash.reverse();
-        }
-        let final_blocks = node_manager.get_blocks();
-        assert!(final_blocks.len() > 2000);
-
+        assert!(node_manager.get_blocks().len() >= 2000);
+        std::fs::remove_file("block_headers.bin").unwrap();
         Ok(())
     }
 }

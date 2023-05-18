@@ -39,6 +39,7 @@ impl Server<'_> {
                 .collect(),
         )?;
         self.node_manager.handshake();
+        self.node_manager.initial_block_download()?;
         self.logger.log(format!("Server listening on {}", addr));
         //here can trigger another thread with a loop to receive all messages for keep connection alive with other nodes
         let connection = listener.accept().map_err(|e| e.to_string())?;

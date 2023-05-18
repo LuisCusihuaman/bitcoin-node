@@ -1,13 +1,19 @@
+use crate::node::block::Block;
+use crate::node::message::get_headers::decode_headers;
+use crate::node::message::get_headers::PayloadGetHeaders;
 use crate::node::message::version::decode_version;
 use crate::node::message::version::PayloadVersion;
 use crate::utils::read_le;
 
+pub mod get_headers;
 pub mod version;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum MessagePayload {
     Version(PayloadVersion),
     Verack,
+    GetHeaders(PayloadGetHeaders),
+    BlockHeader(Vec<Block>),
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -80,6 +86,8 @@ impl Encoding<MessagePayload> for MessagePayload {
         match self {
             MessagePayload::Version(version) => Ok(version.size()),
             MessagePayload::Verack => Ok(0),
+            MessagePayload::GetHeaders(get_headers) => Ok(get_headers.size()),
+            MessagePayload::BlockHeader(_) => Ok(0), // CHEQUEAR No se envía
         }
     }
 
@@ -89,6 +97,10 @@ impl Encoding<MessagePayload> for MessagePayload {
                 version.encode(buffer)?;
             }
             MessagePayload::Verack => {}
+            MessagePayload::GetHeaders(get_headers) => {
+                get_headers.encode(buffer);
+            }
+            MessagePayload::BlockHeader(_) => {} // CHEQUEAR No se envía
         }
         Ok(())
     }
@@ -97,12 +109,15 @@ impl Encoding<MessagePayload> for MessagePayload {
         match self {
             MessagePayload::Version(_) => Ok("version"),
             MessagePayload::Verack => Ok("verack"),
+            MessagePayload::GetHeaders(_) => Ok("getheaders"),
+            MessagePayload::BlockHeader(_) => Ok("headers"),
         }
     }
 
     fn decode(cmd: &String, buffer: &[u8]) -> Result<Self, String> {
         match cmd.as_str() {
             "version" => decode_version(buffer),
+            "headers" => decode_headers(buffer),
             "verack" => Ok(MessagePayload::Verack),
             _ => Err("Unknown command: ".to_owned() + cmd),
         }

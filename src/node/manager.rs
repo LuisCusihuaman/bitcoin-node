@@ -7,6 +7,8 @@ use crate::node::block::Block;
 use crate::node::message::version::PayloadVersion;
 use crate::node::message::{Encoding, MessagePayload};
 use crate::node::p2p_connection::P2PConnection;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::net::{IpAddr, ToSocketAddrs};
 use std::thread;
 use std::thread::Thread;
@@ -81,6 +83,31 @@ impl NodeManager<'_> {
         self.wait_for(vec!["version", "verack"]);
     }
 
+    fn encode_blocks_to_file(&self, file_path: &str) {
+        // Get the total size of blocks
+        let total_size = self.blocks.iter().map(|block| block.size_of()).sum();
+
+        // Create a buffer to hold all the encoded blocks
+        let mut buffer = vec![0; total_size];
+
+        // Encode each block and append it to the buffer
+        let mut offset = 0;
+        for block in &self.blocks {
+            block.encode(&mut buffer[offset..]);
+            offset += block.size_of();
+        }
+
+        // Open the file in append mode
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(file_path)
+            .expect("Failed to open file");
+
+        // Write the buffer to the file
+        file.write_all(&buffer).expect("Failed to write to file");
+    }
+
     pub fn wait_for(&mut self, commands: Vec<&str>) -> Vec<MessagePayload> {
         let mut matched_messages = Vec::new();
         let received_messages = self.node_network.receive_from_all_peers();
@@ -116,6 +143,10 @@ impl NodeManager<'_> {
                         matched_messages.push(MessagePayload::BlockHeader(blocks.clone()));
                     }
                     self.blocks.extend(blocks.clone());
+                    // total size_of of blocks
+                    self.encode_blocks_to_file("blocks.bin");
+                    // //write all bites in file headers.bin
+                    // std::fs::write("headers.bin", blocks_encoded.join(&vec![0u8; 80]));
                 }
                 _ => {}
             }
@@ -294,7 +325,7 @@ mod tests {
 
     #[test]
     fn test_complete_initial_block_download() -> Result<(), String> {
-        let logger = Logger::stdout();
+        let logger: Logger = Logger::stdout();
         let mut node_manager = NodeManager::new(
             Config {
                 addrs: "seed.testnet.bitcoin.sprovoost.nl".to_string(),

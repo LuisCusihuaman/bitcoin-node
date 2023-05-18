@@ -68,6 +68,21 @@ pub fn get_offset(buff: &[u8]) -> usize {
     }
 }
 
+pub fn write_varint<W: Write>(writer: &mut W, value: usize) -> Result<(), io::Error> {
+    if value < 0xfd {
+        writer.write_all(&[value as u8])
+    } else if value <= 0xffff {
+        writer.write_all(&[0xfd])?;
+        writer.write_all(&value.to_le_bytes()[0..2])
+    } else if value <= 0xffffffff {
+        writer.write_all(&[0xfe])?;
+        writer.write_all(&value.to_le_bytes()[0..4])
+    } else {
+        writer.write_all(&[0xff])?;
+        writer.write_all(&value.to_le_bytes()[0..8])
+    }
+}
+
 pub fn read_varint<R: Read>(reader: &mut R) -> Result<usize, String> {
     let mut buffer = [0u8; 8];
     reader

@@ -129,49 +129,56 @@ impl Block {
 }
 
 pub fn decode_block(buffer: &[u8]) -> Result<MessagePayload, String> {
-    
-    let _count = read_varint(&mut &buffer[0..])?;
-    let offset = get_offset(&buffer[..]);
+    // let _count = read_varint(&mut &buffer[0..])?;
+    // let offset = 0; //get_offset(&buffer[..]);
 
-    let chunked = buffer[offset..].chunks(36);
-    let mut inv = vec![];
+    let chunked = buffer.chunks(81);
+    let mut blocks = vec![];
 
     for bufercito in chunked.clone() {
         match decode_internal_block(bufercito) {
             Some(block) => {
-                inv.push(block);
+                blocks.push(block);
             }
             None => continue,
         }
     }
 
-    Ok(MessagePayload::Block(inv))
+    Ok(MessagePayload::BlockHeader(blocks))
 }
 
-fn decode_internal_block(buffer: &[u8]) -> Option<Block> {
-    if buffer.len() != 36 {
-        return None;
-    }
+pub fn decode_internal_block(buffer: &[u8]) -> Option<Block> {
 
-    // let type_inv = read_u32_le(&buffer, 0);
-    // let mut hash: [u8; 32] = [0u8; 32];
-    // copy_bytes_to_array(&buffer[4..36], &mut hash);
-    // hash.reverse();
+    let version = read_u32_le(&buffer, 0);
+
+    let mut previous_block_header_hash: [u8; 32] = [0u8; 32];
+    copy_bytes_to_array(&buffer[4..36], &mut previous_block_header_hash);
+    previous_block_header_hash.reverse();
+
+    let mut merkle_root_hash: [u8; 32] = [0u8; 32];
+    copy_bytes_to_array(&buffer[36..68], &mut merkle_root_hash);
+    merkle_root_hash.reverse();
+
+    let timestamp = read_le(&buffer[68..72]) as u32;
+    let n_bits = read_le(&buffer[72..76]) as u32;
+    let nonce = read_le(&buffer[76..80]) as u32;
+
+    let tx_count = read_varint(&mut &buffer[80..]).unwrap();
+
+    let tx_hashes: Vec<[u8; 32]> = if tx_count != 0 {
+        Vec::new() // TODO Block reading
+    } else {
+        Vec::new()
+    };
 
     Some(Block::new(
-        1,
-        [
-            0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
-            217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
-        ],
-        [
-            240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53, 141, 211, 116,
-            95, 60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186,
-        ],
-        1296688928,
-        486604799,
-        1924588547,
-        vec![],
+        version,
+        previous_block_header_hash,
+        merkle_root_hash,
+        timestamp,
+        n_bits,
+        nonce,
+        tx_hashes,
     ))
 }
 

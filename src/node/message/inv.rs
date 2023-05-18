@@ -4,13 +4,12 @@ use std::vec;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Inv {
-    pub type_inv: u32,
-    hash: [u8; 32],
+    pub inv: [u8; 36],
 }
 
 impl Inv {
-    pub fn new(type_inv: u32, hash: [u8; 32]) -> Self {
-        Self { type_inv, hash }
+    pub fn new(inv: [u8; 36]) -> Self {
+        Self { inv }
     }
 }
 
@@ -40,13 +39,11 @@ fn decode_inventory(buffer: &[u8]) -> Option<Inv> {
         return None;
     }
 
-    let type_inv = read_u32_le(&buffer, 0);
-    let mut hash: [u8; 32] = [0u8; 32];
-    copy_bytes_to_array(&buffer[4..36], &mut hash);
-    hash.reverse();
+    // let type_inv = read_u32_le(&buffer, 0);
+    let mut inv: [u8; 36] = [0u8; 36];
+    copy_bytes_to_array(&buffer[..], &mut inv);
 
     Some(Inv::new(
-        type_inv,
-        hash,
+        inv
     ))
 }

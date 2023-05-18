@@ -246,6 +246,7 @@ mod tests {
     use crate::node::message::get_blocks::PayloadGetBlocks;
     use crate::node::message::get_headers::PayloadGetHeaders;
     use crate::node::message::version::PayloadVersion;
+    use crate::node::message::get_data::PayloadGetData;
 
     #[test]
     fn test_get_all_ips_from_dns() {
@@ -415,21 +416,26 @@ mod tests {
 
         println!("Llegue aca 2");
 
-        let mut cont = 0;
-
         // let mut blockchain: HashMap<String, Block> = HashMap::new();
         
         match messages.first() {
             Some(MessagePayload::Inv(inventories)) => {
                 for inv in inventories.iter() {
-                    if inv.type_inv == 2 {
-                        cont += 1;
-                        println!("Es dos: {:?}", inv.type_inv);
-                        //Construir mensaje get data
+                
+                        // let mut hash_number = inv.hash.clone();
+                        // hash_number.reverse();
                         
+                        // let asd = [0u8; 36];
+
+                        //Construir mensaje get data
+                        let get_data_message = MessagePayload::GetData(PayloadGetData::new(
+                            1,
+                            inv.inv,
+                        ));
+
                         
                         // Enviar el mensaje get data
-                        
+                        node_manager.broadcast(&get_data_message);
 
                         // Esperamos respuesta
                         let _block = node_manager.wait_for(vec!["block"]).first().unwrap();
@@ -438,13 +444,10 @@ mod tests {
                             // let hash = block.get_prev();
                         //     blockchain.insert(hash, block.clone());
                         // }
-                    }
                 }
             }
             _ => return Err("No inv message received".to_string()),
         }
-
-        println!("Hay en total {}", cont);
        
 
         Ok(())

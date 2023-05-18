@@ -1,18 +1,10 @@
 use crate::logger::Logger;
-use crate::net::request::Request;
-use crate::net::response::Response;
-use crate::net::router::Router;
-use crate::net::server::Server;
 use crate::node::block::Block;
 use crate::node::message::version::PayloadVersion;
-use crate::node::message::{Encoding, MessagePayload};
+use crate::node::message::MessagePayload;
 use crate::node::p2p_connection::P2PConnection;
-use std::fs::{self, OpenOptions};
-use std::io::Write;
+
 use std::net::{IpAddr, ToSocketAddrs};
-use std::thread;
-use std::thread::Thread;
-use std::time::Duration;
 
 pub struct Config {
     pub addrs: String,
@@ -83,31 +75,6 @@ impl NodeManager<'_> {
         self.wait_for(vec!["version", "verack"]);
     }
 
-    fn encode_blocks_to_file(&self, file_path: &str) {
-        // Get the total size of blocks
-        let total_size = self.blocks.iter().map(|block| block.size_of()).sum();
-
-        // Create a buffer to hold all the encoded blocks
-        let mut buffer = vec![0; total_size];
-
-        // Encode each block and append it to the buffer
-        let mut offset = 0;
-        for block in &self.blocks {
-            block.encode(&mut buffer[offset..]);
-            offset += block.size_of();
-        }
-
-        // Open the file in append mode
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(file_path)
-            .expect("Failed to open file");
-
-        // Write the buffer to the file
-        file.write_all(&buffer).expect("Failed to write to file");
-    }
-
     pub fn wait_for(&mut self, commands: Vec<&str>) -> Vec<MessagePayload> {
         let mut matched_messages = Vec::new();
         let received_messages = self.node_network.receive_from_all_peers();
@@ -144,9 +111,7 @@ impl NodeManager<'_> {
                     }
                     self.blocks.extend(blocks.clone());
                     // total size_of of blocks
-                    self.encode_blocks_to_file("blocks.bin");
-                    // //write all bites in file headers.bin
-                    // std::fs::write("headers.bin", blocks_encoded.join(&vec![0u8; 80]));
+                    Block::encode_blocks_to_file(&blocks, "block_headers.bin");
                 }
                 _ => {}
             }
@@ -346,35 +311,23 @@ mod tests {
 
         let stop_hash = [0u8; 32];
 
-        let mut is_finished: bool = false;
-        let mut messages: Vec<MessagePayload> = vec![];
-
-        while !is_finished {
+        for _ in 0..3 {
             let payload_get_headers =
                 PayloadGetHeaders::new(70015, 1, last_block_prev_hash, stop_hash);
             let get_headers_message = MessagePayload::GetHeaders(payload_get_headers);
 
             node_manager.broadcast(&get_headers_message);
 
-            messages = node_manager.wait_for(vec!["headers"]);
+            node_manager.wait_for(vec!["headers"]);
 
             last_block_prev_hash = match node_manager.get_blocks().last() {
                 Some(block) => block.get_prev().clone(),
                 None => return Err("No blocks received".to_string()), // Err(Error::NoBlocksReceived)
             };
             last_block_prev_hash.reverse();
-
-            let blocks_again = node_manager.get_blocks();
-
-            println!("{:?}", blocks_again.len());
-
-            is_finished = messages.is_empty();
         }
-
         let final_blocks = node_manager.get_blocks();
-
-        println!("FINALLLLLLLLLL {:?}", final_blocks.len());
-        // assert!(blocks.len() > 0);
+        assert!(final_blocks.len() > 2000);
 
         Ok(())
     }

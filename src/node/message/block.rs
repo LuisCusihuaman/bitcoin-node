@@ -20,8 +20,8 @@ pub struct Block {
     timestamp: u32,
     n_bits: u32,
     nonce: u32,
-    txn_count: u8, // TODO Variable size
-    txns: Vec<Tx>, // TODO Variable size
+    pub txn_count: u8, // TODO Variable size
+    txns: Vec<Tx>,     // TODO Variable size
 }
 
 impl Block {
@@ -140,13 +140,15 @@ impl Block {
 pub fn decode_block(buffer: &[u8]) -> Result<MessagePayload, String> {
     println!("decoding block:");
     println!("{:?}", buffer);
-    let block_header = decode_internal_block(&buffer[0..80]).unwrap();
+    let block_header = decode_internal_block(&buffer).unwrap();
     let mut transactions = Vec::new();
-    
-    let mut offset = 80;
-    while offset + 4 <= buffer.len() {
-        if let Some(tx) = decode_tx(&buffer[offset..]) {
-            offset += 4 + tx.get_size() as usize;
+
+    let tnx_count = read_varint(&mut &buffer[80..]).unwrap() as u8;
+    let mut offset = 80 + get_offset(&buffer[80..]);
+
+    for _ in 0..tnx_count {
+        if let Some(tx) = decode_tx(&buffer, &mut offset) {
+            println!("{:?}", offset);
             transactions.push(tx);
         } else {
             return Err("Failed to decode transaction".to_string());

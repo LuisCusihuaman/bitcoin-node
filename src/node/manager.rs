@@ -428,7 +428,9 @@ mod tests {
                     node_manager.broadcast(&get_data_message);
 
                     // Esperamos respuesta
-                    if let Some(MessagePayload::Block(block_payload)) = node_manager.wait_for(vec!["block"]).first() {
+                    if let Some(MessagePayload::Block(block_payload)) =
+                        node_manager.wait_for(vec!["block"]).first()
+                    {
                         let _hash: [u8; 32] = block_payload.get_prev();
                         node_manager.blocks.push(block_payload.clone());
                         // blockchain.insert(hash, block.clone());

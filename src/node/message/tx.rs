@@ -1,10 +1,12 @@
+use crate::utils::*;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Tx {
     version: u32,
-    flag: u32,
-    tx_in_count: u8,
+    flag: u16,
+    tx_in_count: u64,
     tx_in: Vec<TxIn>,
-    tx_out_count: u8,
+    tx_out_count: u64,
     tx_out: Vec<TxOut>,
     tx_witness: Vec<u8>,
     lock_time: u32,
@@ -12,7 +14,7 @@ pub struct Tx {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TxIn {
-    previous_output: [u8; 32],
+    previous_output: [u8; 36],
     script_length: u8,
     signature_script: Vec<u8>,
     sequence: u32,
@@ -21,7 +23,7 @@ pub struct TxIn {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TxOut {
     value: u64,
-    pk_script_length: u8,
+    pk_script_length: u64,
     pk_script: Vec<u8>,
 }
 
@@ -65,46 +67,35 @@ impl Tx {
 //     witness: Vec<u8>,
 // }
 
-pub fn decode_tx(buffer: &[u8]) -> Option<Tx> {
-    if buffer.len() < 85 {
-        return None; // Buffer is not large enough for a complete transaction
-    }
+pub fn decode_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
+    let version = read_u32_le(&buffer, 0);
+    *offset += 4;
 
-    let version = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
+    // If present, always 00 01 , and indicates the presence of witness data
+    // Nosotros tenemos 01 00, NO 00 01
+    let flag = 0; // TODO Funcion q devuelva offset y flag
+    *offset += 0;
 
-    let flag = u32::from_le_bytes([buffer[4], buffer[5], buffer[6], buffer[7]]);
-
-    let tx_in_count = buffer[8];
+    let tx_in_count = read_varint(&mut &buffer[*offset..]).unwrap() as u64; // Never zero, TODO calcular bien offset arriba
+    *offset += get_offset(&buffer[*offset..]);
 
     let mut tx_in = Vec::new();
-    let mut offset = 9;
+    // let mut offset = 9; // ????????????
+
     for _ in 0..tx_in_count {
-        if offset + 38 > buffer.len() {
-            return None; // Buffer is not large enough for the next transaction input
-        }
+        let mut previous_output = [0u8; 36];
+        previous_output.copy_from_slice(&buffer[*offset..*offset + 36]);
+        *offset += 36;
 
-        let mut previous_output = [0u8; 32];
-        previous_output.copy_from_slice(&buffer[offset..offset + 32]);
-        offset += 32;
-
-        let script_length = buffer[offset];
-        offset += 1;
-
-        if offset + script_length as usize > buffer.len() {
-            return None; // Buffer is not large enough for the input signature script
-        }
+        let script_length = read_varint(&mut &buffer[*offset..]).unwrap() as u8;
+        *offset += get_offset(&buffer[*offset..]);
 
         let mut signature_script = Vec::new();
-        signature_script.extend_from_slice(&buffer[offset..offset + script_length as usize]);
-        offset += script_length as usize;
+        signature_script.extend(&buffer[*offset..*offset + script_length as usize]);
+        *offset += script_length as usize;
 
-        let sequence = u32::from_le_bytes([
-            buffer[offset],
-            buffer[offset + 1],
-            buffer[offset + 2],
-            buffer[offset + 3],
-        ]);
-        offset += 4;
+        let sequence = read_u32_le(&buffer, *offset);
+        *offset += 4;
 
         let tx_input = TxIn {
             previous_output,
@@ -112,76 +103,51 @@ pub fn decode_tx(buffer: &[u8]) -> Option<Tx> {
             signature_script,
             sequence,
         };
+
         tx_in.push(tx_input);
     }
 
-    let tx_out_count = buffer[offset];
+    let tx_out_count = read_varint(&mut &buffer[*offset..]).unwrap() as u64;
+    *offset += get_offset(&buffer[*offset..]);
 
     let mut tx_out = Vec::new();
-    offset += 1;
+
     for _ in 0..tx_out_count {
-        if offset + 9 > buffer.len() {
-            return None; // Buffer is not large enough for the next transaction output
-        }
+        let value = read_u64_le(buffer, *offset);
+        *offset += 8;
 
-        let value = u64::from_le_bytes([
-            buffer[offset],
-            buffer[offset + 1],
-            buffer[offset + 2],
-            buffer[offset + 3],
-            buffer[offset + 4],
-            buffer[offset + 5],
-            buffer[offset + 6],
-            buffer[offset + 7],
-        ]);
-        offset += 8;
-
-        let pk_script_length = buffer[offset];
-        offset += 1;
-
-        if offset + pk_script_length as usize > buffer.len() {
-            return None; // Buffer is not large enough for the output pubkey script
-        }
+        let pk_script_length = read_varint(&mut &buffer[*offset..]).unwrap() as u64;
+        *offset += get_offset(&buffer[*offset..]);
 
         let mut pk_script = Vec::new();
-        pk_script.extend_from_slice(&buffer[offset..offset + pk_script_length as usize]);
-        offset += pk_script_length as usize;
+        pk_script.extend(&buffer[*offset..*offset + pk_script_length as usize]);
+        *offset += pk_script_length as usize;
 
         let tx_output = TxOut {
             value,
             pk_script_length,
             pk_script,
         };
+
         tx_out.push(tx_output);
     }
 
     let tx_witness = if flag != 0 {
-        let witness_length = buffer[offset];
-        offset += 1;
-
-        if offset + witness_length as usize > buffer.len() {
-            return None; // Buffer is not large enough for the transaction witness
-        }
+        let witness_length = buffer[*offset];
+        *offset += 1;
 
         let mut tx_witness = Vec::new();
-        tx_witness.extend(&buffer[offset..offset + witness_length as usize]);
-        offset += witness_length as usize;
+        tx_witness.extend(&buffer[*offset..*offset + witness_length as usize]);
+        *offset += witness_length as usize;
 
         tx_witness
     } else {
         Vec::new()
+        // Offset no se actualiza
     };
 
-    if offset + 4 > buffer.len() {
-        return None; // Buffer is not large enough for the transaction lock time
-    }
-
-    let lock_time = u32::from_le_bytes([
-        buffer[offset],
-        buffer[offset + 1],
-        buffer[offset + 2],
-        buffer[offset + 3],
-    ]);
+    let lock_time = read_u32_le(&buffer, *offset);
+    *offset += 4;
 
     Some(Tx {
         version,
@@ -196,7 +162,6 @@ pub fn decode_tx(buffer: &[u8]) -> Option<Tx> {
 }
 
 #[cfg(test)]
-#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -204,14 +169,14 @@ mod tests {
     fn test_get_size() {
         // Create a sample transaction
         let tx_in_1 = TxIn {
-            previous_output: [0u8; 32],
+            previous_output: [0u8; 36],
             script_length: 10,
             signature_script: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
             sequence: 0,
         };
 
         let tx_in_2 = TxIn {
-            previous_output: [0u8; 32],
+            previous_output: [0u8; 36],
             script_length: 5,
             signature_script: vec![11, 12, 13, 14, 15],
             sequence: 0,

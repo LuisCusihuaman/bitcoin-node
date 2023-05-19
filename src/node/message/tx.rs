@@ -71,16 +71,19 @@ pub fn decode_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
     let version = read_u32_le(&buffer, 0);
     *offset += 4;
 
-    // If present, always 00 01 , and indicates the presence of witness data
-    // Nosotros tenemos 01 00, NO 00 01
-    let flag = 0; // TODO Funcion q devuelva offset y flag
-    *offset += 0;
+    // If present, always 0x0001 , and indicates the presence of witness data
+    let (flag, flag_bytes) = check_flag(&buffer[*offset..]);
+    *offset += flag_bytes;
+
+    if flag == 1{
+        // AAAAAA
+        println!("flag: 1 LOL")
+    }
 
     let tx_in_count = read_varint(&mut &buffer[*offset..]).unwrap() as u64; // Never zero, TODO calcular bien offset arriba
     *offset += get_offset(&buffer[*offset..]);
 
     let mut tx_in = Vec::new();
-    // let mut offset = 9; // ????????????
 
     for _ in 0..tx_in_count {
         let mut previous_output = [0u8; 36];
@@ -159,6 +162,16 @@ pub fn decode_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
         tx_witness,
         lock_time,
     })
+}
+
+fn check_flag(buffer: &[u8]) -> (u16, usize) {
+    if buffer[0] != 0x00 {
+        return (0, 0)
+    }
+    if buffer[1] != 0x01 {
+        return (0, 0)
+    }
+    (0x0001, 2)
 }
 
 #[cfg(test)]

@@ -1,4 +1,4 @@
-use crate::node::message::block::BlockHeader;
+use crate::node::message::block::Block;
 use crate::node::message::version::PayloadVersion;
 use crate::node::message::MessagePayload;
 use crate::node::p2p_connection::P2PConnection;
@@ -57,7 +57,7 @@ pub struct NodeManager<'a> {
     node_network: NodeNetwork<'a>,
     config: Config,
     logger: &'a Logger,
-    blocks: Vec<BlockHeader>,
+    blocks: Vec<Block>,
 }
 
 impl NodeManager<'_> {
@@ -112,25 +112,24 @@ impl NodeManager<'_> {
                     }
                     self.blocks.extend(blocks.clone());
                     // total size_of of blocks
-                    BlockHeader::encode_blocks_to_file(&blocks, "block_headers.bin");
+                    Block::encode_blocks_to_file(&blocks, "block_headers.bin");
                 }
                 MessagePayload::Inv(inv) => {
                     self.logger
                         .log(format!("Received inv from {}", peer_address));
-                    
+
                     if commands.contains(&"inv") {
                         matched_messages.push(MessagePayload::Inv(inv.clone()));
                     }
-
                 }
-                
+
                 _ => {}
             }
         }
         matched_messages
     }
 
-    pub fn get_blocks(&self) -> Vec<BlockHeader> {
+    pub fn get_blocks(&self) -> Vec<Block> {
         self.blocks.clone()
     }
 
@@ -199,7 +198,7 @@ impl NodeManager<'_> {
         let file_path = "block_headers.bin";
         if fs::metadata(file_path).is_ok() {
             // Blocks file already exists, no need to perform initial block download
-            self.blocks = BlockHeader::decode_blocks_from_file(file_path);
+            self.blocks = Block::decode_blocks_from_file(file_path);
             if self.blocks.len() >= 2000 {
                 return Err("Blocks failed to decode".to_string());
             }
@@ -244,9 +243,9 @@ mod tests {
 
     use super::*;
     use crate::node::message::get_blocks::PayloadGetBlocks;
+    use crate::node::message::get_data::PayloadGetData;
     use crate::node::message::get_headers::PayloadGetHeaders;
     use crate::node::message::version::PayloadVersion;
-    use crate::node::message::get_data::PayloadGetData;
 
     #[test]
     fn test_get_all_ips_from_dns() {
@@ -343,7 +342,7 @@ mod tests {
     }
 
     #[test]
-    fn test_node_send_get_blocks_receives_inv()-> Result<(), String> {
+    fn test_node_send_get_blocks_receives_inv() -> Result<(), String> {
         let logger = Logger::stdout();
         let mut node_manager = NodeManager::new(
             Config {
@@ -354,7 +353,6 @@ mod tests {
         );
         node_manager.connect(vec!["69.197.185.106:18333".to_string()])?;
         node_manager.handshake();
-
 
         let hash_beginning_project = [
             0x00, 0x00, 0x00, 0x00, 0x09, 0x33, 0xea, 0x01, 0xad, 0x0e, 0xe9, 0x84, 0x20, 0x97,
@@ -380,7 +378,7 @@ mod tests {
     }
 
     #[test]
-    fn test_node_send_get_blocks_receives_inv_sends_get_data()-> Result<(), String> {
+    fn test_node_send_get_blocks_receives_inv_sends_get_data() -> Result<(), String> {
         let logger = Logger::stdout();
         let mut node_manager = NodeManager::new(
             Config {
@@ -391,7 +389,6 @@ mod tests {
         );
         node_manager.connect(vec!["69.197.185.106:18333".to_string()])?;
         node_manager.handshake();
-
 
         let hash_beginning_project = [
             0x00, 0x00, 0x00, 0x00, 0x09, 0x33, 0xea, 0x01, 0xad, 0x0e, 0xe9, 0x84, 0x20, 0x97,
@@ -409,7 +406,7 @@ mod tests {
         ));
 
         node_manager.broadcast(&get_blocks_message);
-        
+
         println!("Llegue aca");
         // Recibo inventario
         let messages = node_manager.wait_for(vec!["inv"]);
@@ -417,38 +414,32 @@ mod tests {
         println!("Llegue aca 2");
 
         // let mut blockchain: HashMap<String, Block> = HashMap::new();
-        
+
         match messages.first() {
             Some(MessagePayload::Inv(inventories)) => {
                 for inv in inventories.iter() {
-                
-                        // let mut hash_number = inv.hash.clone();
-                        // hash_number.reverse();
-                        
-                        // let asd = [0u8; 36];
+                    // let mut hash_number = inv.hash.clone();
+                    // hash_number.reverse();
 
-                        //Construir mensaje get data
-                        let get_data_message = MessagePayload::GetData(PayloadGetData::new(
-                            1,
-                            inv.inv,
-                        ));
+                    // let asd = [0u8; 36];
 
-                        
-                        // Enviar el mensaje get data
-                        node_manager.broadcast(&get_data_message);
+                    //Construir mensaje get data
+                    let get_data_message = MessagePayload::GetData(PayloadGetData::new(1, *inv));
 
-                        // Esperamos respuesta
-                        let _block = node_manager.wait_for(vec!["block"]).first().unwrap();
-                        
-                        // if let MessagePayload::Block(block) = block {
-                            // let hash = block.get_prev();
-                        //     blockchain.insert(hash, block.clone());
-                        // }
+                    // Enviar el mensaje get data
+                    node_manager.broadcast(&get_data_message);
+
+                    // Esperamos respuesta
+                    let _block = node_manager.wait_for(vec!["block"]).first().unwrap();
+
+                    // if let MessagePayload::Block(block) = block {
+                    // let hash = block.get_prev();
+                    //     blockchain.insert(hash, block.clone());
+                    // }
                 }
             }
             _ => return Err("No inv message received".to_string()),
         }
-       
 
         Ok(())
     }
@@ -472,6 +463,4 @@ mod tests {
         std::fs::remove_file("block_headers.bin").unwrap();
         Ok(())
     }
-
-  
 }

@@ -1,34 +1,33 @@
-use crate::node::message::blockHeader::BlockHeader;
+use crate::node::message::block::decode_block;
+use crate::node::message::block::Block;
+use crate::node::message::get_blocks::PayloadGetBlocks;
+use crate::node::message::get_data::PayloadGetData;
 use crate::node::message::get_headers::decode_headers;
 use crate::node::message::get_headers::PayloadGetHeaders;
-use crate::node::message::inv::Inv;
 use crate::node::message::inv::decode_inv;
-use crate::node::message::get_blocks::PayloadGetBlocks;
 use crate::node::message::version::decode_version;
 use crate::node::message::version::PayloadVersion;
-use crate::node::message::blockHeader::decode_block;
-use crate::node::message::get_data::PayloadGetData;
 
 use crate::utils::read_le;
 
-pub mod get_headers;
+pub mod block;
 pub mod get_blocks;
 pub mod get_data;
-pub mod version;
+pub mod get_headers;
 pub mod inv;
-pub mod blockHeader;
-pub mod block;
+pub mod tx;
+pub mod version;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum MessagePayload {
     Version(PayloadVersion),
     Verack,
     GetHeaders(PayloadGetHeaders),
-    BlockHeader(Vec<BlockHeader>),
+    BlockHeader(Vec<Block>),
     GetBlocks(PayloadGetBlocks),
-    Inv(Vec<Inv>),
+    Inv(Vec<[u8; 36]>),
     GetData(PayloadGetData),
-    Block(BlockHeader),
+    Block(Block),
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]

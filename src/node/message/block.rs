@@ -15,28 +15,30 @@ use super::get_headers::decode_header;
 pub struct Block {
     version: u32,
     previous_block: [u8; 32],
-    merkle_root: [u8; 32],
+    merkle_root_hash: [u8; 32],
     timestamp: u32,
     n_bits: u32,
     nonce: u32,
     txn_count: u8, // TODO Variable size
-    txns: Vec<[Tx]>, // "tx"
+    txns: Vec<Tx>, // TODO Variable size
 }
 
 impl Block {
     pub fn new(
         version: u32,
-        previous_block_header_hash: [u8; 32],
-        merkle_root: [u8; 32],
+        previous_block: [u8; 32],
+        merkle_root_hash: [u8; 32],
         timestamp: u32,
         n_bits: u32,
         nonce: u32,
         txn_count: u8,
     ) -> Self {
+        let txns: Vec<Tx> = Vec::new();
+
         Self {
             version,
             previous_block,
-            merkle_root,
+            merkle_root_hash,
             timestamp,
             n_bits,
             nonce,
@@ -58,7 +60,8 @@ impl Block {
         offset += 32;
 
         // Encode merkle_root_hash
-        let mut merkle_root_hash = self.merkle_root;
+        // Encode merkle_root_hash
+        let mut merkle_root_hash = self.merkle_root_hash;
         merkle_root_hash.reverse();
         buffer[offset..offset + 32].copy_from_slice(&merkle_root_hash);
         offset += 32;
@@ -76,11 +79,11 @@ impl Block {
         offset += 4;
 
         // txn_count
-        buffer[offset..offset + 1].copy_from_slice(&self.nonce.to_le_bytes());
+        buffer[offset..offset + 1].copy_from_slice(&self.txn_count.to_le_bytes());
         offset += 1; // Es variable
 
         // Encode txns, for complete initial download is zero.
-        buffer[offset..offset + 1].copy_from_slice(&[0]);
+        // buffer[offset..offset + 1].copy_from_slice(&[0]);
     }
 
     pub fn get_prev(&self) -> [u8; 32] {
@@ -137,56 +140,51 @@ pub fn decode_block(buffer: &[u8]) -> Result<MessagePayload, String> {
     // let _count = read_varint(&mut &buffer[0..])?;
     // let offset = 0; //get_offset(&buffer[..]);
 
+    let chunked = buffer.chunks(81);
+    let mut blocks = vec![];
 
-    let blocks = match decode_internal_block(buffer) {
+    for bufercito in chunked.clone() {
+        match decode_internal_block(bufercito) {
             Some(block) => {
-                block
+                blocks.push(block);
             }
-            None => {
-                return Err("Failed to decode block".to_string());
-            },
-        };
-    
+            None => continue,
+        }
+    }
 
-    Ok(MessagePayload::Block(blocks))
+    Ok(MessagePayload::BlockHeader(blocks))
 }
 
 pub fn decode_internal_block(buffer: &[u8]) -> Option<Block> {
-
     let version = read_u32_le(&buffer, 0);
 
-    let mut previous_block: [u8; 32] = [0u8; 32];
-    copy_bytes_to_array(&buffer[4..36], &mut previous_block);
-    previous_block.reverse();
+    let mut previous_block_header_hash: [u8; 32] = [0u8; 32];
+    copy_bytes_to_array(&buffer[4..36], &mut previous_block_header_hash);
+    previous_block_header_hash.reverse();
 
-    let mut merkle_root: [u8; 32] = [0u8; 32];
-    copy_bytes_to_array(&buffer[36..68], &mut merkle_root);
-    merkle_root.reverse();
+    let mut merkle_root_hash: [u8; 32] = [0u8; 32];
+    copy_bytes_to_array(&buffer[36..68], &mut merkle_root_hash);
+    merkle_root_hash.reverse();
 
     let timestamp = read_le(&buffer[68..72]) as u32;
     let n_bits = read_le(&buffer[72..76]) as u32;
     let nonce = read_le(&buffer[76..80]) as u32;
 
-    let tx_count:u8 = read_varint(&mut &buffer[80..81]).unwrap() as u8;
+    let tx_count = read_varint(&mut &buffer[80..]).unwrap() as u8;
 
-    let mut txms:[u8;62];
-    copy_bytes_to_array(&buffer[81..], &mut txms);
-
-    let tx_hashes: Vec<[u8; 32]> = if tx_count != 0 {
-        Vec::new() // TODO Block reading
-    } else {
-        Vec::new()
-    };
-
+    let mut txns: [u8; 64] = [0u8; 64];
+    copy_bytes_to_array(&buffer[81..], &mut txns);
+    // Aca hacer un decode tranx o algo así
+    //Append to block (block id, ie hash)
     Some(Block::new(
         version,
-        previous_block,
-        merkle_root,
+        previous_block_header_hash,
+        merkle_root_hash,
         timestamp,
         n_bits,
         nonce,
         tx_count,
-        txms,
+        // txns,
     ))
 }
 
@@ -210,7 +208,7 @@ mod tests {
             1296688928,
             486604799,
             1924588547,
-            vec![],
+            1,
         );
 
         let mut buffer_encoded = vec![0; 81];
@@ -243,7 +241,7 @@ mod tests {
                 1296688928,
                 486604799,
                 1924588547,
-                vec![],
+                1,
             ),
             Block::new(
                 1,
@@ -258,7 +256,7 @@ mod tests {
                 1296688928,
                 486604799,
                 1924588547,
-                vec![],
+                1,
             ),
         ];
         Block::encode_blocks_to_file(&blocks, file_path);

@@ -2,20 +2,7 @@ use super::MessagePayload;
 use crate::utils::*;
 use std::vec;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Inv {
-    pub inv: [u8; 36],
-}
-
-impl Inv {
-    pub fn new(inv: [u8; 36]) -> Self {
-        Self { inv }
-    }
-}
-
-
 pub fn decode_inv(buffer: &[u8]) -> Result<MessagePayload, String> {
-
     let _count = read_varint(&mut &buffer[0..])?;
     let offset = get_offset(&buffer[..]);
 
@@ -34,7 +21,7 @@ pub fn decode_inv(buffer: &[u8]) -> Result<MessagePayload, String> {
     Ok(MessagePayload::Inv(inv))
 }
 
-fn decode_inventory(buffer: &[u8]) -> Option<Inv> {
+fn decode_inventory(buffer: &[u8]) -> Option<[u8; 36]> {
     if buffer.len() != 36 {
         return None;
     }
@@ -43,7 +30,5 @@ fn decode_inventory(buffer: &[u8]) -> Option<Inv> {
     let mut inv: [u8; 36] = [0u8; 36];
     copy_bytes_to_array(&buffer[..], &mut inv);
 
-    Some(Inv::new(
-        inv
-    ))
+    Some(inv)
 }

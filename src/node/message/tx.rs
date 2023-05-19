@@ -1,6 +1,3 @@
-
-
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Tx {
     version: u32,
@@ -13,6 +10,7 @@ pub struct Tx {
     lock_time: u32,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TxIn {
     previous_output: [u8; 32],
     script_length: u8,
@@ -20,6 +18,7 @@ pub struct TxIn {
     sequence: u32,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TxOut {
     value: u64,
     pk_script_length: u8,

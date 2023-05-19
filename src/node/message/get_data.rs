@@ -1,5 +1,3 @@
-use super::inv::Inv;
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PayloadGetData {
     count: u8,

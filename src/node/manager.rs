@@ -1,4 +1,4 @@
-use crate::node::message::block::Block;
+use crate::node::message::block::BlockHeader;
 use crate::node::message::version::PayloadVersion;
 use crate::node::message::MessagePayload;
 use crate::node::p2p_connection::P2PConnection;
@@ -57,7 +57,7 @@ pub struct NodeManager<'a> {
     node_network: NodeNetwork<'a>,
     config: Config,
     logger: &'a Logger,
-    blocks: Vec<Block>,
+    blocks: Vec<BlockHeader>,
 }
 
 impl NodeManager<'_> {
@@ -112,7 +112,7 @@ impl NodeManager<'_> {
                     }
                     self.blocks.extend(blocks.clone());
                     // total size_of of blocks
-                    Block::encode_blocks_to_file(&blocks, "block_headers.bin");
+                    BlockHeader::encode_blocks_to_file(&blocks, "block_headers.bin");
                 }
                 MessagePayload::Inv(inv) => {
                     self.logger
@@ -130,7 +130,7 @@ impl NodeManager<'_> {
         matched_messages
     }
 
-    pub fn get_blocks(&self) -> Vec<Block> {
+    pub fn get_blocks(&self) -> Vec<BlockHeader> {
         self.blocks.clone()
     }
 
@@ -199,7 +199,7 @@ impl NodeManager<'_> {
         let file_path = "block_headers.bin";
         if fs::metadata(file_path).is_ok() {
             // Blocks file already exists, no need to perform initial block download
-            self.blocks = Block::decode_blocks_from_file(file_path);
+            self.blocks = BlockHeader::decode_blocks_from_file(file_path);
             if self.blocks.len() >= 2000 {
                 return Err("Blocks failed to decode".to_string());
             }

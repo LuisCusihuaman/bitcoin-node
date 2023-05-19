@@ -12,35 +12,34 @@ use std::{
 use super::get_headers::decode_header;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Block {
+pub struct BlockHeader {
     version: u32,
-    previous_block: [u8; 32],
-    merkle_root: [u8; 32],
+    previous_block_header_hash: [u8; 32],
+    merkle_root_hash: [u8; 32],
     timestamp: u32,
     n_bits: u32,
     nonce: u32,
     txn_count: u8, // TODO Variable size
-    txns: Vec<[Tx]>, // "tx"
 }
 
-impl Block {
+impl BlockHeader {
     pub fn new(
         version: u32,
         previous_block_header_hash: [u8; 32],
-        merkle_root: [u8; 32],
+        merkle_root_hash: [u8; 32],
         timestamp: u32,
         n_bits: u32,
         nonce: u32,
+        txn_count: u8,
     ) -> Self {
         Self {
             version,
-            previous_block,
-            merkle_root,
+            previous_block_header_hash,
+            merkle_root_hash,
             timestamp,
             n_bits,
             nonce,
             txn_count,
-            txns,
         }
     }
     pub fn encode(&self, buffer: &mut [u8]) {
@@ -51,13 +50,14 @@ impl Block {
         offset += 4;
 
         // Encode previous_block_header_hash
-        let mut previous_block_header_hash = self.previous_block;
+        let mut previous_block_header_hash = self.previous_block_header_hash;
         previous_block_header_hash.reverse();
         buffer[offset..offset + 32].copy_from_slice(&previous_block_header_hash);
         offset += 32;
 
         // Encode merkle_root_hash
-        let mut merkle_root_hash = self.merkle_root;
+        // Encode merkle_root_hash
+        let mut merkle_root_hash = self.merkle_root_hash;
         merkle_root_hash.reverse();
         buffer[offset..offset + 32].copy_from_slice(&merkle_root_hash);
         offset += 32;
@@ -83,9 +83,9 @@ impl Block {
     }
 
     pub fn get_prev(&self) -> [u8; 32] {
-        self.previous_block
+        self.previous_block_header_hash
     }
-    pub fn decode_blocks_from_file(file_path: &str) -> Vec<Block> {
+    pub fn decode_blocks_from_file(file_path: &str) -> Vec<BlockHeader> {
         let mut file = File::open(file_path).expect("Failed to open file");
 
         let mut buffer = Vec::new();
@@ -106,7 +106,7 @@ impl Block {
         blocks
     }
 
-    pub fn encode_blocks_to_file(blocks: &Vec<Block>, file_path: &str) {
+    pub fn encode_blocks_to_file(blocks: &Vec<BlockHeader>, file_path: &str) {
         // Get the total size of blocks
         let total_size = blocks.len() * 81;
 
@@ -136,56 +136,47 @@ pub fn decode_block(buffer: &[u8]) -> Result<MessagePayload, String> {
     // let _count = read_varint(&mut &buffer[0..])?;
     // let offset = 0; //get_offset(&buffer[..]);
 
+    let chunked = buffer.chunks(81);
+    let mut blocks = vec![];
 
-    let blocks = match decode_internal_block(buffer) {
+    for bufercito in chunked.clone() {
+        match decode_internal_block(bufercito) {
             Some(block) => {
-                block
+                blocks.push(block);
             }
-            None => {
-                return Err("Failed to decode block".to_string());
-            },
-        };
-    
+            None => continue,
+        }
+    }
 
-    Ok(MessagePayload::Block(blocks))
+    Ok(MessagePayload::BlockHeader(blocks))
 }
 
-pub fn decode_internal_block(buffer: &[u8]) -> Option<Block> {
+pub fn decode_internal_block(buffer: &[u8]) -> Option<BlockHeader> {
 
     let version = read_u32_le(&buffer, 0);
 
-    let mut previous_block: [u8; 32] = [0u8; 32];
-    copy_bytes_to_array(&buffer[4..36], &mut previous_block);
-    previous_block.reverse();
+    let mut previous_block_header_hash: [u8; 32] = [0u8; 32];
+    copy_bytes_to_array(&buffer[4..36], &mut previous_block_header_hash);
+    previous_block_header_hash.reverse();
 
-    let mut merkle_root: [u8; 32] = [0u8; 32];
-    copy_bytes_to_array(&buffer[36..68], &mut merkle_root);
-    merkle_root.reverse();
+    let mut merkle_root_hash: [u8; 32] = [0u8; 32];
+    copy_bytes_to_array(&buffer[36..68], &mut merkle_root_hash);
+    merkle_root_hash.reverse();
 
     let timestamp = read_le(&buffer[68..72]) as u32;
     let n_bits = read_le(&buffer[72..76]) as u32;
     let nonce = read_le(&buffer[76..80]) as u32;
 
-    let tx_count:u8 = read_varint(&mut &buffer[80..81]).unwrap() as u8;
+    let tx_count = read_varint(&mut &buffer[80..]).unwrap() as u8;
 
-    let mut txms:[u8;];
-    copy_bytes_to_array(&buffer[81..], &mut txms);
-
-    let tx_hashes: Vec<[u8; 32]> = if tx_count != 0 {
-        Vec::new() // TODO Block reading
-    } else {
-        Vec::new()
-    };
-
-    Some(Block::new(
+    Some(BlockHeader::new(
         version,
-        previous_block,
-        merkle_root,
+        previous_block_header_hash,
+        merkle_root_hash,
         timestamp,
         n_bits,
         nonce,
         tx_count,
-        txms,
     ))
 }
 
@@ -196,7 +187,7 @@ mod tests {
     #[test]
 
     fn test_block_encode() {
-        let block = Block::new(
+        let block = BlockHeader::new(
             1,
             [
                 0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
@@ -209,7 +200,7 @@ mod tests {
             1296688928,
             486604799,
             1924588547,
-            vec![],
+            1,
         );
 
         let mut buffer_encoded = vec![0; 81];
@@ -229,7 +220,7 @@ mod tests {
         // Create a temporary file with encoded blocks
         let file_path = "block_headers.bin";
         let blocks = vec![
-            Block::new(
+            BlockHeader::new(
                 1,
                 [
                     0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
@@ -242,9 +233,9 @@ mod tests {
                 1296688928,
                 486604799,
                 1924588547,
-                vec![],
+                1,
             ),
-            Block::new(
+            BlockHeader::new(
                 1,
                 [
                     0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
@@ -257,13 +248,13 @@ mod tests {
                 1296688928,
                 486604799,
                 1924588547,
-                vec![],
+                1,
             ),
         ];
-        Block::encode_blocks_to_file(&blocks, file_path);
+        BlockHeader::encode_blocks_to_file(&blocks, file_path);
 
         // Decode blocks from the file
-        let decoded_blocks = Block::decode_blocks_from_file(file_path);
+        let decoded_blocks = BlockHeader::decode_blocks_from_file(file_path);
 
         // Ensure the decoded blocks match the original blocks
         assert_eq!(decoded_blocks, blocks);

@@ -1,5 +1,5 @@
 use super::MessagePayload;
-use super::block::Block;
+use super::blockHeader::BlockHeader;
 
 use crate::utils::*;
 use std::vec;
@@ -64,7 +64,7 @@ pub fn decode_headers(buffer: &[u8]) -> Result<MessagePayload, String> {
     Ok(MessagePayload::BlockHeader(blocks))
 }
 
-pub fn decode_header(buffer: &[u8]) -> Option<Block> {
+pub fn decode_header(buffer: &[u8]) -> Option<BlockHeader> {
     if buffer.len() != 81 {
         return None;
     }
@@ -83,21 +83,15 @@ pub fn decode_header(buffer: &[u8]) -> Option<Block> {
     let n_bits = read_le(&buffer[72..76]) as u32;
     let nonce = read_le(&buffer[76..80]) as u32;
 
-    let tx_count = read_varint(&mut &buffer[80..]).unwrap();
+    let tx_count = read_varint(&mut &buffer[80..]).unwrap() as u8;
 
-    let tx_hashes: Vec<[u8; 32]> = if tx_count != 0 {
-        Vec::new() // TODO Block reading
-    } else {
-        Vec::new()
-    };
-
-    Some(Block::new(
+    Some(BlockHeader::new(
         version,
         previous_block_header_hash,
         merkle_root_hash,
         timestamp,
         n_bits,
         nonce,
-        tx_hashes,
+        tx_count,
     ))
 }

@@ -17,7 +17,7 @@ pub struct Block {
     version: u32,
     previous_block: [u8; 32],
     merkle_root_hash: [u8; 32],
-    timestamp: u32,
+    pub timestamp: u32,
     n_bits: u32,
     nonce: u32,
     pub txn_count: u8, // TODO Variable size
@@ -90,6 +90,7 @@ impl Block {
     pub fn get_prev(&self) -> [u8; 32] {
         self.previous_block
     }
+
     pub fn decode_blocks_from_file(file_path: &str) -> Vec<Block> {
         let mut file = File::open(file_path).expect("Failed to open file");
 
@@ -140,7 +141,7 @@ impl Block {
 pub fn decode_block(buffer: &[u8]) -> Result<MessagePayload, String> {
     println!("decoding block:");
     println!("{:?}", buffer);
-    let block_header = decode_internal_block(&buffer).unwrap();
+    let mut block = decode_internal_block(&buffer).unwrap();
     let mut transactions = Vec::new();
 
     let tnx_count = read_varint(&mut &buffer[80..]).unwrap() as u8;
@@ -148,14 +149,16 @@ pub fn decode_block(buffer: &[u8]) -> Result<MessagePayload, String> {
 
     for _ in 0..tnx_count {
         if let Some(tx) = decode_tx(&buffer, &mut offset) {
-            println!("{:?}", offset);
             transactions.push(tx);
         } else {
             return Err("Failed to decode transaction".to_string());
         }
     }
 
-    Ok(MessagePayload::BlockHeader(vec![block_header]))
+    block.txn_count = tnx_count;
+    block.txns = transactions;
+
+    Ok(MessagePayload::Block(block))
 }
 
 pub fn decode_internal_block(buffer: &[u8]) -> Option<Block> {

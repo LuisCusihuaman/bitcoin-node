@@ -1,4 +1,4 @@
-
+use super::tx::Tx;
 use super::MessagePayload;
 use crate::utils::*;
 use std::vec;
@@ -31,6 +31,7 @@ impl Block {
         timestamp: u32,
         n_bits: u32,
         nonce: u32,
+        txn_count: u8,
     ) -> Self {
         Self {
             version,
@@ -168,7 +169,7 @@ pub fn decode_internal_block(buffer: &[u8]) -> Option<Block> {
 
     let tx_count:u8 = read_varint(&mut &buffer[80..81]).unwrap() as u8;
 
-    let mut txms:[u8;];
+    let mut txms:[u8;62];
     copy_bytes_to_array(&buffer[81..], &mut txms);
 
     let tx_hashes: Vec<[u8; 32]> = if tx_count != 0 {

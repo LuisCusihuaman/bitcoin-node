@@ -1,5 +1,6 @@
 use super::tx::Tx;
 use super::MessagePayload;
+use crate::node::message::tx::decode_tx;
 use crate::utils::*;
 use std::vec;
 
@@ -137,22 +138,22 @@ impl Block {
 }
 
 pub fn decode_block(buffer: &[u8]) -> Result<MessagePayload, String> {
-    // let _count = read_varint(&mut &buffer[0..])?;
-    // let offset = 0; //get_offset(&buffer[..]);
-
-    let chunked = buffer.chunks(81);
-    let mut blocks = vec![];
-
-    for bufercito in chunked.clone() {
-        match decode_internal_block(bufercito) {
-            Some(block) => {
-                blocks.push(block);
-            }
-            None => continue,
+    println!("decoding block:");
+    println!("{:?}", buffer);
+    let block_header = decode_internal_block(&buffer[0..80]).unwrap();
+    let mut transactions = Vec::new();
+    
+    let mut offset = 80;
+    while offset + 4 <= buffer.len() {
+        if let Some(tx) = decode_tx(&buffer[offset..]) {
+            offset += 4 + tx.get_size() as usize;
+            transactions.push(tx);
+        } else {
+            return Err("Failed to decode transaction".to_string());
         }
     }
 
-    Ok(MessagePayload::BlockHeader(blocks))
+    Ok(MessagePayload::BlockHeader(vec![block_header]))
 }
 
 pub fn decode_internal_block(buffer: &[u8]) -> Option<Block> {
@@ -170,12 +171,6 @@ pub fn decode_internal_block(buffer: &[u8]) -> Option<Block> {
     let n_bits = read_le(&buffer[72..76]) as u32;
     let nonce = read_le(&buffer[76..80]) as u32;
 
-    let tx_count = read_varint(&mut &buffer[80..]).unwrap() as u8;
-
-    let mut txns: [u8; 64] = [0u8; 64];
-    copy_bytes_to_array(&buffer[81..], &mut txns);
-    // Aca hacer un decode tranx o algo así
-    //Append to block (block id, ie hash)
     Some(Block::new(
         version,
         previous_block_header_hash,
@@ -183,7 +178,7 @@ pub fn decode_internal_block(buffer: &[u8]) -> Option<Block> {
         timestamp,
         n_bits,
         nonce,
-        tx_count,
+        0,
         // txns,
     ))
 }

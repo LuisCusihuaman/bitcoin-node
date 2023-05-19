@@ -242,6 +242,7 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
+    use crate::node;
     use crate::node::message::get_blocks::PayloadGetBlocks;
     use crate::node::message::get_data::PayloadGetData;
     use crate::node::message::get_headers::PayloadGetHeaders;
@@ -407,11 +408,8 @@ mod tests {
 
         node_manager.broadcast(&get_blocks_message);
 
-        println!("Llegue aca");
         // Recibo inventario
         let messages = node_manager.wait_for(vec!["inv"]);
-
-        println!("Llegue aca 2");
 
         // let mut blockchain: HashMap<String, Block> = HashMap::new();
 
@@ -430,8 +428,11 @@ mod tests {
                     node_manager.broadcast(&get_data_message);
 
                     // Esperamos respuesta
-                    let _block = node_manager.wait_for(vec!["block"]).first().unwrap();
-
+                    if let Some(MessagePayload::Block(block_payload)) = node_manager.wait_for(vec!["block"]).first() {
+                        let _hash: [u8; 32] = block_payload.get_prev();
+                        node_manager.blocks.push(block_payload.clone());
+                        // blockchain.insert(hash, block.clone());
+                    }
                     // if let MessagePayload::Block(block) = block {
                     // let hash = block.get_prev();
                     //     blockchain.insert(hash, block.clone());

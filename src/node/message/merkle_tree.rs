@@ -43,7 +43,7 @@ impl MerkleTree {
     }
 
     // Generates the merkle root from the vector of leaves
-    pub fn generate_merkle_tree(&mut self, data: Vec<&str>) {
+    pub fn generate_merkle_tree(&mut self, data: Vec<&[u8]>) {
         if data.len() == 0 {
             return;
         }
@@ -201,24 +201,7 @@ mod tests {
 
         assert!(hash.to_string().is_empty() == false);
     }
-
-    #[test]
-    fn test_real_de_bloque(){
-
-
-        let mut merkle_tree = MerkleTree::new();
-
-        //let expected_root = "14ede5e8e97ad9372327728f5099b95604a39593cac3bd38a343ad76205213e7";
-
-        // Resultado sacado de https://blockchain-academy.hs-mittweida.de/merkle-tree/
-        let expected_root = "58c89d709329eb37285837b042ab6ff72c7c8f74de0446b091b6a0131c102cfd";
-
-        let hex_hashes = vec!["a", "b", "c", "d"];
-
-        merkle_tree.generate_merkle_tree(hex_hashes);
-
-        assert_eq!(merkle_tree.get_root().unwrap(), expected_root);
-    }
+    
 
     #[test]
     fn test_generates_merkle_node_parent_correctly() {

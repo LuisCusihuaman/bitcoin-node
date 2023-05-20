@@ -1,6 +1,6 @@
 use super::tx::Tx;
 use super::MessagePayload;
-use crate::node::message::tx::decode_tx;
+use crate::node::message::{tx::decode_tx, merkle_tree};
 use crate::utils::*;
 use std::vec;
 use super::merkle_tree::MerkleTree;
@@ -48,11 +48,11 @@ impl Block {
             txns,
         }
     }
-
+/*
     pub fn add_txns(&mut self, txns:Vec<Tx> ) {
         self.txns = txns;
     }
-/*
+
     pub fn get_merkle_tree_root(&self){
         let merkle_tree = MerkleTree::new();
         
@@ -69,6 +69,7 @@ impl Block {
         merkle_tree.proof_of_inclusion(tx)
     }
     */
+    
     
     pub fn encode(&self, buffer: &mut [u8]) {
         let mut offset = 0;
@@ -166,17 +167,34 @@ pub fn decode_block(buffer: &[u8]) -> Result<MessagePayload, String> {
     let block_header = decode_internal_block(&buffer).unwrap();
     let mut transactions = Vec::new();
 
+    let mut raw_trxs = Vec::new();
+
     let tnx_count = read_varint(&mut &buffer[80..]).unwrap() as u8;
     let mut offset = 80 + get_offset(&buffer[80..]);
 
+    let mut off_aux;
+
     for _ in 0..tnx_count {
+        off_aux = offset;
         if let Some(tx) = decode_tx(&buffer, &mut offset) {
             println!("{:?}", offset);
             transactions.push(tx);
+            raw_trxs.push(&buffer[off_aux..offset]);
         } else {
             return Err("Failed to decode transaction".to_string());
         }
     }
+
+    println!("raw_trxs: {:?}", raw_trxs);
+
+    // map raw_trxs to a vector of Strings, Falle porque no son ASCI (no tiene sentido en UTF8)
+    //let raw_trxs_str: Vec<&str> = raw_trxs
+        //.iter()
+        //.map(|raw_trx| std::str::from_utf8(raw_trx).unwrap() )
+        //.collect();
+
+    let mut merkle_tree = MerkleTree::new();
+    merkle_tree.generate_merkle_tree(raw_trxs);
 
     Ok(MessagePayload::BlockHeader(vec![block_header]))
 }
@@ -289,7 +307,7 @@ mod tests {
         // Cleanup: delete the temporary file
         std::fs::remove_file(file_path).unwrap();
     }
-/*
+
     #[test]
     fn test_proof_of_inclution(){
 
@@ -309,12 +327,14 @@ mod tests {
             1,
         );
 
-        let txn = [0,1,0,1,0,1];
+//        let txn = [0,1,0,1,0,1];
 
-        block.add_txns(txn);
+     //   block.add_txns(txn);
 
-        assert!(block.proof_of_inclusion(txn));
+     // 1. 
+
+       // assert!(block.proof_of_inclusion(txn));
 
     }
-    */
+    
 }

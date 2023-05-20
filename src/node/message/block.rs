@@ -3,6 +3,7 @@ use super::MessagePayload;
 use crate::node::message::tx::decode_tx;
 use crate::utils::*;
 use std::vec;
+use super::merkle_tree::MerkleTree;
 
 use std::{
     fs::{File, OpenOptions},
@@ -47,6 +48,28 @@ impl Block {
             txns,
         }
     }
+
+    pub fn add_txns(&mut self, txns:Vec<Tx> ) {
+        self.txns = txns;
+    }
+/*
+    pub fn get_merkle_tree_root(&self){
+        let merkle_tree = MerkleTree::new();
+        
+        merkle_tree.generate_merkle_tree(self.txns);
+
+        merkle_tree.get_root();
+    }
+
+    pub fn proof_of_inclusion(&self, tx: Tx) -> bool {
+        let merkle_tree = MerkleTree::new();
+        
+        merkle_tree.generate_merkle_tree(self.txns);
+
+        merkle_tree.proof_of_inclusion(tx)
+    }
+    */
+    
     pub fn encode(&self, buffer: &mut [u8]) {
         let mut offset = 0;
 
@@ -181,7 +204,6 @@ pub fn decode_internal_block(buffer: &[u8]) -> Option<Block> {
         n_bits,
         nonce,
         0,
-        // txns,
     ))
 }
 
@@ -267,4 +289,32 @@ mod tests {
         // Cleanup: delete the temporary file
         std::fs::remove_file(file_path).unwrap();
     }
+/*
+    #[test]
+    fn test_proof_of_inclution(){
+
+        let block = Block::new(
+            1,
+            [
+                0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
+                217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
+            ],
+            [
+                240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53, 141, 211,
+                116, 95, 60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186,
+            ],
+            1296688928,
+            486604799,
+            1924588547,
+            1,
+        );
+
+        let txn = [0,1,0,1,0,1];
+
+        block.add_txns(txn);
+
+        assert!(block.proof_of_inclusion(txn));
+
+    }
+    */
 }

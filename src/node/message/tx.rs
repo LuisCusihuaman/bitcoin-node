@@ -150,6 +150,7 @@ pub fn decode_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
     };
 
     let lock_time = read_u32_le(&buffer, *offset);
+    println!("locktime {}", lock_time);
     *offset += 4;
 
     Some(Tx {

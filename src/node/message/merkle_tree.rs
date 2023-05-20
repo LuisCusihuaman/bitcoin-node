@@ -2,6 +2,8 @@
 use crate::error::Error;
 use bitcoin_hashes::{sha256, Hash, HashEngine};
 
+use super::tx::Tx;
+
 pub struct MerkleTree {
     root: String,
     hashed_leaves: Vec<String>,
@@ -198,6 +200,24 @@ mod tests {
         let hash = MerkleTree::new().hash256("1");
 
         assert!(hash.to_string().is_empty() == false);
+    }
+
+    #[test]
+    fn test_real_de_bloque(){
+
+
+        let mut merkle_tree = MerkleTree::new();
+
+        //let expected_root = "14ede5e8e97ad9372327728f5099b95604a39593cac3bd38a343ad76205213e7";
+
+        // Resultado sacado de https://blockchain-academy.hs-mittweida.de/merkle-tree/
+        let expected_root = "58c89d709329eb37285837b042ab6ff72c7c8f74de0446b091b6a0131c102cfd";
+
+        let hex_hashes = vec!["a", "b", "c", "d"];
+
+        merkle_tree.generate_merkle_tree(hex_hashes);
+
+        assert_eq!(merkle_tree.get_root().unwrap(), expected_root);
     }
 
     #[test]

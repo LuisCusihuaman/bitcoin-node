@@ -1,12 +1,11 @@
-use crate::error::Error;
-use bitcoin_hashes::{sha256, Hash, HashEngine};
+use super::merkle_tree::MerkleTree;
 use super::tx::{Tx, TxIn, TxOut};
 use super::MessagePayload;
-use crate::node::message::{tx::decode_tx, merkle_tree};
+use crate::error::Error;
+use crate::node::message::{merkle_tree, tx::decode_tx};
 use crate::utils::*;
-use std::os::linux::raw;
+use bitcoin_hashes::{sha256, Hash, HashEngine};
 use std::vec;
-use super::merkle_tree::MerkleTree;
 
 use std::{
     fs::{File, OpenOptions},
@@ -52,27 +51,24 @@ impl Block {
         }
     }
 
-    fn add_txns(&mut self, txns:Vec<Tx> ) {
+    fn add_txns(&mut self, txns: Vec<Tx>) {
         //TODO if (txns.len()!=self.txn_count as usize){
         //    Error
         //}
         self.txns = txns;
     }
 
-    fn init_merkle_tree(&self) -> MerkleTree{
-        let raw_txs = self.txns.iter().map(|tx| tx.encode()).collect::<Vec<Vec<u8>>>();
-        let raw_txs_slice = raw_txs.iter().map(|tx| tx.as_slice()).collect::<Vec<&[u8]>>();
+    fn init_merkle_tree(&self) -> MerkleTree {
+        let tx_ids: Vec<&[u8]> = self.txns.iter().map(|tx| &tx.id[..]).collect();
 
         let mut merkle_tree = MerkleTree::new();
-        
-        merkle_tree.generate_merkle_tree(raw_txs_slice);
+        merkle_tree.generate_merkle_tree(tx_ids);
 
         merkle_tree
     }
 
-    pub fn get_merkle_tree_root(&self)-> Result<sha256::Hash, Error>{
-
-         let merkle_tree = self.init_merkle_tree();
+    pub fn get_merkle_tree_root(&self) -> Result<sha256::Hash, Error> {
+        let merkle_tree = self.init_merkle_tree();
 
         merkle_tree.get_root()
     }
@@ -81,13 +77,11 @@ impl Block {
     //merkle_tree.generate_merkle_tree(raw_trxs);
 
     pub fn proof_of_inclusion(&self, tx_req: Tx) -> bool {
-
         let merkle_tree = self.init_merkle_tree();
 
         merkle_tree.proof_of_inclusion(tx_req.encode().as_slice())
     }
-    
-    
+
     pub fn encode(&self, buffer: &mut [u8]) {
         let mut offset = 0;
 
@@ -181,10 +175,8 @@ pub fn decode_block(buffer: &[u8]) -> Result<MessagePayload, String> {
     let mut block_header = decode_internal_block(&buffer).unwrap();
     let mut transactions = Vec::new();
 
-
     let tnx_count = read_varint(&mut &buffer[80..]).unwrap() as u8;
     let mut offset = 80 + get_offset(&buffer[80..]);
-
 
     for _ in 0..tnx_count {
         if let Some(tx) = decode_tx(&buffer, &mut offset) {
@@ -310,8 +302,7 @@ mod tests {
     }
 
     #[test]
-    fn test_proof_of_inclution(){
-
+    fn test_proof_of_inclution() {
         let mut block = Block::new(
             1,
             [
@@ -319,8 +310,8 @@ mod tests {
                 217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
             ],
             [
-                240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53, 141, 211,
-                116, 95, 60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186,
+                240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53, 141, 211, 116,
+                95, 60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186,
             ],
             1296688928,
             486604799,
@@ -329,6 +320,7 @@ mod tests {
         );
 
         let tx_1 = Tx {
+            id: [0u8; 32],
             version: 1,
             flag: 0,
             tx_in_count: 2, // varint
@@ -347,18 +339,17 @@ mod tests {
                 },
             ],
             tx_out_count: 1, // varint
-            tx_out: vec![
-                TxOut {
-                    value: 100_000_000,
-                    pk_script_length: 0, // varint
-                    pk_script: vec![],
-                },
-            ],
+            tx_out: vec![TxOut {
+                value: 100_000_000,
+                pk_script_length: 0, // varint
+                pk_script: vec![],
+            }],
             tx_witness: vec![],
             lock_time: 0,
         };
 
         let tx_2 = Tx {
+            id: [0u8; 32],
             version: 1,
             flag: 0,
             tx_in_count: 2, // varint
@@ -377,18 +368,17 @@ mod tests {
                 },
             ],
             tx_out_count: 1, // varint
-            tx_out: vec![
-                TxOut {
-                    value: 100_000_000,
-                    pk_script_length: 0, // varint
-                    pk_script: vec![],
-                },
-            ],
+            tx_out: vec![TxOut {
+                value: 100_000_000,
+                pk_script_length: 0, // varint
+                pk_script: vec![],
+            }],
             tx_witness: vec![],
             lock_time: 0,
         };
 
         let tx_3 = Tx {
+            id: [0u8; 32],
             version: 1,
             flag: 0,
             tx_in_count: 2, // varint
@@ -407,29 +397,25 @@ mod tests {
                 },
             ],
             tx_out_count: 1, // varint
-            tx_out: vec![
-                TxOut {
-                    value: 100_000_000,
-                    pk_script_length: 0, // varint
-                    pk_script: vec![],
-                },
-            ],
+            tx_out: vec![TxOut {
+                value: 100_000_000,
+                pk_script_length: 0, // varint
+                pk_script: vec![],
+            }],
             tx_witness: vec![],
             lock_time: 0,
         };
 
         let expected_tex = tx_1.clone();
-        let txns = vec![tx_1,tx_2,tx_3];
+        let txns = vec![tx_1, tx_2, tx_3];
 
         block.add_txns(txns);
-    
+
         assert_eq!(block.proof_of_inclusion(expected_tex), true);
-
     }
-    
-    #[test]
-    fn test_proof_of_inclution_doesnt_have_invalid_tx(){
 
+    #[test]
+    fn test_proof_of_inclution_doesnt_have_invalid_tx() {
         let mut block = Block::new(
             1,
             [
@@ -437,8 +423,8 @@ mod tests {
                 217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
             ],
             [
-                240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53, 141, 211,
-                116, 95, 60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186,
+                240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53, 141, 211, 116,
+                95, 60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186,
             ],
             1296688928,
             486604799,
@@ -447,6 +433,7 @@ mod tests {
         );
 
         let tx_1 = Tx {
+            id: [0u8; 32],
             version: 1,
             flag: 0,
             tx_in_count: 2, // varint
@@ -465,18 +452,17 @@ mod tests {
                 },
             ],
             tx_out_count: 1, // varint
-            tx_out: vec![
-                TxOut {
-                    value: 100_000_000,
-                    pk_script_length: 0, // varint
-                    pk_script: vec![],
-                },
-            ],
+            tx_out: vec![TxOut {
+                value: 100_000_000,
+                pk_script_length: 0, // varint
+                pk_script: vec![],
+            }],
             tx_witness: vec![],
             lock_time: 0,
         };
 
         let tx_2 = Tx {
+            id: [0u8; 32],
             version: 1,
             flag: 0,
             tx_in_count: 2, // varint
@@ -495,18 +481,17 @@ mod tests {
                 },
             ],
             tx_out_count: 1, // varint
-            tx_out: vec![
-                TxOut {
-                    value: 100_000_000,
-                    pk_script_length: 0, // varint
-                    pk_script: vec![],
-                },
-            ],
+            tx_out: vec![TxOut {
+                value: 100_000_000,
+                pk_script_length: 0, // varint
+                pk_script: vec![],
+            }],
             tx_witness: vec![],
             lock_time: 0,
         };
 
         let tx_3 = Tx {
+            id: [0u8; 32],
             version: 1,
             flag: 0,
             tx_in_count: 2, // varint
@@ -525,145 +510,154 @@ mod tests {
                 },
             ],
             tx_out_count: 1, // varint
-            tx_out: vec![
-                TxOut {
-                    value: 100_000_000,
-                    pk_script_length: 0, // varint
-                    pk_script: vec![],
-                },
-            ],
+            tx_out: vec![TxOut {
+                value: 100_000_000,
+                pk_script_length: 0, // varint
+                pk_script: vec![],
+            }],
             tx_witness: vec![],
             lock_time: 0,
         };
 
-        let not_expected_tnx=Tx {
+        let not_expected_tnx = Tx {
+            id: [0u8; 32],
             version: 1,
             flag: 0,
             tx_in_count: 1, // varint
-            tx_in: vec![
-                TxIn {
-                    previous_output: [0; 36],
-                    script_length: 0, // varint
-                    signature_script: vec![],
-                    sequence: 0,
-                },
-            ],
+            tx_in: vec![TxIn {
+                previous_output: [0; 36],
+                script_length: 0, // varint
+                signature_script: vec![],
+                sequence: 0,
+            }],
             tx_out_count: 1, // varint
-            tx_out: vec![
-                TxOut {
-                    value: 100_000_000,
-                    pk_script_length: 0, // varint
-                    pk_script: vec![],
-                },
-            ],
+            tx_out: vec![TxOut {
+                value: 100_000_000,
+                pk_script_length: 0, // varint
+                pk_script: vec![],
+            }],
             tx_witness: vec![],
             lock_time: 0,
         };
 
-        let txns = vec![tx_1,tx_2,tx_3];
+        let txns = vec![tx_1, tx_2, tx_3];
 
         block.add_txns(txns);
-    
-        assert_eq!( block.proof_of_inclusion(not_expected_tnx), false);
 
+        assert_eq!(block.proof_of_inclusion(not_expected_tnx), false);
     }
 
     #[test]
-    fn test_prof_validation_with_origin_block(){
-
+    fn test_prof_validation_with_origin_block() {
         let mut block = Block::new(
-            
-            1, 
-            [0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 
-            174, 195, 206, 217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67], 
-            [240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53,
-             141, 211, 116, 95, 60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186], 
-             1296688928,
-             486604799,
-             1924588547,
-             1,
+            1,
+            [
+                0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
+                217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
+            ],
+            [
+                240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53, 141, 211, 116,
+                95, 60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186,
+            ],
+            1296688928,
+            486604799,
+            1924588547,
+            1,
         );
 
         let tx = Tx {
+            id: [0u8; 32],
             version: 1,
             flag: 0,
             tx_in_count: 1, // varint
-            tx_in: vec![
-                TxIn {
-                    previous_output: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255],
-                    script_length: 14, // varint
-                    signature_script: vec![4, 32, 231, 73, 77, 1, 127, 6, 47, 80, 50, 83, 72, 47],
-                    sequence: 4294967295,
-                },
-            ],
+            tx_in: vec![TxIn {
+                previous_output: [
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 255, 255, 255, 255,
+                ],
+                script_length: 14, // varint
+                signature_script: vec![4, 32, 231, 73, 77, 1, 127, 6, 47, 80, 50, 83, 72, 47],
+                sequence: 4294967295,
+            }],
             tx_out_count: 1, // varint
-            tx_out: vec![
-                TxOut {
-                    value: 5000000000,
-                    pk_script_length: 35, // varint
-                    pk_script: vec![33, 2, 26, 234, 242, 248, 99, 138, 18, 154, 49, 86, 251, 231, 229, 239, 99, 82, 38, 176, 186, 253, 73, 95, 240, 58, 254, 44, 132, 61, 126, 58, 75, 81, 172],
-                },
-            ],
+            tx_out: vec![TxOut {
+                value: 5000000000,
+                pk_script_length: 35, // varint
+                pk_script: vec![
+                    33, 2, 26, 234, 242, 248, 99, 138, 18, 154, 49, 86, 251, 231, 229, 239, 99, 82,
+                    38, 176, 186, 253, 73, 95, 240, 58, 254, 44, 132, 61, 126, 58, 75, 81, 172,
+                ],
+            }],
             tx_witness: vec![],
             lock_time: 0,
-        }; 
+        };
 
         let expected_tex = tx.clone();
         let txns = vec![tx];
 
         block.add_txns(txns);
-    
+
         assert_eq!(block.proof_of_inclusion(expected_tex), true);
     }
 
     #[test]
-    fn test_generates_origin_block_merkle(){
-
+    fn test_generates_origin_block_merkle() {
         let mut block = Block::new(
-            
-            1, 
-            [0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 
-            174, 195, 206, 217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67], 
-            [240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53,
-             141, 211, 116, 95, 60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186], 
-             1296688928,
-             486604799,
-             1924588547,
-             1,
+            1,
+            [
+                0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
+                217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
+            ],
+            [
+                240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53, 141, 211, 116,
+                95, 60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186,
+            ],
+            1296688928,
+            486604799,
+            1924588547,
+            1,
         );
 
         let tx = Tx {
+            id: [
+                240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53, 141, 211, 116,
+                95, 60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186,
+            ],
             version: 1,
             flag: 0,
             tx_in_count: 1, // varint
-            tx_in: vec![
-                TxIn {
-                    previous_output: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255],
-                    script_length: 14, // varint
-                    signature_script: vec![4, 32, 231, 73, 77, 1, 127, 6, 47, 80, 50, 83, 72, 47],
-                    sequence: 4294967295,
-                },
-            ],
+            tx_in: vec![TxIn {
+                previous_output: [
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 255, 255, 255, 255,
+                ],
+                script_length: 14, // varint
+                signature_script: vec![4, 32, 231, 73, 77, 1, 127, 6, 47, 80, 50, 83, 72, 47],
+                sequence: 4294967295,
+            }],
             tx_out_count: 1, // varint
-            tx_out: vec![
-                TxOut {
-                    value: 5000000000,
-                    pk_script_length: 35, // varint
-                    pk_script: vec![33, 2, 26, 234, 242, 248, 99, 138, 18, 154, 49, 86, 251, 231, 229, 239, 99, 82, 38, 176, 186, 253, 73, 95, 240, 58, 254, 44, 132, 61, 126, 58, 75, 81, 172],
-                },
-            ],
+            tx_out: vec![TxOut {
+                value: 5000000000,
+                pk_script_length: 35, // varint
+                pk_script: vec![
+                    33, 2, 26, 234, 242, 248, 99, 138, 18, 154, 49, 86, 251, 231, 229, 239, 99, 82,
+                    38, 176, 186, 253, 73, 95, 240, 58, 254, 44, 132, 61, 126, 58, 75, 81, 172,
+                ],
+            }],
             tx_witness: vec![],
             lock_time: 0,
-        }; 
+        };
 
         block.add_txns(vec![tx]);
 
-        let expected_merkle_root = [240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53,
-        141, 211, 116, 95, 60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186];
-        
-        println!("{:?}",block.get_merkle_tree_root().unwrap().to_string());
+        let expected_merkle_root = [
+            240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53, 141, 211, 116, 95,
+            60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186,
+        ];
 
+        assert_eq!(
+            block.get_merkle_tree_root().unwrap().to_byte_array(),
+            expected_merkle_root
+        );
     }
-
-    
 }

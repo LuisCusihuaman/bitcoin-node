@@ -1,13 +1,15 @@
+use bitcoin_hashes::Hash;
+
 use crate::utils::write_varint;
 
 use crate::utils::*;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Tx {
-    pub id: Vec<u8>,
+    pub id: [u8; 32],
     pub version: u32,
     pub flag: u16,
-    pub tx_in_count: u64,  // varint
+    pub tx_in_count: u64, // varint
     pub tx_in: Vec<TxIn>,
     pub tx_out_count: u64, // varint
     pub tx_out: Vec<TxOut>,
@@ -32,7 +34,6 @@ pub struct TxOut {
 
 impl Tx {
     pub fn encode(&self) -> Vec<u8> {
-
         let mut encoded: Vec<u8> = Vec::new();
 
         encoded.extend(self.version.to_le_bytes());
@@ -40,30 +41,30 @@ impl Tx {
         if self.flag != 0 {
             encoded.extend(self.flag.to_le_bytes());
         }
-        
+
         write_varint(&mut encoded, self.tx_in_count as usize).unwrap();
-    
+
         for tx_in in &self.tx_in {
             encoded.extend(tx_in.previous_output);
             write_varint(&mut encoded, tx_in.script_length as usize).unwrap();
             encoded.extend(tx_in.signature_script.clone());
             encoded.extend(tx_in.sequence.to_le_bytes());
         }
-    
+
         write_varint(&mut encoded, self.tx_out_count as usize).unwrap();
-    
+
         for tx_out in &self.tx_out {
             encoded.extend(tx_out.value.to_le_bytes());
             write_varint(&mut encoded, tx_out.pk_script_length as usize).unwrap();
             encoded.extend(tx_out.pk_script.clone());
         }
-    
+
         if self.flag != 0 {
             encoded.extend(&self.tx_witness);
         }
-    
+
         encoded.extend(self.lock_time.to_le_bytes());
-    
+
         encoded
     }
 }
@@ -77,9 +78,8 @@ impl Tx {
 //     witness: Vec<u8>,
 // }
 
-https://blockchain-academy.hs-mittweida.de/merkle-tree/
-
 pub fn decode_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
+    let old_offset = *offset;
     let version = read_u32_le(&buffer, 0);
     *offset += 4;
 
@@ -87,7 +87,7 @@ pub fn decode_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
     let (flag, flag_bytes) = check_flag(&buffer[*offset..]);
     *offset += flag_bytes;
 
-    if flag == 1{
+    if flag == 1 {
         // AAAAAA
         println!("flag: 1 LOL")
     }
@@ -163,7 +163,12 @@ pub fn decode_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
 
     let lock_time = read_u32_le(&buffer, *offset);
     *offset += 4;
-    let id = ;
+
+    let raw_hash = double_sha256(&buffer[old_offset..*offset]).to_byte_array();
+    let mut id: [u8; 32] = [0u8; 32];
+    copy_bytes_to_array(&raw_hash, &mut id);
+    id.reverse();
+    println!("id: {:?}", id);
 
     Some(Tx {
         id,
@@ -180,10 +185,10 @@ pub fn decode_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
 
 fn check_flag(buffer: &[u8]) -> (u16, usize) {
     if buffer[0] != 0x00 {
-        return (0, 0)
+        return (0, 0);
     }
     if buffer[1] != 0x01 {
-        return (0, 0)
+        return (0, 0);
     }
     (0x0001, 2)
 }
@@ -195,11 +200,11 @@ mod tests {
     #[cfg(test)]
     mod tests {
         use super::*;
-    
+
         #[test]
         fn test_encode_tx() {
-            
             let tx = Tx {
+                id: [0u8; 32],
                 version: 1,
                 flag: 0,
                 tx_in_count: 2, // varint
@@ -218,39 +223,35 @@ mod tests {
                     },
                 ],
                 tx_out_count: 1, // varint
-                tx_out: vec![
-                    TxOut {
-                        value: 100_000_000,
-                        pk_script_length: 0, // varint
-                        pk_script: vec![],
-                    },
-                ],
+                tx_out: vec![TxOut {
+                    value: 100_000_000,
+                    pk_script_length: 0, // varint
+                    pk_script: vec![],
+                }],
                 tx_witness: vec![],
                 lock_time: 0,
             };
-    
+
             let mut expected_encoded: Vec<u8> = Vec::new();
 
             expected_encoded.extend(&[0x01, 0x00, 0x00, 0x00]); // version
-            //expected_encoded.extend(&[0x00, 0x00]); // flag
+                                                                //expected_encoded.extend(&[0x00, 0x00]); // flag
             expected_encoded.extend(&[0x02]); // tx_in_count  // varint
 
             for _ in 0..2 {
                 expected_encoded.extend(&[0x00; 36]); // tx_in.previous_output
-                expected_encoded.extend(&[0x00] ); // tx_in.script_length // varint// varint
-               // expected_encoded.extend( vacio ); // tx_in.signature_script
+                expected_encoded.extend(&[0x00]); // tx_in.script_length // varint// varint
+                                                  // expected_encoded.extend( vacio ); // tx_in.signature_script
                 expected_encoded.extend(&[0x00; 4]); // tx_in.sequence
             }
 
             expected_encoded.extend(&[0x01]); // tx_out_count // varint
-            expected_encoded.extend(100_000_000u64.to_le_bytes() ); // tx_out.value
+            expected_encoded.extend(100_000_000u64.to_le_bytes()); // tx_out.value
             expected_encoded.extend(&[0x00]); // tx_out.pk_script_length // varint
-        // expected_encoded.extend( vacio ); // tx_in.signature_script
-
+                                              // expected_encoded.extend( vacio ); // tx_in.signature_script
 
             expected_encoded.extend(&[0x00, 0x00, 0x00, 0x00]); // lock_time
 
-    
             assert_eq!(tx.encode(), expected_encoded);
         }
     }
@@ -258,6 +259,7 @@ mod tests {
     #[test]
     fn test_encode_tx_with_script_length() {
         let tx = Tx {
+            id: [0u8; 32],
             version: 1,
             flag: 0,
             tx_in_count: 2, // varint
@@ -276,39 +278,35 @@ mod tests {
                 },
             ],
             tx_out_count: 1, // varint
-            tx_out: vec![
-                TxOut {
-                    value: 100_000_000,
-                    pk_script_length: 0, // varint
-                    pk_script: vec![],
-                },
-            ],
+            tx_out: vec![TxOut {
+                value: 100_000_000,
+                pk_script_length: 0, // varint
+                pk_script: vec![],
+            }],
             tx_witness: vec![],
             lock_time: 0,
         };
-    
+
         let mut expected_encoded: Vec<u8> = Vec::new();
-    
+
         expected_encoded.extend(&[0x01, 0x00, 0x00, 0x00]); // version
-        //expected_encoded.extend(&[0x00, 0x00]); // flag
+                                                            //expected_encoded.extend(&[0x00, 0x00]); // flag
         expected_encoded.extend(&[0x02]); // tx_in_count  // varint
-    
+
         for _ in 0..2 {
             expected_encoded.extend(&[0x00; 36]); // tx_in.previous_output
-            expected_encoded.extend(&[0x01] ); // tx_in.script_length // varint// varint
-            expected_encoded.extend( &[0x04] ); // tx_in.signature_script
+            expected_encoded.extend(&[0x01]); // tx_in.script_length // varint// varint
+            expected_encoded.extend(&[0x04]); // tx_in.signature_script
             expected_encoded.extend(&[0x00; 4]); // tx_in.sequence
         }
-    
+
         expected_encoded.extend(&[0x01]); // tx_out_count // varint
-        expected_encoded.extend(100_000_000u64.to_le_bytes() ); // tx_out.value
+        expected_encoded.extend(100_000_000u64.to_le_bytes()); // tx_out.value
         expected_encoded.extend(&[0x00]); // tx_out.pk_script_length // varint
-    // expected_encoded.extend( vacio ); // tx_in.signature_script
-    
-    
+                                          // expected_encoded.extend( vacio ); // tx_in.signature_script
+
         expected_encoded.extend(&[0x00, 0x00, 0x00, 0x00]); // lock_time
-    
-    
+
         assert_eq!(tx.encode(), expected_encoded);
     }
 }

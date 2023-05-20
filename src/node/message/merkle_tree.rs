@@ -63,8 +63,8 @@ impl MerkleTree {
     }
 
     // Convierte el input en un hash
-    fn hash256(&self, data: &str) -> sha256::Hash {
-        sha256::Hash::hash(data.as_bytes())
+    fn hash256(&self, data: &[u8]) -> sha256::Hash {
+        sha256::Hash::hash(data)
     }
 
     // Takes the binary hashes and calculates the hash256
@@ -136,7 +136,7 @@ impl MerkleTree {
     }
 
     // Indica si la transaccion pertenece al merkle tree
-    pub fn proof_of_inclusion(&self, tx: &str) -> bool {
+    pub fn proof_of_inclusion(&self, tx: &[u8]) -> bool {
         let tx_hash = self.hash256(tx);
         let mut proof = false;
 
@@ -177,7 +177,7 @@ mod tests {
     fn test_create_merkle_tree_with_five_leaves() {
         let mut merkle_tree = MerkleTree::new();
 
-        let data = vec!["1", "2", "3", "4", "5"];
+        let data = vec!["1".as_bytes(), "2".as_bytes(), "3".as_bytes(), "4".as_bytes(), "5".as_bytes()];
 
         merkle_tree.generate_merkle_tree(data);
 
@@ -188,7 +188,7 @@ mod tests {
     fn test_merkle_tree_with_four_leaves_has_seven_nodes_in_total() {
         let mut merkle_tree = MerkleTree::new();
 
-        let data = vec!["1", "2", "3", "5"];
+        let data = vec!["1".as_bytes(), "2".as_bytes(), "3".as_bytes(), "5".as_bytes()];
 
         merkle_tree.generate_merkle_tree(data);
 
@@ -197,7 +197,7 @@ mod tests {
 
     #[test]
     fn test_generates_hash_number_correctly() {
-        let hash = MerkleTree::new().hash256("1");
+        let hash = MerkleTree::new().hash256("1".as_bytes());
 
         assert!(hash.to_string().is_empty() == false);
     }
@@ -206,15 +206,14 @@ mod tests {
     #[test]
     fn test_generates_merkle_node_parent_correctly() {
         let merkle_tree = MerkleTree::new();
-        let left_hash = merkle_tree.hash256("1");
-        let right_hash = merkle_tree.hash256("2");
+        
+        let left_hash = merkle_tree.hash256("1".as_bytes());
+        let right_hash = merkle_tree.hash256("2".as_bytes());
 
-        let mut owned_string: String = left_hash.to_string().to_owned();
-        let borrowed_string: String = right_hash.to_string().to_owned();
-
-        owned_string.push_str(&borrowed_string);
-
-        let expected_hash = merkle_tree.hash256(&owned_string);
+        // concatenate right and left hashes
+        let owned_string = format!("{}{}", left_hash.to_string(), right_hash.to_string());
+        
+        let expected_hash = merkle_tree.hash256(&owned_string.as_bytes());
 
         let parent = merkle_tree.merkle_parent(&left_hash.to_string(), &right_hash.to_string());
 
@@ -225,10 +224,10 @@ mod tests {
     fn test_merkle_parent_level_returns_hash_vector_half_its_even_size() {
         let mut merkle_tree = MerkleTree::new();
         let mut hashes = Vec::new();
-        hashes.push(merkle_tree.hash256("1"));
-        hashes.push(merkle_tree.hash256("2"));
-        hashes.push(merkle_tree.hash256("3"));
-        hashes.push(merkle_tree.hash256("4"));
+        hashes.push(merkle_tree.hash256("1".as_bytes()));
+        hashes.push(merkle_tree.hash256("2".as_bytes()));
+        hashes.push(merkle_tree.hash256("3".as_bytes()));
+        hashes.push(merkle_tree.hash256("4".as_bytes()));
 
         let expected_len = hashes.len() / 2;
 
@@ -241,11 +240,11 @@ mod tests {
     fn test_merkle_parent_level_returns_hash_vector_half_its_un_even_size() {
         let mut merkle_tree = MerkleTree::new();
         let mut hashes = Vec::new();
-        hashes.push(merkle_tree.hash256("1"));
-        hashes.push(merkle_tree.hash256("2"));
-        hashes.push(merkle_tree.hash256("3"));
-        hashes.push(merkle_tree.hash256("4"));
-        hashes.push(merkle_tree.hash256("5"));
+        hashes.push(merkle_tree.hash256("1".as_bytes()));
+        hashes.push(merkle_tree.hash256("2".as_bytes()));
+        hashes.push(merkle_tree.hash256("3".as_bytes()));
+        hashes.push(merkle_tree.hash256("4".as_bytes()));
+        hashes.push(merkle_tree.hash256("5".as_bytes()));
 
         let expected_len = (hashes.len() + 1) / 2;
 
@@ -263,7 +262,7 @@ mod tests {
         // Resultado sacado de https://blockchain-academy.hs-mittweida.de/merkle-tree/
         let expected_root = "58c89d709329eb37285837b042ab6ff72c7c8f74de0446b091b6a0131c102cfd";
 
-        let hex_hashes = vec!["a", "b", "c", "d"];
+        let hex_hashes = vec!["a".as_bytes(), "b".as_bytes(), "c".as_bytes(), "d".as_bytes()];
 
         merkle_tree.generate_merkle_tree(hex_hashes);
 
@@ -279,7 +278,7 @@ mod tests {
         // Resultado sacado de https://blockchain-academy.hs-mittweida.de/merkle-tree/
         let expected_root = "85df8945419d2b5038f7ac83ec1ec6b8267c40fdb3b1e56ff62f6676eb855e70";
 
-        let hex_hashes = vec!["1", "2", "3", "4"];
+        let hex_hashes = vec!["1".as_bytes(), "2".as_bytes(), "3".as_bytes(), "4".as_bytes()];
 
         merkle_tree.generate_merkle_tree(hex_hashes);
 
@@ -292,10 +291,10 @@ mod tests {
         let mut merkle_tree = MerkleTree::new();
 
         let hashes = vec![
-            merkle_tree.hash256("1"),
-            merkle_tree.hash256("2"),
-            merkle_tree.hash256("3"),
-            merkle_tree.hash256("4"),
+            merkle_tree.hash256("1".as_bytes()),
+            merkle_tree.hash256("2".as_bytes()),
+            merkle_tree.hash256("3".as_bytes()),
+            merkle_tree.hash256("4".as_bytes()),
         ];
 
         let root = merkle_tree.merkle_root(hashes).unwrap();
@@ -307,7 +306,7 @@ mod tests {
     fn test_generates_root_merkle_tree_from_leaves() {
         let mut merkle_tree = MerkleTree::new();
 
-        let data = vec!["1", "2", "3", "5"];
+        let data = vec!["1".as_bytes(), "2".as_bytes(), "3".as_bytes(), "5".as_bytes()];
 
         merkle_tree.generate_merkle_tree(data);
 
@@ -322,10 +321,10 @@ mod tests {
         let expected_root = "03bbf047aef6a41e8d19f5d85425f965e8c59d0fe1fc9dca02dd79754edf3451";
 
         let hex_hashes = vec![
-            "c117ea8ec828342f4dfb0ad6bd140e03a50720ece40169ee38bdc15d9eb64cf5",
-            "c131474164b412e3406696da1ee20ab0fc9bf41c8f05fa8ceea7a08d672d7cc5",
-            "f391da6ecfeed1814efae39e7fcb3838ae0b02c02ae7d0a5848a66947c0727b0",
-            "3d238a92a94532b946c90e19c49351c763696cff3db400485b813aecb8a13181",
+            "c117ea8ec828342f4dfb0ad6bd140e03a50720ece40169ee38bdc15d9eb64cf5".as_bytes(),
+            "c131474164b412e3406696da1ee20ab0fc9bf41c8f05fa8ceea7a08d672d7cc5".as_bytes(),
+            "f391da6ecfeed1814efae39e7fcb3838ae0b02c02ae7d0a5848a66947c0727b0".as_bytes(),
+            "3d238a92a94532b946c90e19c49351c763696cff3db400485b813aecb8a13181".as_bytes(),
         ];
 
         merkle_tree.generate_merkle_tree(hex_hashes);
@@ -337,8 +336,8 @@ mod tests {
     fn test_proof_of_inclution() {
         let mut merkle_tree = MerkleTree::new();
 
-        let data = vec!["1", "2", "3", "5"];
-        let tx = "1";
+        let data = vec!["1".as_bytes(), "2".as_bytes(), "3".as_bytes(), "5".as_bytes()];
+        let tx = "1".as_bytes();
 
         merkle_tree.generate_merkle_tree(data);
 
@@ -349,8 +348,8 @@ mod tests {
     fn test_proof_of_inclution_does_not_contain_foul_transaction() {
         let mut merkle_tree = MerkleTree::new();
 
-        let data = vec!["1", "2", "3", "5"];
-        let tx = "10";
+        let data = vec!["1".as_bytes(), "2".as_bytes(), "3".as_bytes(), "5".as_bytes()];
+        let tx = "10".as_bytes();
 
         merkle_tree.generate_merkle_tree(data);
 

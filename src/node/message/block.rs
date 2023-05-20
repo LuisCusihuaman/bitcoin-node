@@ -185,14 +185,6 @@ pub fn decode_block(buffer: &[u8]) -> Result<MessagePayload, String> {
         }
     }
 
-    println!("raw_trxs: {:?}", raw_trxs);
-
-    // map raw_trxs to a vector of Strings, Falle porque no son ASCI (no tiene sentido en UTF8)
-    //let raw_trxs_str: Vec<&str> = raw_trxs
-        //.iter()
-        //.map(|raw_trx| std::str::from_utf8(raw_trx).unwrap() )
-        //.collect();
-
     let mut merkle_tree = MerkleTree::new();
     merkle_tree.generate_merkle_tree(raw_trxs);
 
@@ -331,7 +323,16 @@ mod tests {
 
      //   block.add_txns(txn);
 
-     // 1. 
+    // Definir el metodo encode de transaccion para luego poder definir el vector
+
+     // Instanciar 3 transacciones y guardarlas en un vector de transacciones
+
+
+
+     // Llamar al metodo block.add_txns para agg vector de transacciones
+
+
+     // Llamar block.proof_of_inclusion para una transaccion y verificar que sea true 
 
        // assert!(block.proof_of_inclusion(txn));
 

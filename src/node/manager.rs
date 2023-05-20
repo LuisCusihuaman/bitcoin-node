@@ -1,16 +1,15 @@
+use crate::config::Config;
 use crate::node::message::block::Block;
+use crate::node::message::get_blocks::PayloadGetBlocks;
 use crate::node::message::version::PayloadVersion;
 use crate::node::message::MessagePayload;
 use crate::node::p2p_connection::P2PConnection;
+use crate::utils::date_to_timestamp;
 use crate::{logger::Logger, node::message::get_headers::PayloadGetHeaders};
+use std::thread;
 
 use std::fs;
 use std::net::{IpAddr, ToSocketAddrs};
-
-pub struct Config {
-    pub addrs: String,
-    pub port: u16,
-}
 
 pub struct NodeNetwork<'a> {
     pub peer_connections: Vec<P2PConnection>,
@@ -242,6 +241,30 @@ impl NodeManager<'_> {
             println!("{:?}", self.blocks.len());
             is_finished = messages.is_empty();
         }
+
+        if let Some(timestamp) = date_to_timestamp(&self.config.download_blocks_since_date) {
+            if let Some(block_by_date) = self.get_block_by_timestamp(timestamp) {
+                let mut block_hash = block_by_date.get_prev();
+                block_hash.reverse();
+
+                let stop_hash = [0u8; 32];
+
+                let get_blocks_message = MessagePayload::GetBlocks(PayloadGetBlocks::new(
+                    70015, 1, block_hash, stop_hash,
+                ));
+
+                // Send get block messages
+                self.broadcast(&get_blocks_message);
+
+                // Receive inv messages
+                let messages = self.wait_for(vec!["inv"]);
+
+                for inv in messages.iter() {
+                    // TODO send get data message with inv
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -278,13 +301,9 @@ mod tests {
     #[test]
     fn test_get_all_ips_from_dns() {
         let logger = Logger::stdout();
-        let mut node_manager = NodeManager::new(
-            Config {
-                addrs: "seed.testnet.bitcoin.sprovoost.nl".to_string(),
-                port: 80,
-            },
-            &logger,
-        );
+        let config = Config::new();
+
+        let mut node_manager = NodeManager::new(config, &logger);
         let node_network_ips = node_manager.get_initial_nodes().unwrap();
         assert_ne!(node_network_ips.len(), 0);
     }
@@ -292,13 +311,9 @@ mod tests {
     #[test]
     fn test_connect_node_with_external_nodes_not_refuse_connection() -> Result<(), String> {
         let logger = Logger::stdout();
-        let mut node_manager = NodeManager::new(
-            Config {
-                addrs: "seed.testnet.bitcoin.sprovoost.nl".to_string(),
-                port: 80,
-            },
-            &logger,
-        );
+        let config = Config::new();
+
+        let mut node_manager = NodeManager::new(config, &logger);
         let node_network_ips = node_manager.get_initial_nodes().unwrap();
         node_manager.connect(
             node_network_ips
@@ -312,13 +327,9 @@ mod tests {
     #[test]
     fn test_node_handshake() -> Result<(), String> {
         let logger = Logger::stdout();
-        let mut node_manager = NodeManager::new(
-            Config {
-                addrs: "seed.testnet.bitcoin.sprovoost.nl".to_string(),
-                port: 80,
-            },
-            &logger,
-        );
+        let config = Config::new();
+
+        let mut node_manager = NodeManager::new(config, &logger);
         node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
 
         let payload_version_message = MessagePayload::Version(PayloadVersion::default_version());
@@ -334,13 +345,9 @@ mod tests {
     #[test]
     fn test_node_send_get_headers_receives_headers() -> Result<(), String> {
         let logger: Logger = Logger::stdout();
-        let mut node_manager = NodeManager::new(
-            Config {
-                addrs: "seed.testnet.bitcoin.sprovoost.nl".to_string(),
-                port: 80,
-            },
-            &logger,
-        );
+        let config = Config::new();
+
+        let mut node_manager = NodeManager::new(config, &logger);
         node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
         node_manager.handshake();
 
@@ -367,13 +374,9 @@ mod tests {
     #[test]
     fn test_node_send_get_blocks_receives_inv() -> Result<(), String> {
         let logger: Logger = Logger::stdout();
-        let mut node_manager = NodeManager::new(
-            Config {
-                addrs: "seed.testnet.bitcoin.sprovoost.nl".to_string(),
-                port: 80,
-            },
-            &logger,
-        );
+        let config = Config::new();
+
+        let mut node_manager = NodeManager::new(config, &logger);
         node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
         node_manager.handshake();
 
@@ -399,13 +402,9 @@ mod tests {
     #[test]
     fn test_node_send_get_blocks_receives_inv_sends_get_data() -> Result<(), String> {
         let logger: Logger = Logger::stdout();
-        let mut node_manager = NodeManager::new(
-            Config {
-                addrs: "seed.testnet.bitcoin.sprovoost.nl".to_string(),
-                port: 80,
-            },
-            &logger,
-        );
+        let config = Config::new();
+
+        let mut node_manager = NodeManager::new(config, &logger);
         node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
         node_manager.handshake();
 
@@ -451,13 +450,9 @@ mod tests {
     #[test]
     fn test_send_get_headers_and_get_blocks_from_a_date() -> Result<(), String> {
         let logger: Logger = Logger::stdout();
-        let mut node_manager = NodeManager::new(
-            Config {
-                addrs: "seed.testnet.bitcoin.sprovoost.nl".to_string(),
-                port: 80,
-            },
-            &logger,
-        );
+        let config = Config::new();
+
+        let mut node_manager = NodeManager::new(config, &logger);
         node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
         node_manager.handshake();
 
@@ -481,6 +476,7 @@ mod tests {
         assert!(initial_blocks.len() > 0);
 
         let timestamp = 1337966303;
+
         if let Some(block_by_date) = node_manager.get_block_by_timestamp(timestamp) {
             // Create getblocks message
             let mut block_hash = block_by_date.get_prev();
@@ -539,13 +535,9 @@ mod tests {
     #[ignore]
     fn test_complete_initial_block_download() -> Result<(), String> {
         let logger: Logger = Logger::stdout();
-        let mut node_manager = NodeManager::new(
-            Config {
-                addrs: "seed.testnet.bitcoin.sprovoost.nl".to_string(),
-                port: 80,
-            },
-            &logger,
-        );
+        let config = Config::new();
+
+        let mut node_manager = NodeManager::new(config, &logger);
         node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
         node_manager.handshake();
 

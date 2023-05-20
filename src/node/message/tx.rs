@@ -1,3 +1,5 @@
+use core::slice::SlicePattern;
+
 use crate::utils::*;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -25,6 +27,44 @@ pub struct TxOut {
     value: u64,
     pk_script_length: u64,
     pk_script: Vec<u8>,
+}
+
+impl TxIn {
+
+    // encode and return a &[u8] slice
+    pub fn encode(&self, buffer: &mut [u8]){
+        
+        let mut offset = 0;
+
+        buffer[offset..offset+36].copy_from_slice(&self.previous_output);
+        offset += 36;
+
+        buffer[offset..offset+1].copy_from_slice(&self.script_length.to_le_bytes());
+        offset += 1; // Es variable
+
+        buffer[offset..offset+self.signature_script.len()].copy_from_slice(&self.signature_script);
+        offset += self.signature_script.len();
+
+        buffer[offset..offset+4].copy_from_slice(&self.sequence.to_le_bytes());
+        offset += 4;
+    }
+    
+}
+
+impl TxOut{
+    pub fn encode(&self, buffer: &mut [u8]){
+        
+        let mut offset = 0;
+
+        buffer[offset..offset+8].copy_from_slice(&self.value.to_le_bytes());
+        offset += 8;
+
+        buffer[offset..offset+1].copy_from_slice(&self.pk_script_length.to_le_bytes());
+        offset += 1; // Es variable
+
+        buffer[offset..].copy_from_slice(&self.pk_script);
+        offset += self.pk_script.len();
+    }
 }
 
 impl Tx {
@@ -55,6 +95,45 @@ impl Tx {
         size += self.tx_witness.len() as u64;
 
         size
+    }
+
+    pub fn encode_tx(&self, buffer: &mut [u8]){
+
+        let mut offset = 0;
+
+        buffer[offset..offset+4].copy_from_slice(&self.version.to_le_bytes());
+        offset += 4;
+
+        buffer[offset..offset+2].copy_from_slice(&self.flag.to_le_bytes());
+        offset += 2;
+
+        buffer[offset..offset+1].copy_from_slice(&self.tx_in_count.to_le_bytes());
+        offset += 1;
+
+
+        for tx_in in &self.tx_in {
+            let lenght = ????
+            let mut buf=vec![0;lenght];
+            buf.extend_from_slice(tx_in.encode(&mut buf));
+            offset += 1;
+        }
+
+
+        buffer[offset..offset+1].copy_from_slice(&self.tx_out_count.to_le_bytes());
+        offset += 1;
+
+        for tx_out in &self.tx_out {
+            let lenght = ????
+            let mut buf=vec![0;lenght];
+            buf.extend_from_slice(tx_out.encode(&mut buf));
+            offset += lenght;
+        }
+
+        buffer[offset..offset+self.tx_witness.len()].copy_from_slice(&self.tx_witness);
+        offset += self.tx_witness.len();
+
+        buffer[offset..offset+4].copy_from_slice(&self.lock_time.to_le_bytes());
+        offset += 4;
     }
 }
 

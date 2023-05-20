@@ -250,4 +250,61 @@ mod tests {
             assert_eq!(tx.encode_tx(), expected_encoded);
         }
     }
+
+    #[test]
+    fn test_encode_tx_with_script_length() {
+        let tx = Tx {
+            version: 1,
+            flag: 0,
+            tx_in_count: 2, // varint
+            tx_in: vec![
+                TxIn {
+                    previous_output: [0; 36],
+                    script_length: 1, // varint
+                    signature_script: vec![4],
+                    sequence: 0,
+                },
+                TxIn {
+                    previous_output: [0; 36],
+                    script_length: 1, // varint
+                    signature_script: vec![4],
+                    sequence: 0,
+                },
+            ],
+            tx_out_count: 1, // varint
+            tx_out: vec![
+                TxOut {
+                    value: 100_000_000,
+                    pk_script_length: 0, // varint
+                    pk_script: vec![],
+                },
+            ],
+            tx_witness: vec![],
+            lock_time: 0,
+        };
+    
+        let mut expected_encoded: Vec<u8> = Vec::new();
+    
+        expected_encoded.extend(&[0x01, 0x00, 0x00, 0x00]); // version
+        //expected_encoded.extend(&[0x00, 0x00]); // flag
+        expected_encoded.extend(&[0x02]); // tx_in_count  // varint
+    
+        for _ in 0..2 {
+            expected_encoded.extend(&[0x00; 36]); // tx_in.previous_output
+            expected_encoded.extend(&[0x01] ); // tx_in.script_length // varint// varint
+            expected_encoded.extend( &[0x04] ); // tx_in.signature_script
+            expected_encoded.extend(&[0x00; 4]); // tx_in.sequence
+        }
+    
+        expected_encoded.extend(&[0x01]); // tx_out_count // varint
+        expected_encoded.extend(100_000_000u64.to_le_bytes() ); // tx_out.value
+        expected_encoded.extend(&[0x00]); // tx_out.pk_script_length // varint
+    // expected_encoded.extend( vacio ); // tx_in.signature_script
+    
+    
+        expected_encoded.extend(&[0x00, 0x00, 0x00, 0x00]); // lock_time
+    
+    
+        assert_eq!(tx.encode_tx(), expected_encoded);
+    }
 }

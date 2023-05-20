@@ -4,6 +4,7 @@ use crate::utils::*;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Tx {
+    pub id: Vec<u8>,
     pub version: u32,
     pub flag: u16,
     pub tx_in_count: u64,  // varint
@@ -75,6 +76,8 @@ impl Tx {
 // pub struct TxInWitness {
 //     witness: Vec<u8>,
 // }
+
+https://blockchain-academy.hs-mittweida.de/merkle-tree/
 
 pub fn decode_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
     let version = read_u32_le(&buffer, 0);
@@ -159,10 +162,11 @@ pub fn decode_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
     };
 
     let lock_time = read_u32_le(&buffer, *offset);
-    println!("locktime {}", lock_time);
     *offset += 4;
+    let id = ;
 
     Some(Tx {
+        id,
         version,
         flag,
         tx_in_count,

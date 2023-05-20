@@ -17,7 +17,6 @@ impl PayloadGetData {
         let count = 1u8.to_le_bytes();
         buffer[0..1].copy_from_slice(&count);
         buffer[1..].copy_from_slice(&self.inventory);
-        println!("{:?}", buffer);
     }
 
     pub fn new(count: u8, inventory: [u8; 36]) -> Self {

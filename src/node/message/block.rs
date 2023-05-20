@@ -1,3 +1,5 @@
+use crate::error::Error;
+use bitcoin_hashes::{sha256, Hash, HashEngine};
 use super::tx::{Tx, TxIn, TxOut};
 use super::MessagePayload;
 use crate::node::message::{tx::decode_tx, merkle_tree};
@@ -57,12 +59,22 @@ impl Block {
         self.txns = txns;
     }
 
-    pub fn get_merkle_tree_root(&self){
-        let merkle_tree = MerkleTree::new();
-        
-        //merkle_tree.generate_merkle_tree(self.txns);
+    fn init_merkle_tree(&self) -> MerkleTree{
+        let raw_txs = self.txns.iter().map(|tx| tx.encode()).collect::<Vec<Vec<u8>>>();
+        let raw_txs_slice = raw_txs.iter().map(|tx| tx.as_slice()).collect::<Vec<&[u8]>>();
 
-        merkle_tree.get_root();
+        let mut merkle_tree = MerkleTree::new();
+        
+        merkle_tree.generate_merkle_tree(raw_txs_slice);
+
+        merkle_tree
+    }
+
+    pub fn get_merkle_tree_root(&self)-> Result<sha256::Hash, Error>{
+
+         let merkle_tree = self.init_merkle_tree();
+
+        merkle_tree.get_root()
     }
 
     //let mut merkle_tree = MerkleTree::new();
@@ -70,12 +82,7 @@ impl Block {
 
     pub fn proof_of_inclusion(&self, tx_req: Tx) -> bool {
 
-        let raw_txs = self.txns.iter().map(|tx| tx.encode()).collect::<Vec<Vec<u8>>>();
-        let raw_txs_slice = raw_txs.iter().map(|tx| tx.as_slice()).collect::<Vec<&[u8]>>();
-
-        let mut merkle_tree = MerkleTree::new();
-        
-        merkle_tree.generate_merkle_tree(raw_txs_slice);
+        let merkle_tree = self.init_merkle_tree();
 
         merkle_tree.proof_of_inclusion(tx_req.encode().as_slice())
     }
@@ -94,7 +101,6 @@ impl Block {
         buffer[offset..offset + 32].copy_from_slice(&previous_block_header_hash);
         offset += 32;
 
-        // Encode merkle_root_hash
         // Encode merkle_root_hash
         let mut merkle_root_hash = self.merkle_root_hash;
         merkle_root_hash.reverse();
@@ -172,9 +178,7 @@ impl Block {
 }
 
 pub fn decode_block(buffer: &[u8]) -> Result<MessagePayload, String> {
-    println!("decoding block:");
-    println!("{:?}", buffer);
-    let block_header = decode_internal_block(&buffer).unwrap();
+    let mut block_header = decode_internal_block(&buffer).unwrap();
     let mut transactions = Vec::new();
 
 
@@ -184,14 +188,16 @@ pub fn decode_block(buffer: &[u8]) -> Result<MessagePayload, String> {
 
     for _ in 0..tnx_count {
         if let Some(tx) = decode_tx(&buffer, &mut offset) {
-            println!("{:?}", offset);
             transactions.push(tx);
         } else {
             return Err("Failed to decode transaction".to_string());
         }
     }
 
-    Ok(MessagePayload::BlockHeader(vec![block_header]))
+    block_header.txn_count = tnx_count;
+    block_header.txns = transactions;
+
+    Ok(MessagePayload::Block(block_header))
 }
 
 pub fn decode_internal_block(buffer: &[u8]) -> Option<Block> {
@@ -561,4 +567,103 @@ mod tests {
         assert_eq!( block.proof_of_inclusion(not_expected_tnx), false);
 
     }
+
+    #[test]
+    fn test_prof_validation_with_origin_block(){
+
+        let mut block = Block::new(
+            
+            1, 
+            [0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 
+            174, 195, 206, 217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67], 
+            [240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53,
+             141, 211, 116, 95, 60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186], 
+             1296688928,
+             486604799,
+             1924588547,
+             1,
+        );
+
+        let tx = Tx {
+            version: 1,
+            flag: 0,
+            tx_in_count: 1, // varint
+            tx_in: vec![
+                TxIn {
+                    previous_output: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255],
+                    script_length: 14, // varint
+                    signature_script: vec![4, 32, 231, 73, 77, 1, 127, 6, 47, 80, 50, 83, 72, 47],
+                    sequence: 4294967295,
+                },
+            ],
+            tx_out_count: 1, // varint
+            tx_out: vec![
+                TxOut {
+                    value: 5000000000,
+                    pk_script_length: 35, // varint
+                    pk_script: vec![33, 2, 26, 234, 242, 248, 99, 138, 18, 154, 49, 86, 251, 231, 229, 239, 99, 82, 38, 176, 186, 253, 73, 95, 240, 58, 254, 44, 132, 61, 126, 58, 75, 81, 172],
+                },
+            ],
+            tx_witness: vec![],
+            lock_time: 0,
+        }; 
+
+        let expected_tex = tx.clone();
+        let txns = vec![tx];
+
+        block.add_txns(txns);
+    
+        assert_eq!(block.proof_of_inclusion(expected_tex), true);
+    }
+
+    #[test]
+    fn test_generates_origin_block_merkle(){
+
+        let mut block = Block::new(
+            
+            1, 
+            [0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 
+            174, 195, 206, 217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67], 
+            [240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53,
+             141, 211, 116, 95, 60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186], 
+             1296688928,
+             486604799,
+             1924588547,
+             1,
+        );
+
+        let tx = Tx {
+            version: 1,
+            flag: 0,
+            tx_in_count: 1, // varint
+            tx_in: vec![
+                TxIn {
+                    previous_output: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255],
+                    script_length: 14, // varint
+                    signature_script: vec![4, 32, 231, 73, 77, 1, 127, 6, 47, 80, 50, 83, 72, 47],
+                    sequence: 4294967295,
+                },
+            ],
+            tx_out_count: 1, // varint
+            tx_out: vec![
+                TxOut {
+                    value: 5000000000,
+                    pk_script_length: 35, // varint
+                    pk_script: vec![33, 2, 26, 234, 242, 248, 99, 138, 18, 154, 49, 86, 251, 231, 229, 239, 99, 82, 38, 176, 186, 253, 73, 95, 240, 58, 254, 44, 132, 61, 126, 58, 75, 81, 172],
+                },
+            ],
+            tx_witness: vec![],
+            lock_time: 0,
+        }; 
+
+        block.add_txns(vec![tx]);
+
+        let expected_merkle_root = [240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53,
+        141, 211, 116, 95, 60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186];
+        
+        println!("{:?}",block.get_merkle_tree_root().unwrap().to_string());
+
+    }
+
+    
 }

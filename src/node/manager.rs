@@ -114,6 +114,14 @@ impl NodeManager<'_> {
                     // total size_of of blocks
                     Block::encode_blocks_to_file(&blocks, "block_headers.bin");
                 }
+                MessagePayload::Block(block) => {
+                    self.logger
+                        .log(format!("Received block from {}", peer_address));
+                    println!("{:?}", block);
+                    if commands.contains(&"block") {
+                        matched_messages.push(MessagePayload::Block(block.clone()));
+                    }
+                }
                 MessagePayload::Inv(inv) => {
                     self.logger
                         .log(format!("Received inv from {}", peer_address));
@@ -432,6 +440,7 @@ mod tests {
                         node_manager.wait_for(vec!["block"]).first()
                     {
                         let _hash: [u8; 32] = block_payload.get_prev();
+
                         node_manager.blocks.push(block_payload.clone());
                         // blockchain.insert(hash, block.clone());
                     }

@@ -106,6 +106,9 @@ impl NodeManager<'_> {
                     }
                 }
                 MessagePayload::BlockHeader(blocks) => {
+                    self.logger
+                        .log(format!("Received block headers from {}", peer_address));
+
                     if commands.contains(&"headers") {
                         matched_messages.push(MessagePayload::BlockHeader(blocks.clone()));
                     }
@@ -114,6 +117,9 @@ impl NodeManager<'_> {
                     Block::encode_blocks_to_file(&blocks, "block_headers.bin");
                 }
                 MessagePayload::Block(block) => {
+                    self.logger
+                        .log(format!("Received block from {}", peer_address));
+
                     if commands.contains(&"block") {
                         matched_messages.push(MessagePayload::Block(block.clone()));
                     }
@@ -203,7 +209,10 @@ impl NodeManager<'_> {
     }
 
     pub fn initial_block_download(&mut self) -> Result<(), String> {
+        // Block headers first
+
         let file_path = "block_headers.bin";
+
         if fs::metadata(file_path).is_ok() {
             // Blocks file already exists, no need to perform initial block download
             self.blocks = Block::decode_blocks_from_file(file_path);
@@ -211,32 +220,46 @@ impl NodeManager<'_> {
             self.initial_block_headers_download();
         }
 
-        // Create getheaders message
+        // Block from date
 
-        // if let Some(timestamp) = date_to_timestamp(&self.config.download_blocks_since_date) {
-        //     if let Some(block_by_date) = self.get_block_by_timestamp(timestamp) {
-        //         let mut block_hash = block_by_date.get_prev();
-        //         block_hash.reverse();
+        if let Some(timestamp) = date_to_timestamp("2012-05-25") {
+            // TODO integrar fecha del config &self.config.download_blocks_since_date) {
+            println!("timestamp {:?}", timestamp);
 
-        //         let stop_hash = [0u8; 32];
+            let blocks = self.get_blocks();
 
-        //         let get_blocks_message = MessagePayload::GetBlocks(PayloadGetBlocks::new(
-        //             70015, 1, block_hash, stop_hash,
-        //         ));
+            let mut index = match self.get_block_index_by_timestamp(timestamp) {
+                Some(index) => index,
+                None => blocks.len(),
+            };
 
-        //         // Send get block messages
-        //         self.broadcast(&get_blocks_message);
+            while index <= blocks.len() {
+                let block = blocks[index].clone();
 
-        //         // Receive inv messages
-        //         let messages = self.wait_for(vec!["inv"]);
+                let mut block_hash = block.get_prev();
+                block_hash.reverse();
 
-        //         for inv in messages.iter() {
-        //             // TODO send get data message with inv
-        //         }
-        //     }
-        // }
+                self.block_download_since_block_hash(&block_hash);
 
+                index += 500;
+            }
+        }
         Ok(())
+    }
+
+    fn block_download_since_block_hash(&mut self, block_hash: &[u8; 32]) {
+        let stop_hash = [0u8; 32];
+
+        let get_blocks_message =
+            MessagePayload::GetBlocks(PayloadGetBlocks::new(70015, 1, *block_hash, stop_hash));
+
+        // Send get block messages
+        self.broadcast(&get_blocks_message);
+
+        // Receive inv messages
+        let _messages = self.wait_for(vec!["inv"]);
+
+        // implementar threadpool de invs
     }
 
     fn initial_block_headers_download(&mut self) {
@@ -250,13 +273,14 @@ impl NodeManager<'_> {
         let mut is_finished: bool = false;
 
         while !is_finished {
-            let messages = self.send_get_headers_with_block_hash(&last_block);
+            let _messages = self.send_get_headers_with_block_hash(&last_block);
 
             if let Some(block) = self.blocks.last() {
                 last_block = block.get_prev().clone();
             }
 
-            is_finished = messages.is_empty();
+            // is_finished = messages.is_empty();
+            is_finished = true; // TODO borrar luego, solo corro una vez para probar
         }
     }
 
@@ -274,10 +298,10 @@ impl NodeManager<'_> {
         self.wait_for(vec!["headers"])
     }
 
-    pub fn get_block_by_timestamp(&self, timestamp: u32) -> Option<Block> {
-        for block in self.get_blocks() {
+    pub fn get_block_index_by_timestamp(&self, timestamp: u32) -> Option<usize> {
+        for (index, block) in self.get_blocks().iter().enumerate() {
             if block.timestamp >= timestamp {
-                return Some(block);
+                return Some(index);
             }
         }
         None
@@ -481,8 +505,9 @@ mod tests {
 
         let timestamp = 1337966303;
 
-        if let Some(block_by_date) = node_manager.get_block_by_timestamp(timestamp) {
+        if let Some(index) = node_manager.get_block_index_by_timestamp(timestamp) {
             // Create getblocks message
+            let block_by_date = initial_blocks[index].clone();
             let mut block_hash = block_by_date.get_prev();
             block_hash.reverse();
 

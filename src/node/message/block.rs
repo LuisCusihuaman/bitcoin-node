@@ -321,7 +321,7 @@ mod tests {
 
 //        let txn = [0,1,0,1,0,1];
 
-     //   block.add_txns(txn);
+     //block.add_txns(txn);
 
     // Definir el metodo encode de transaccion para luego poder definir el vector
 

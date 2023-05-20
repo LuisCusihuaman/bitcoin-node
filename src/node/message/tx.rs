@@ -1,4 +1,4 @@
-use core::slice::SlicePattern;
+use crate::utils::write_varint;
 
 use crate::utils::*;
 
@@ -6,9 +6,9 @@ use crate::utils::*;
 pub struct Tx {
     version: u32,
     flag: u16,
-    tx_in_count: u64,
+    tx_in_count: u64,  // varint
     tx_in: Vec<TxIn>,
-    tx_out_count: u64,
+    tx_out_count: u64, // varint
     tx_out: Vec<TxOut>,
     tx_witness: Vec<u8>,
     lock_time: u32,
@@ -17,7 +17,7 @@ pub struct Tx {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TxIn {
     previous_output: [u8; 36],
-    script_length: u8,
+    script_length: u64, // varint
     signature_script: Vec<u8>,
     sequence: u32,
 }
@@ -25,115 +25,45 @@ pub struct TxIn {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TxOut {
     value: u64,
-    pk_script_length: u64,
+    pk_script_length: u64, // varint
     pk_script: Vec<u8>,
 }
 
-impl TxIn {
-
-    // encode and return a &[u8] slice
-    pub fn encode(&self, buffer: &mut [u8]){
-        
-        let mut offset = 0;
-
-        buffer[offset..offset+36].copy_from_slice(&self.previous_output);
-        offset += 36;
-
-        buffer[offset..offset+1].copy_from_slice(&self.script_length.to_le_bytes());
-        offset += 1; // Es variable
-
-        buffer[offset..offset+self.signature_script.len()].copy_from_slice(&self.signature_script);
-        offset += self.signature_script.len();
-
-        buffer[offset..offset+4].copy_from_slice(&self.sequence.to_le_bytes());
-        offset += 4;
-    }
-    
-}
-
-impl TxOut{
-    pub fn encode(&self, buffer: &mut [u8]){
-        
-        let mut offset = 0;
-
-        buffer[offset..offset+8].copy_from_slice(&self.value.to_le_bytes());
-        offset += 8;
-
-        buffer[offset..offset+1].copy_from_slice(&self.pk_script_length.to_le_bytes());
-        offset += 1; // Es variable
-
-        buffer[offset..].copy_from_slice(&self.pk_script);
-        offset += self.pk_script.len();
-    }
-}
-
 impl Tx {
-    pub fn get_size(&self) -> u64 {
-        let mut size = 0;
+    pub fn encode_tx(&self) -> Vec<u8> {
 
-        // Calculate the size of fixed-size fields
-        size += std::mem::size_of::<u32>() as u64; // version
-        size += std::mem::size_of::<u32>() as u64; // flag
-        size += std::mem::size_of::<u8>() as u64; // tx_in_count
-        size += std::mem::size_of::<u8>() as u64; // tx_out_count
-        size += std::mem::size_of::<u32>() as u64; // lock_time
+        let mut encoded: Vec<u8> = Vec::new();
 
-        // Calculate the size of variable-length fields
-        size += self.tx_in.iter().fold(0, |acc, tx_in| {
-            acc + std::mem::size_of::<[u8; 32]>() as u64
-                + std::mem::size_of::<u8>() as u64
-                + tx_in.signature_script.len() as u64
-                + std::mem::size_of::<u32>() as u64
-        });
+        encoded.extend(self.version.to_le_bytes());
 
-        size += self.tx_out.iter().fold(0, |acc, tx_out| {
-            acc + std::mem::size_of::<u64>() as u64
-                + std::mem::size_of::<u8>() as u64
-                + tx_out.pk_script.len() as u64
-        });
-
-        size += self.tx_witness.len() as u64;
-
-        size
-    }
-
-    pub fn encode_tx(&self, buffer: &mut [u8]){
-
-        let mut offset = 0;
-
-        buffer[offset..offset+4].copy_from_slice(&self.version.to_le_bytes());
-        offset += 4;
-
-        buffer[offset..offset+2].copy_from_slice(&self.flag.to_le_bytes());
-        offset += 2;
-
-        buffer[offset..offset+1].copy_from_slice(&self.tx_in_count.to_le_bytes());
-        offset += 1;
-
-
+        if self.flag != 0 {
+            encoded.extend(self.flag.to_le_bytes());
+        }
+        
+        write_varint(&mut encoded, self.tx_in_count as usize).unwrap();
+    
         for tx_in in &self.tx_in {
-            let lenght = ????
-            let mut buf=vec![0;lenght];
-            buf.extend_from_slice(tx_in.encode(&mut buf));
-            offset += 1;
+            encoded.extend(tx_in.previous_output);
+            write_varint(&mut encoded, tx_in.script_length as usize).unwrap();
+            encoded.extend(tx_in.signature_script.clone());
+            encoded.extend(tx_in.sequence.to_le_bytes());
         }
-
-
-        buffer[offset..offset+1].copy_from_slice(&self.tx_out_count.to_le_bytes());
-        offset += 1;
-
+    
+        write_varint(&mut encoded, self.tx_out_count as usize).unwrap();
+    
         for tx_out in &self.tx_out {
-            let lenght = ????
-            let mut buf=vec![0;lenght];
-            buf.extend_from_slice(tx_out.encode(&mut buf));
-            offset += lenght;
+            encoded.extend(tx_out.value.to_le_bytes());
+            write_varint(&mut encoded, tx_out.pk_script_length as usize).unwrap();
+            encoded.extend(tx_out.pk_script.clone());
         }
-
-        buffer[offset..offset+self.tx_witness.len()].copy_from_slice(&self.tx_witness);
-        offset += self.tx_witness.len();
-
-        buffer[offset..offset+4].copy_from_slice(&self.lock_time.to_le_bytes());
-        offset += 4;
+    
+        if self.flag != 0 {
+            encoded.extend(&self.tx_witness);
+        }
+    
+        encoded.extend(self.lock_time.to_le_bytes());
+    
+        encoded
     }
 }
 
@@ -169,7 +99,7 @@ pub fn decode_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
         previous_output.copy_from_slice(&buffer[*offset..*offset + 36]);
         *offset += 36;
 
-        let script_length = read_varint(&mut &buffer[*offset..]).unwrap() as u8;
+        let script_length = read_varint(&mut &buffer[*offset..]).unwrap() as u64;
         *offset += get_offset(&buffer[*offset..]);
 
         let mut signature_script = Vec::new();
@@ -258,69 +188,66 @@ fn check_flag(buffer: &[u8]) -> (u16, usize) {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_get_size() {
-        // Create a sample transaction
-        let tx_in_1 = TxIn {
-            previous_output: [0u8; 36],
-            script_length: 10,
-            signature_script: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-            sequence: 0,
-        };
+    
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+    
+        #[test]
+        fn test_encode_tx() {
+            let tx = Tx {
+                version: 1,
+                flag: 0,
+                tx_in_count: 2, // varint
+                tx_in: vec![
+                    TxIn {
+                        previous_output: [0; 36],
+                        script_length: 0, // varint
+                        signature_script: vec![],
+                        sequence: 0,
+                    },
+                    TxIn {
+                        previous_output: [0; 36],
+                        script_length: 0, // varint
+                        signature_script: vec![],
+                        sequence: 0,
+                    },
+                ],
+                tx_out_count: 1, // varint
+                tx_out: vec![
+                    TxOut {
+                        value: 100_000_000,
+                        pk_script_length: 0, // varint
+                        pk_script: vec![],
+                    },
+                ],
+                tx_witness: vec![],
+                lock_time: 0,
+            };
+    
+            let mut expected_encoded: Vec<u8> = Vec::new();
 
-        let tx_in_2 = TxIn {
-            previous_output: [0u8; 36],
-            script_length: 5,
-            signature_script: vec![11, 12, 13, 14, 15],
-            sequence: 0,
-        };
+            expected_encoded.extend(&[0x01, 0x00, 0x00, 0x00]); // version
+            //expected_encoded.extend(&[0x00, 0x00]); // flag
+            expected_encoded.extend(&[0x02]); // tx_in_count  // varint
 
-        let tx_out_1 = TxOut {
-            value: 100_000_000,
-            pk_script_length: 8,
-            pk_script: vec![16, 17, 18, 19, 20, 21, 22, 23],
-        };
+            for _ in 0..2 {
+                expected_encoded.extend(&[0x00; 36]); // tx_in.previous_output
+                expected_encoded.extend(&[0x00] ); // tx_in.script_length // varint// varint
+               // expected_encoded.extend( vacio ); // tx_in.signature_script
+                expected_encoded.extend(&[0x00; 4]); // tx_in.sequence
+            }
 
-        let tx_out_2 = TxOut {
-            value: 200_000_000,
-            pk_script_length: 6,
-            pk_script: vec![24, 25, 26, 27, 28, 29],
-        };
+            expected_encoded.extend(&[0x01]); // tx_out_count // varint
+            expected_encoded.extend(100_000_000u64.to_le_bytes() ); // tx_out.value
+            expected_encoded.extend(&[0x00]); // tx_out.pk_script_length // varint
+        // expected_encoded.extend( vacio ); // tx_in.signature_script
 
-        let tx = Tx {
-            version: 1,
-            flag: 0,
-            tx_in_count: 2,
-            tx_in: vec![tx_in_1.clone(), tx_in_2.clone()],
-            tx_out_count: 2,
-            tx_out: vec![tx_out_1.clone(), tx_out_2.clone()],
-            tx_witness: vec![30, 31, 32],
-            lock_time: 123456789,
-        };
 
-        // Calculate the expected size
-        let expected_size = std::mem::size_of::<u32>() as u64 +  // version
-            std::mem::size_of::<u32>() as u64 +  // flag
-            std::mem::size_of::<u8>() as u64 +   // tx_in_count
-            std::mem::size_of_val(&tx_in_1.previous_output) as u64 +  // previous_output
-            std::mem::size_of::<u8>() as u64 +   // script_length
-            tx_in_1.signature_script.len() as u64 +  // signature_script
-            std::mem::size_of::<u32>() as u64 +  // sequence
-            std::mem::size_of_val(&tx_in_2.previous_output) as u64 +  // previous_output
-            std::mem::size_of::<u8>() as u64 +   // script_length
-            tx_in_2.signature_script.len() as u64 +  // signature_script
-            std::mem::size_of::<u32>() as u64 +  // sequence
-            std::mem::size_of::<u8>() as u64 +   // tx_out_count
-            std::mem::size_of::<u64>() as u64 +  // value
-            std::mem::size_of::<u8>() as u64 +   // pk_script_length
-            tx_out_1.pk_script.len() as u64 +    // pk_script
-            std::mem::size_of::<u64>() as u64 +  // value
-            std::mem::size_of::<u8>() as u64 +   // pk_script_length
-            tx_out_2.pk_script.len() as u64 +    // pk_script
-            tx.tx_witness.len() as u64 +         // tx_witness
-            std::mem::size_of::<u32>() as u64; // lock_time
+            expected_encoded.extend(&[0x00, 0x00, 0x00, 0x00]); // lock_time
 
-        // Check if the calculated size matches the expected size
-        assert_eq!(tx.get_size(), expected_size);
+    
+            assert_eq!(tx.encode_tx(), expected_encoded);
+        }
     }
 }

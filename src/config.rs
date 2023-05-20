@@ -8,19 +8,21 @@ use std::io::Read;
 // use app::error::Error;
 
 pub struct Config {
-    pub logfile: String,
-    pub direccion_ip: String,
-    pub puerto: String,
+    pub log_file: String,
+    pub addrs: String,
+    pub port: u16,
     pub dns: String,
+    pub download_blocks_since_date: String,
 }
 
 impl Config {
     pub fn new() -> Self {
         Self {
-            logfile: String::from(""),
-            direccion_ip: String::from(""),
-            puerto: String::from(""),
+            log_file: String::from(""),
+            addrs: String::from(""),
+            port: 0,
             dns: String::from(""),
+            download_blocks_since_date: String::from(""),
         }
     }
     // Abro el archivo
@@ -33,10 +35,11 @@ impl Config {
         let reader = BufReader::new(content);
 
         let mut cfg = Self {
-            logfile: String::from(""),
-            direccion_ip: String::from(""),
-            puerto: String::from(""),
+            log_file: String::from(""),
+            addrs: String::from(""),
+            port: 0,
             dns: String::from(""),
+            download_blocks_since_date: String::from(""),
         };
 
         for line in reader.lines() {
@@ -56,16 +59,12 @@ impl Config {
 
     fn load_setting(&mut self, name: &str, value: &str) -> Result<(), Box<dyn Error>> {
         match name {
-            "logfile" => self.logfile = String::from(value),
-            "direccionIP" => self.direccion_ip = String::from(value),
-            "puerto" => self.puerto = String::from(value),
+            "LOG_FILE" => self.log_file = String::from(value),
+            "IP_ADDRESS" => self.addrs = String::from(value),
+            "PORT" => self.port = value.parse::<u16>()?,
             "DNS" => self.dns = String::from(value),
-            _ => {
-                return Err(Box::new(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    format!("Invalid config setting name: {}", name),
-                )))
-            }
+            "DOWNLOAD_BLOCKS_SINCE_DATE" => self.dns = String::from(value),
+            _ => {}
         }
         Ok(())
     }

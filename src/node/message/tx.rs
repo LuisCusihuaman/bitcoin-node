@@ -4,33 +4,33 @@ use crate::utils::*;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Tx {
-    version: u32,
-    flag: u16,
-    tx_in_count: u64,  // varint
-    tx_in: Vec<TxIn>,
-    tx_out_count: u64, // varint
-    tx_out: Vec<TxOut>,
-    tx_witness: Vec<u8>,
-    lock_time: u32,
+    pub version: u32,
+    pub flag: u16,
+    pub tx_in_count: u64,  // varint
+    pub tx_in: Vec<TxIn>,
+    pub tx_out_count: u64, // varint
+    pub tx_out: Vec<TxOut>,
+    pub tx_witness: Vec<u8>,
+    pub lock_time: u32,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TxIn {
-    previous_output: [u8; 36],
-    script_length: u64, // varint
-    signature_script: Vec<u8>,
-    sequence: u32,
+    pub previous_output: [u8; 36],
+    pub script_length: u64, // varint
+    pub signature_script: Vec<u8>,
+    pub sequence: u32,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TxOut {
-    value: u64,
-    pk_script_length: u64, // varint
-    pk_script: Vec<u8>,
+    pub value: u64,
+    pub pk_script_length: u64, // varint
+    pub pk_script: Vec<u8>,
 }
 
 impl Tx {
-    pub fn encode_tx(&self) -> Vec<u8> {
+    pub fn encode(&self) -> Vec<u8> {
 
         let mut encoded: Vec<u8> = Vec::new();
 
@@ -188,13 +188,13 @@ fn check_flag(buffer: &[u8]) -> (u16, usize) {
 mod tests {
     use super::*;
 
-    
     #[cfg(test)]
     mod tests {
         use super::*;
     
         #[test]
         fn test_encode_tx() {
+            
             let tx = Tx {
                 version: 1,
                 flag: 0,
@@ -247,7 +247,7 @@ mod tests {
             expected_encoded.extend(&[0x00, 0x00, 0x00, 0x00]); // lock_time
 
     
-            assert_eq!(tx.encode_tx(), expected_encoded);
+            assert_eq!(tx.encode(), expected_encoded);
         }
     }
 
@@ -305,6 +305,6 @@ mod tests {
         expected_encoded.extend(&[0x00, 0x00, 0x00, 0x00]); // lock_time
     
     
-        assert_eq!(tx.encode_tx(), expected_encoded);
+        assert_eq!(tx.encode(), expected_encoded);
     }
 }

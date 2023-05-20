@@ -1,7 +1,8 @@
-use super::tx::Tx;
+use super::tx::{Tx, TxIn, TxOut};
 use super::MessagePayload;
 use crate::node::message::{tx::decode_tx, merkle_tree};
 use crate::utils::*;
+use std::os::linux::raw;
 use std::vec;
 use super::merkle_tree::MerkleTree;
 
@@ -48,27 +49,36 @@ impl Block {
             txns,
         }
     }
-/*
-    pub fn add_txns(&mut self, txns:Vec<Tx> ) {
+
+    fn add_txns(&mut self, txns:Vec<Tx> ) {
+        //TODO if (txns.len()!=self.txn_count as usize){
+        //    Error
+        //}
         self.txns = txns;
     }
 
     pub fn get_merkle_tree_root(&self){
         let merkle_tree = MerkleTree::new();
         
-        merkle_tree.generate_merkle_tree(self.txns);
+        //merkle_tree.generate_merkle_tree(self.txns);
 
         merkle_tree.get_root();
     }
 
-    pub fn proof_of_inclusion(&self, tx: Tx) -> bool {
-        let merkle_tree = MerkleTree::new();
-        
-        merkle_tree.generate_merkle_tree(self.txns);
+    //let mut merkle_tree = MerkleTree::new();
+    //merkle_tree.generate_merkle_tree(raw_trxs);
 
-        merkle_tree.proof_of_inclusion(tx)
+    pub fn proof_of_inclusion(&self, tx_req: Tx) -> bool {
+
+        let raw_txs = self.txns.iter().map(|tx| tx.encode()).collect::<Vec<Vec<u8>>>();
+        let raw_txs_slice = raw_txs.iter().map(|tx| tx.as_slice()).collect::<Vec<&[u8]>>();
+
+        let mut merkle_tree = MerkleTree::new();
+        
+        merkle_tree.generate_merkle_tree(raw_txs_slice);
+
+        merkle_tree.proof_of_inclusion(tx_req.encode().as_slice())
     }
-    */
     
     
     pub fn encode(&self, buffer: &mut [u8]) {
@@ -167,26 +177,19 @@ pub fn decode_block(buffer: &[u8]) -> Result<MessagePayload, String> {
     let block_header = decode_internal_block(&buffer).unwrap();
     let mut transactions = Vec::new();
 
-    let mut raw_trxs = Vec::new();
 
     let tnx_count = read_varint(&mut &buffer[80..]).unwrap() as u8;
     let mut offset = 80 + get_offset(&buffer[80..]);
 
-    let mut off_aux;
 
     for _ in 0..tnx_count {
-        off_aux = offset;
         if let Some(tx) = decode_tx(&buffer, &mut offset) {
             println!("{:?}", offset);
             transactions.push(tx);
-            raw_trxs.push(&buffer[off_aux..offset]);
         } else {
             return Err("Failed to decode transaction".to_string());
         }
     }
-
-    let mut merkle_tree = MerkleTree::new();
-    merkle_tree.generate_merkle_tree(raw_trxs);
 
     Ok(MessagePayload::BlockHeader(vec![block_header]))
 }
@@ -303,7 +306,7 @@ mod tests {
     #[test]
     fn test_proof_of_inclution(){
 
-        let block = Block::new(
+        let mut block = Block::new(
             1,
             [
                 0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
@@ -316,26 +319,246 @@ mod tests {
             1296688928,
             486604799,
             1924588547,
-            1,
+            3,
         );
 
-//        let txn = [0,1,0,1,0,1];
+        let tx_1 = Tx {
+            version: 1,
+            flag: 0,
+            tx_in_count: 2, // varint
+            tx_in: vec![
+                TxIn {
+                    previous_output: [0; 36],
+                    script_length: 0, // varint
+                    signature_script: vec![],
+                    sequence: 0,
+                },
+                TxIn {
+                    previous_output: [0; 36],
+                    script_length: 0, // varint
+                    signature_script: vec![],
+                    sequence: 0,
+                },
+            ],
+            tx_out_count: 1, // varint
+            tx_out: vec![
+                TxOut {
+                    value: 100_000_000,
+                    pk_script_length: 0, // varint
+                    pk_script: vec![],
+                },
+            ],
+            tx_witness: vec![],
+            lock_time: 0,
+        };
 
-     //block.add_txns(txn);
+        let tx_2 = Tx {
+            version: 1,
+            flag: 0,
+            tx_in_count: 2, // varint
+            tx_in: vec![
+                TxIn {
+                    previous_output: [0; 36],
+                    script_length: 0, // varint
+                    signature_script: vec![],
+                    sequence: 0,
+                },
+                TxIn {
+                    previous_output: [0; 36],
+                    script_length: 0, // varint
+                    signature_script: vec![],
+                    sequence: 0,
+                },
+            ],
+            tx_out_count: 1, // varint
+            tx_out: vec![
+                TxOut {
+                    value: 100_000_000,
+                    pk_script_length: 0, // varint
+                    pk_script: vec![],
+                },
+            ],
+            tx_witness: vec![],
+            lock_time: 0,
+        };
 
-    // Definir el metodo encode de transaccion para luego poder definir el vector
+        let tx_3 = Tx {
+            version: 1,
+            flag: 0,
+            tx_in_count: 2, // varint
+            tx_in: vec![
+                TxIn {
+                    previous_output: [0; 36],
+                    script_length: 0, // varint
+                    signature_script: vec![],
+                    sequence: 0,
+                },
+                TxIn {
+                    previous_output: [0; 36],
+                    script_length: 0, // varint
+                    signature_script: vec![],
+                    sequence: 0,
+                },
+            ],
+            tx_out_count: 1, // varint
+            tx_out: vec![
+                TxOut {
+                    value: 100_000_000,
+                    pk_script_length: 0, // varint
+                    pk_script: vec![],
+                },
+            ],
+            tx_witness: vec![],
+            lock_time: 0,
+        };
 
-     // Instanciar 3 transacciones y guardarlas en un vector de transacciones
+        let expected_tex = tx_1.clone();
+        let txns = vec![tx_1,tx_2,tx_3];
 
-
-
-     // Llamar al metodo block.add_txns para agg vector de transacciones
-
-
-     // Llamar block.proof_of_inclusion para una transaccion y verificar que sea true 
-
-       // assert!(block.proof_of_inclusion(txn));
+        block.add_txns(txns);
+    
+        assert_eq!(block.proof_of_inclusion(expected_tex), true);
 
     }
     
+    #[test]
+    fn test_proof_of_inclution_doesnt_have_invalid_tx(){
+
+        let mut block = Block::new(
+            1,
+            [
+                0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
+                217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
+            ],
+            [
+                240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53, 141, 211,
+                116, 95, 60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186,
+            ],
+            1296688928,
+            486604799,
+            1924588547,
+            3,
+        );
+
+        let tx_1 = Tx {
+            version: 1,
+            flag: 0,
+            tx_in_count: 2, // varint
+            tx_in: vec![
+                TxIn {
+                    previous_output: [0; 36],
+                    script_length: 0, // varint
+                    signature_script: vec![],
+                    sequence: 0,
+                },
+                TxIn {
+                    previous_output: [0; 36],
+                    script_length: 0, // varint
+                    signature_script: vec![],
+                    sequence: 0,
+                },
+            ],
+            tx_out_count: 1, // varint
+            tx_out: vec![
+                TxOut {
+                    value: 100_000_000,
+                    pk_script_length: 0, // varint
+                    pk_script: vec![],
+                },
+            ],
+            tx_witness: vec![],
+            lock_time: 0,
+        };
+
+        let tx_2 = Tx {
+            version: 1,
+            flag: 0,
+            tx_in_count: 2, // varint
+            tx_in: vec![
+                TxIn {
+                    previous_output: [0; 36],
+                    script_length: 0, // varint
+                    signature_script: vec![],
+                    sequence: 0,
+                },
+                TxIn {
+                    previous_output: [0; 36],
+                    script_length: 0, // varint
+                    signature_script: vec![],
+                    sequence: 0,
+                },
+            ],
+            tx_out_count: 1, // varint
+            tx_out: vec![
+                TxOut {
+                    value: 100_000_000,
+                    pk_script_length: 0, // varint
+                    pk_script: vec![],
+                },
+            ],
+            tx_witness: vec![],
+            lock_time: 0,
+        };
+
+        let tx_3 = Tx {
+            version: 1,
+            flag: 0,
+            tx_in_count: 2, // varint
+            tx_in: vec![
+                TxIn {
+                    previous_output: [0; 36],
+                    script_length: 0, // varint
+                    signature_script: vec![],
+                    sequence: 0,
+                },
+                TxIn {
+                    previous_output: [0; 36],
+                    script_length: 0, // varint
+                    signature_script: vec![],
+                    sequence: 0,
+                },
+            ],
+            tx_out_count: 1, // varint
+            tx_out: vec![
+                TxOut {
+                    value: 100_000_000,
+                    pk_script_length: 0, // varint
+                    pk_script: vec![],
+                },
+            ],
+            tx_witness: vec![],
+            lock_time: 0,
+        };
+
+        let not_expected_tnx=Tx {
+            version: 1,
+            flag: 0,
+            tx_in_count: 1, // varint
+            tx_in: vec![
+                TxIn {
+                    previous_output: [0; 36],
+                    script_length: 0, // varint
+                    signature_script: vec![],
+                    sequence: 0,
+                },
+            ],
+            tx_out_count: 1, // varint
+            tx_out: vec![
+                TxOut {
+                    value: 100_000_000,
+                    pk_script_length: 0, // varint
+                    pk_script: vec![],
+                },
+            ],
+            tx_witness: vec![],
+            lock_time: 0,
+        };
+
+        let txns = vec![tx_1,tx_2,tx_3];
+
+        block.add_txns(txns);
+    
+        assert_eq!( block.proof_of_inclusion(not_expected_tnx), false);
+
+    }
 }

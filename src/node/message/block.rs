@@ -139,8 +139,10 @@ impl Block {
 }
 
 pub fn decode_block(buffer: &[u8]) -> Result<MessagePayload, String> {
-    println!("decoding block:");
-    println!("{:?}", buffer);
+    if buffer.len() == 0 {
+        return Err("Empty buffer".to_string());
+    }
+
     let mut block = decode_internal_block(&buffer).unwrap();
     let mut transactions = Vec::new();
 

@@ -6,6 +6,7 @@ use crate::node::message::MessagePayload;
 use crate::node::p2p_connection::P2PConnection;
 use crate::utils::date_to_timestamp;
 use crate::{logger::Logger, node::message::get_headers::PayloadGetHeaders};
+use crate::node::message::get_data::PayloadGetData;
 use std::thread;
 
 use std::fs;
@@ -171,7 +172,7 @@ impl NodeManager<'_> {
 
     pub fn get_initial_nodes(&mut self) -> Result<Vec<String>, String> {
         let ips = self
-            .resolve_hostname(&self.config.addrs, self.config.port)
+            .resolve_hostname(&self.config.dns, self.config.port)
             .map_err(|e| format!("Error resolving hostname: {}", e))?;
         let ipv4_addresses: Vec<String> = ips
             .into_iter()
@@ -257,9 +258,29 @@ impl NodeManager<'_> {
         self.broadcast(&get_blocks_message);
 
         // Receive inv messages
-        let _messages = self.wait_for(vec!["inv"]);
+        let messages = self.wait_for(vec!["inv"]);
 
-        // implementar threadpool de invs
+        // implementar threadpool de inv
+        match messages.first() {
+            Some(MessagePayload::Inv(inventories)) => {
+                for inv in inventories.iter() {
+                    self.update_block_by_inv(*inv);
+                }
+            }
+            _ => {},
+        }
+    }
+
+    fn update_block_by_inv(&mut self, inv: [u8; 36]){
+
+        let get_data_message =
+                        MessagePayload::GetData(PayloadGetData::new(1, inv));
+
+        // Send get data messages
+        self.broadcast(&get_data_message);
+
+        // Receive block
+        self.wait_for(vec!["block"]);
     }
 
     fn initial_block_headers_download(&mut self) {
@@ -328,7 +349,7 @@ mod tests {
     #[test]
     fn test_get_all_ips_from_dns() {
         let logger = Logger::stdout();
-        let config = Config::new();
+        let config = Config::from_file("nodo.config").map_err(|err| err.to_string()).unwrap();
 
         let mut node_manager = NodeManager::new(config, &logger);
         let node_network_ips = node_manager.get_initial_nodes().unwrap();
@@ -338,7 +359,7 @@ mod tests {
     #[test]
     fn test_connect_node_with_external_nodes_not_refuse_connection() -> Result<(), String> {
         let logger = Logger::stdout();
-        let config = Config::new();
+        let config = Config::from_file("nodo.config").map_err(|err| err.to_string())?;
 
         let mut node_manager = NodeManager::new(config, &logger);
         let node_network_ips = node_manager.get_initial_nodes().unwrap();
@@ -357,7 +378,7 @@ mod tests {
         let config = Config::new();
 
         let mut node_manager = NodeManager::new(config, &logger);
-        node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
+        node_manager.connect(vec!["5.9.73.173:18333".to_string()])?;
 
         let payload_version_message = MessagePayload::Version(PayloadVersion::default_version());
         node_manager.broadcast(&payload_version_message);
@@ -372,7 +393,7 @@ mod tests {
     #[test]
     fn test_node_send_get_headers_receives_headers() -> Result<(), String> {
         let logger: Logger = Logger::stdout();
-        let config = Config::new();
+        let config = Config::from_file("nodo.config").map_err(|err| err.to_string()).unwrap();
 
         let mut node_manager = NodeManager::new(config, &logger);
         node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
@@ -401,7 +422,7 @@ mod tests {
     #[test]
     fn test_node_send_get_blocks_receives_inv() -> Result<(), String> {
         let logger: Logger = Logger::stdout();
-        let config = Config::new();
+        let config = Config::from_file("nodo.config").map_err(|err| err.to_string()).unwrap();
 
         let mut node_manager = NodeManager::new(config, &logger);
         node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
@@ -430,7 +451,7 @@ mod tests {
     #[ignore]
     fn test_node_send_get_blocks_receives_inv_sends_get_data() -> Result<(), String> {
         let logger: Logger = Logger::stdout();
-        let config = Config::new();
+        let config = Config::from_file("nodo.config").map_err(|err| err.to_string()).unwrap();
 
         let mut node_manager = NodeManager::new(config, &logger);
         node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
@@ -478,7 +499,7 @@ mod tests {
     #[test]
     fn test_send_get_headers_and_get_blocks_from_a_date() -> Result<(), String> {
         let logger: Logger = Logger::stdout();
-        let config = Config::new();
+        let config = Config::from_file("nodo.config").map_err(|err| err.to_string()).unwrap();
 
         let mut node_manager = NodeManager::new(config, &logger);
         node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
@@ -564,7 +585,7 @@ mod tests {
     #[ignore]
     fn test_complete_initial_block_download() -> Result<(), String> {
         let logger: Logger = Logger::stdout();
-        let config = Config::new();
+        let config = Config::from_file("nodo.config").map_err(|err| err.to_string()).unwrap();
 
         let mut node_manager = NodeManager::new(config, &logger);
         node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;

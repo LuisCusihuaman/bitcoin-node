@@ -45,6 +45,7 @@ mod tests {
             log_file: "test.log".to_owned(),
             addrs: "".to_string(),
             port: 0,
+            dns_port: 0,
             dns: "".to_string(),
             download_blocks_since_date: "".to_string(),
         };

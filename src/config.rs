@@ -12,6 +12,7 @@ pub struct Config {
     pub addrs: String,
     pub port: u16,
     pub dns: String,
+    pub dns_port: u16,
     pub download_blocks_since_date: String,
 }
 
@@ -22,6 +23,7 @@ impl Config {
             addrs: String::from(""),
             port: 0,
             dns: String::from(""),
+            dns_port: 80,
             download_blocks_since_date: String::from(""),
         }
     }
@@ -39,6 +41,7 @@ impl Config {
             addrs: String::from(""),
             port: 0,
             dns: String::from(""),
+            dns_port: 80,
             download_blocks_since_date: String::from(""),
         };
 
@@ -63,7 +66,8 @@ impl Config {
             "IP_ADDRESS" => self.addrs = String::from(value),
             "PORT" => self.port = value.parse::<u16>()?,
             "DNS" => self.dns = String::from(value),
-            "DOWNLOAD_BLOCKS_SINCE_DATE" => self.dns = String::from(value),
+            "DOWNLOAD_BLOCKS_SINCE_DATE" => self.download_blocks_since_date = String::from(value),
+            "DNS_PORT" => self.dns_port = value.parse::<u16>()?,
             _ => {}
         }
         Ok(())

@@ -143,14 +143,7 @@ impl NodeManager<'_> {
                     if let Some(index) = self.get_block_index_by_prev_hash(block.get_prev()) {
                         self.blocks[index] = block;
                     }
-                }
-                MessagePayload::Block(block) => {
-                    self.logger
-                        .log(format!("Received block from {}", peer_address));
-                    if commands.contains(&"block") {
-                        matched_messages.push(MessagePayload::Block(block.clone()));
-                    }
-                }
+                },
                 MessagePayload::Inv(inv) => {
                     self.logger
                         .log(format!("Received inv from {}", peer_address));

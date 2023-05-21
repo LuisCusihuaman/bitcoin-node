@@ -2,6 +2,7 @@ use super::tx::Tx;
 use super::MessagePayload;
 use crate::node::message::tx::decode_tx;
 use crate::utils::*;
+use bitcoin_hashes::Hash;
 use std::vec;
 
 use std::{
@@ -15,6 +16,7 @@ use super::get_headers::decode_header;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Block {
     version: u32,
+    hash: [u8; 32],
     previous_block: [u8; 32],
     merkle_root_hash: [u8; 32],
     pub timestamp: u32,
@@ -27,6 +29,7 @@ pub struct Block {
 impl Block {
     pub fn new(
         version: u32,
+        hash: [u8; 32],
         previous_block: [u8; 32],
         merkle_root_hash: [u8; 32],
         timestamp: u32,
@@ -38,6 +41,7 @@ impl Block {
 
         Self {
             version,
+            hash,
             previous_block,
             merkle_root_hash,
             timestamp,
@@ -89,6 +93,10 @@ impl Block {
 
     pub fn get_prev(&self) -> [u8; 32] {
         self.previous_block
+    }
+
+    pub fn get_hash(&self) -> [u8; 32] {
+        self.hash
     }
 
     pub fn decode_blocks_from_file(file_path: &str) -> Vec<Block> {
@@ -178,8 +186,14 @@ pub fn decode_internal_block(buffer: &[u8]) -> Option<Block> {
     let n_bits = read_le(&buffer[72..76]) as u32;
     let nonce = read_le(&buffer[76..80]) as u32;
 
+    let raw_hash = double_sha256(&buffer[0..80]).to_byte_array();
+    let mut hash: [u8; 32] = [0u8; 32];
+    copy_bytes_to_array(&raw_hash, &mut hash);
+    hash.reverse();
+
     Some(Block::new(
         version,
+        hash,
         previous_block_header_hash,
         merkle_root_hash,
         timestamp,
@@ -195,10 +209,13 @@ mod tests {
     use super::*;
 
     #[test]
-
     fn test_block_encode() {
         let block = Block::new(
             1,
+            [
+                0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
+                217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
+            ],
             [
                 0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
                 217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
@@ -237,6 +254,10 @@ mod tests {
                     217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
                 ],
                 [
+                    0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
+                    217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
+                ],
+                [
                     240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53, 141, 211,
                     116, 95, 60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186,
                 ],
@@ -247,6 +268,10 @@ mod tests {
             ),
             Block::new(
                 1,
+                [
+                    0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
+                    217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
+                ],
                 [
                     0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
                     217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,

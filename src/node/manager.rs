@@ -1,12 +1,12 @@
 use crate::config::Config;
 use crate::node::message::block::Block;
 use crate::node::message::get_blocks::PayloadGetBlocks;
+use crate::node::message::get_data::PayloadGetData;
 use crate::node::message::version::PayloadVersion;
 use crate::node::message::MessagePayload;
 use crate::node::p2p_connection::P2PConnection;
 use crate::utils::date_to_timestamp;
 use crate::{logger::Logger, node::message::get_headers::PayloadGetHeaders};
-use crate::node::message::get_data::PayloadGetData;
 use std::thread;
 
 use std::fs;
@@ -217,34 +217,33 @@ impl NodeManager<'_> {
         if fs::metadata(file_path).is_ok() {
             // Blocks file already exists, no need to perform initial block download
             self.blocks = Block::decode_blocks_from_file(file_path);
-        } else {
-            self.initial_block_headers_download();
         }
+        println!("blocks iniciales {:?}", self.blocks.len());
+        self.initial_block_headers_download();
 
         // Block from date
 
-        if let Some(timestamp) = date_to_timestamp("2012-05-25") {
-            // TODO integrar fecha del config &self.config.download_blocks_since_date) {
-            println!("timestamp {:?}", timestamp);
+        // if let Some(timestamp) = date_to_timestamp("2013-11-10") {
+        //     // TODO integrar fecha del config &self.config.download_blocks_since_date) {
 
-            let blocks = self.get_blocks();
+        //     let blocks = self.get_blocks();
 
-            let mut index = match self.get_block_index_by_timestamp(timestamp) {
-                Some(index) => index,
-                None => blocks.len(),
-            };
+        //     let mut index = match self.get_block_index_by_timestamp(timestamp) {
+        //         Some(index) => index,
+        //         None => blocks.len(),
+        //     };
 
-            while index <= blocks.len() {
-                let block = blocks[index].clone();
+        //     while index < blocks.len() {
+        //         let block = blocks[index].clone();
 
-                let mut block_hash = block.get_prev();
-                block_hash.reverse();
+        //         let mut block_hash = block.get_prev();
+        //         block_hash.reverse();
 
-                self.block_download_since_block_hash(&block_hash);
+        //         self.block_download_since_block_hash(&block_hash);
 
-                index += 500;
-            }
-        }
+        //         index += 500;
+        //     }
+        // }
         Ok(())
     }
 
@@ -267,14 +266,12 @@ impl NodeManager<'_> {
                     self.update_block_by_inv(*inv);
                 }
             }
-            _ => {},
+            _ => {}
         }
     }
 
-    fn update_block_by_inv(&mut self, inv: [u8; 36]){
-
-        let get_data_message =
-                        MessagePayload::GetData(PayloadGetData::new(1, inv));
+    fn update_block_by_inv(&mut self, inv: [u8; 36]) {
+        let get_data_message = MessagePayload::GetData(PayloadGetData::new(1, inv));
 
         // Send get data messages
         self.broadcast(&get_data_message);
@@ -284,24 +281,30 @@ impl NodeManager<'_> {
     }
 
     fn initial_block_headers_download(&mut self) {
-        let mut last_block: [u8; 32] = [
-            0x00, 0x00, 0x00, 0x00, 0x09, 0x33, 0xea, 0x01, 0xad, 0x0e, 0xe9, 0x84, 0x20, 0x97,
-            0x79, 0xba, 0xae, 0xc3, 0xce, 0xd9, 0x0f, 0xa3, 0xf4, 0x08, 0x71, 0x95, 0x26, 0xf8,
-            0xd7, 0x7f, 0x49, 0x43,
-        ];
+        let mut last_block: [u8; 32] = if self.blocks.len() == 0 {
+            [
+                0x00, 0x00, 0x00, 0x00, 0x09, 0x33, 0xea, 0x01, 0xad, 0x0e, 0xe9, 0x84, 0x20, 0x97,
+                0x79, 0xba, 0xae, 0xc3, 0xce, 0xd9, 0x0f, 0xa3, 0xf4, 0x08, 0x71, 0x95, 0x26, 0xf8,
+                0xd7, 0x7f, 0x49, 0x43,
+            ]
+        } else {
+            let last_block_found = self.blocks.last().unwrap();
+            last_block_found.get_prev()
+        };
+
         last_block.reverse();
 
         let mut is_finished: bool = false;
 
         while !is_finished {
-            let _messages = self.send_get_headers_with_block_hash(&last_block);
+            let messages = self.send_get_headers_with_block_hash(&last_block);
 
             if let Some(block) = self.blocks.last() {
                 last_block = block.get_prev().clone();
             }
 
-            // is_finished = messages.is_empty();
-            is_finished = true; // TODO borrar luego, solo corro una vez para probar
+            println!("blocks {:?}", self.blocks.len());
+            is_finished = messages.is_empty();
         }
     }
 
@@ -336,6 +339,27 @@ impl NodeManager<'_> {
         }
         None
     }
+
+    fn check_blockchain_integrity(&self) -> Result<(), String> {
+        // let blocks = self.get_blocks();
+
+        // for (index, block) in blocks.iter().enumerate() {
+        //     if index == 0 {
+        //         continue;
+        //     }
+
+        //     let prev_block = &blocks[index - 1];
+
+        //     if block.get_prev() != prev_block.get_hash() {
+        //         return Err(format!(
+        //             "Blockchain integrity error: block {} prev hash is not equal to block {} hash",
+        //             index - 1,
+        //             index
+        //         ));
+        //     }
+        // }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -349,7 +373,9 @@ mod tests {
     #[test]
     fn test_get_all_ips_from_dns() {
         let logger = Logger::stdout();
-        let config = Config::from_file("nodo.config").map_err(|err| err.to_string()).unwrap();
+        let config = Config::from_file("nodo.config")
+            .map_err(|err| err.to_string())
+            .unwrap();
 
         let mut node_manager = NodeManager::new(config, &logger);
         let node_network_ips = node_manager.get_initial_nodes().unwrap();
@@ -393,7 +419,9 @@ mod tests {
     #[test]
     fn test_node_send_get_headers_receives_headers() -> Result<(), String> {
         let logger: Logger = Logger::stdout();
-        let config = Config::from_file("nodo.config").map_err(|err| err.to_string()).unwrap();
+        let config = Config::from_file("nodo.config")
+            .map_err(|err| err.to_string())
+            .unwrap();
 
         let mut node_manager = NodeManager::new(config, &logger);
         node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
@@ -422,7 +450,9 @@ mod tests {
     #[test]
     fn test_node_send_get_blocks_receives_inv() -> Result<(), String> {
         let logger: Logger = Logger::stdout();
-        let config = Config::from_file("nodo.config").map_err(|err| err.to_string()).unwrap();
+        let config = Config::from_file("nodo.config")
+            .map_err(|err| err.to_string())
+            .unwrap();
 
         let mut node_manager = NodeManager::new(config, &logger);
         node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
@@ -451,7 +481,9 @@ mod tests {
     #[ignore]
     fn test_node_send_get_blocks_receives_inv_sends_get_data() -> Result<(), String> {
         let logger: Logger = Logger::stdout();
-        let config = Config::from_file("nodo.config").map_err(|err| err.to_string()).unwrap();
+        let config = Config::from_file("nodo.config")
+            .map_err(|err| err.to_string())
+            .unwrap();
 
         let mut node_manager = NodeManager::new(config, &logger);
         node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
@@ -499,7 +531,9 @@ mod tests {
     #[test]
     fn test_send_get_headers_and_get_blocks_from_a_date() -> Result<(), String> {
         let logger: Logger = Logger::stdout();
-        let config = Config::from_file("nodo.config").map_err(|err| err.to_string()).unwrap();
+        let config = Config::from_file("nodo.config")
+            .map_err(|err| err.to_string())
+            .unwrap();
 
         let mut node_manager = NodeManager::new(config, &logger);
         node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
@@ -585,7 +619,9 @@ mod tests {
     #[ignore]
     fn test_complete_initial_block_download() -> Result<(), String> {
         let logger: Logger = Logger::stdout();
-        let config = Config::from_file("nodo.config").map_err(|err| err.to_string()).unwrap();
+        let config = Config::from_file("nodo.config")
+            .map_err(|err| err.to_string())
+            .unwrap();
 
         let mut node_manager = NodeManager::new(config, &logger);
         node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
@@ -593,8 +629,10 @@ mod tests {
 
         node_manager.initial_block_download()?;
 
+        // 2 184 477 bloques?
+
         assert!(node_manager.get_blocks().len() >= 2000);
-        std::fs::remove_file("block_headers.bin").unwrap();
+        // std::fs::remove_file("block_headers.bin").unwrap();
         Ok(())
     }
 

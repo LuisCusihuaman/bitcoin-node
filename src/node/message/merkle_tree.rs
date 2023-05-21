@@ -19,6 +19,7 @@ impl MerkleTree {
         }
     }
 
+    //Must be reverse order
     pub fn get_root(&self) -> Result<sha256::Hash, Error> {
         if self.root == sha256::Hash::hash("".as_bytes()) {
             return Err(Error::MerkleTreeNotGenerated(String::from(
@@ -57,7 +58,7 @@ impl MerkleTree {
 
         // Convierto las hojas a hashes
         for l in data {
-            let hash = self.hash256(l);
+            let hash = sha256::Hash::from_slice(l).unwrap();
             hashed_leaves.push(hash);
         }
         if hashed_leaves.len() % 2 == 1 {
@@ -79,10 +80,11 @@ impl MerkleTree {
     // Takes the binary hashes and calculates the hash256
     // this implementation assumes that the child node hashes are already in SHA-256
     fn merkle_parent(&self, left: &sha256::Hash, right: &sha256::Hash) -> sha256::Hash {
-        let mut hasher = sha256::Hash::engine();
-        hasher.input(left.as_ref());
-        hasher.input(right.as_ref());
-        sha256::Hash::from_engine(hasher)
+        let mut concat_left_right = Vec::new();
+        concat_left_right.extend_from_slice(&left.to_byte_array());
+        concat_left_right.extend_from_slice(&right.to_byte_array());
+        let first_hash = self.hash256(&concat_left_right);
+        self.hash256(&first_hash.to_byte_array())
     }
 
     // Recibe una lista de hashes y devuelve una lista que es la mitad de largo
@@ -108,8 +110,7 @@ impl MerkleTree {
         let mut i = 0;
 
         while i < hashes.len() {
-            let parent = self.merkle_parent(&hashes[i], &hashes[i + 1]);
-            println!("Parent: {:?}", parent.to_string());
+            let parent: sha256::Hash = self.merkle_parent(&hashes[i], &hashes[i + 1]);
             parent_level.push(parent);
             i += 2;
         }
@@ -136,7 +137,7 @@ impl MerkleTree {
 
     // Indica si la transaccion pertenece al merkle tree
     pub fn proof_of_inclusion(&self, tx: &[u8]) -> bool {
-        let tx_hash = self.hash256(tx);
+        let tx_hash = sha256::Hash::from_slice(&tx).unwrap();
         let mut proof = false;
 
         for h in &self.hashed_leaves {

@@ -1,3 +1,4 @@
+use app::config::Config;
 use app::logger::Logger;
 use app::net::request::Request;
 use app::net::response::Response;
@@ -23,9 +24,10 @@ fn test_al_pedir_un_balance_el_router_devuelve_resultado_esperado() -> std::io::
         },
     );
     let addrs = "127.0.0.1:8990";
+    let config = Config::new();
     let handle = thread::spawn(move || {
         let logger = Logger::stdout();
-        Server::new(router, &logger).run(&addrs).unwrap();
+        Server::new(router, &logger, config).run(&addrs).unwrap();
     });
     thread::sleep(Duration::from_millis(500));
 

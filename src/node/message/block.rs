@@ -18,18 +18,20 @@ use super::get_headers::decode_header;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Block {
     version: u32,
+    hash: [u8; 32],
     previous_block: [u8; 32],
     merkle_root_hash: [u8; 32],
-    timestamp: u32,
+    pub timestamp: u32,
     n_bits: u32,
     nonce: u32,
     pub txn_count: u8, // TODO Variable size
-    txns: Vec<Tx>,     // TODO Variable size
+    pub txns: Vec<Tx>, // TODO Variable size
 }
 
 impl Block {
     pub fn new(
         version: u32,
+        hash: [u8; 32],
         previous_block: [u8; 32],
         merkle_root_hash: [u8; 32],
         timestamp: u32,
@@ -41,6 +43,7 @@ impl Block {
 
         Self {
             version,
+            hash,
             previous_block,
             merkle_root_hash,
             timestamp,
@@ -132,6 +135,11 @@ impl Block {
     pub fn get_prev(&self) -> [u8; 32] {
         self.previous_block
     }
+
+    pub fn get_hash(&self) -> [u8; 32] {
+        self.hash
+    }
+
     pub fn decode_blocks_from_file(file_path: &str) -> Vec<Block> {
         let mut file = File::open(file_path).expect("Failed to open file");
 
@@ -180,7 +188,11 @@ impl Block {
 }
 
 pub fn decode_block(buffer: &[u8]) -> Result<MessagePayload, String> {
-    let mut block_header = decode_internal_block(&buffer).unwrap();
+    if buffer.len() == 0 {
+        return Err("Empty buffer".to_string());
+    }
+
+    let mut block = decode_internal_block(&buffer).unwrap();
     let mut transactions = Vec::new();
 
     let tnx_count = read_varint(&mut &buffer[80..]).unwrap() as u8;
@@ -193,13 +205,10 @@ pub fn decode_block(buffer: &[u8]) -> Result<MessagePayload, String> {
             return Err("Failed to decode transaction".to_string());
         }
     }
-
-    block_header.txn_count = tnx_count;
-    block_header.txns = transactions;
-    if tnx_count == 2 {
-        println!("Block with 2 transactions: {:?}", block_header);
-    }
-    Ok(MessagePayload::Block(block_header))
+    block.txn_count = tnx_count;
+    block.txns = transactions;
+    
+    Ok(MessagePayload::Block(block))
 }
 
 pub fn decode_internal_block(buffer: &[u8]) -> Option<Block> {
@@ -217,8 +226,14 @@ pub fn decode_internal_block(buffer: &[u8]) -> Option<Block> {
     let n_bits = read_le(&buffer[72..76]) as u32;
     let nonce = read_le(&buffer[76..80]) as u32;
 
+    let raw_hash = double_sha256(&buffer[0..80]).to_byte_array();
+    let mut hash: [u8; 32] = [0u8; 32];
+    copy_bytes_to_array(&raw_hash, &mut hash);
+    hash.reverse();
+
     Some(Block::new(
         version,
+        hash,
         previous_block_header_hash,
         merkle_root_hash,
         timestamp,
@@ -233,10 +248,13 @@ mod tests {
     use super::*;
 
     #[test]
-
     fn test_block_encode() {
         let block = Block::new(
             1,
+            [
+                0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
+                217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
+            ],
             [
                 0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
                 217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
@@ -275,6 +293,10 @@ mod tests {
                     217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
                 ],
                 [
+                    0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
+                    217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
+                ],
+                [
                     240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53, 141, 211,
                     116, 95, 60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186,
                 ],
@@ -285,6 +307,10 @@ mod tests {
             ),
             Block::new(
                 1,
+                [
+                    0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
+                    217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
+                ],
                 [
                     0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
                     217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,

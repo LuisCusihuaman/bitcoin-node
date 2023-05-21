@@ -1,3 +1,0 @@
-Received version from 185.210.125.33:18333
-Received verack from 185.210.125.33:18333
-Handshake complete with peer: 185.210.125.33:18333

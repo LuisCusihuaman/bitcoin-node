@@ -110,7 +110,6 @@ fn parse_messages_from(buf: &mut Vec<u8>) -> Vec<MessagePayload> {
 
         if header.magic_number != 118034699 {
             println!("Invalid magic number: 0x{:08x}", header.magic_number);
-            cursor += (header.payload_size as usize) + 24;
             break;
         }
 

@@ -23,7 +23,7 @@ pub struct Block {
     n_bits: u32,
     nonce: u32,
     pub txn_count: u8, // TODO Variable size
-    txns: Vec<Tx>,     // TODO Variable size
+    pub txns: Vec<Tx>, // TODO Variable size
 }
 
 impl Block {

@@ -110,12 +110,27 @@ impl NodeManager<'_> {
                     self.logger
                         .log(format!("Received block headers from {}", peer_address));
 
-                    if commands.contains(&"headers") {
-                        matched_messages.push(MessagePayload::BlockHeader(blocks.clone()));
+                    // Primeros headers
+                    if self.get_blocks().len() == 0 {
+                        if commands.contains(&"headers") {
+                            matched_messages.push(MessagePayload::BlockHeader(blocks.clone()));
+                        }
+                        self.blocks.extend(blocks.clone());
+                        Block::encode_blocks_to_file(&blocks, "block_headers.bin");
                     }
-                    self.blocks.extend(blocks.clone());
-                    // total size_of of blocks
-                    Block::encode_blocks_to_file(&blocks, "block_headers.bin");
+
+                    // Continuidad de la blockchain
+                    if let Some(actual_last_block) = self.blocks.last() {
+
+                        if actual_last_block.get_hash() == blocks.first().unwrap().get_prev() {
+                            if commands.contains(&"headers") {
+                                matched_messages.push(MessagePayload::BlockHeader(blocks.clone()));
+                            }
+
+                            self.blocks.extend(blocks.clone());
+                            Block::encode_blocks_to_file(&blocks, "block_headers.bin");
+                        }
+                    }
                 }
                 MessagePayload::Block(block) => {
                     self.logger
@@ -218,12 +233,12 @@ impl NodeManager<'_> {
             // Blocks file already exists, no need to perform initial block download
             self.blocks = Block::decode_blocks_from_file(file_path);
         }
-        println!("blocks iniciales {:?}", self.blocks.len());
+        println!("{:?} blocks loaded by file", self.blocks.len());
         self.initial_block_headers_download();
 
         // Block from date
 
-        // if let Some(timestamp) = date_to_timestamp("2013-11-10") {
+        // if let Some(timestamp) = date_to_timestamp("2023-04-11") {
         //     // TODO integrar fecha del config &self.config.download_blocks_since_date) {
 
         //     let blocks = self.get_blocks();
@@ -281,18 +296,14 @@ impl NodeManager<'_> {
     }
 
     fn initial_block_headers_download(&mut self) {
-        let mut last_block: [u8; 32] = if self.blocks.len() == 0 {
-            [
-                0x00, 0x00, 0x00, 0x00, 0x09, 0x33, 0xea, 0x01, 0xad, 0x0e, 0xe9, 0x84, 0x20, 0x97,
-                0x79, 0xba, 0xae, 0xc3, 0xce, 0xd9, 0x0f, 0xa3, 0xf4, 0x08, 0x71, 0x95, 0x26, 0xf8,
-                0xd7, 0x7f, 0x49, 0x43,
-            ]
-        } else {
-            let last_block_found = self.blocks.last().unwrap();
-            last_block_found.get_prev()
-        };
-
-        last_block.reverse();
+        let mut last_block: [u8; 32] = 
+            if self.blocks.len() == 0 {
+                get_hash_block_genesis()
+            } else {
+                    let last_block_found = self.blocks.last().unwrap();
+                    last_block_found.get_hash()
+            };
+            
 
         let mut is_finished: bool = false;
 
@@ -300,10 +311,9 @@ impl NodeManager<'_> {
             let messages = self.send_get_headers_with_block_hash(&last_block);
 
             if let Some(block) = self.blocks.last() {
-                last_block = block.get_prev().clone();
+                last_block = block.get_hash().clone();
             }
 
-            println!("blocks {:?}", self.blocks.len());
             is_finished = messages.is_empty();
         }
     }
@@ -324,7 +334,7 @@ impl NodeManager<'_> {
 
     pub fn get_block_index_by_timestamp(&self, timestamp: u32) -> Option<usize> {
         for (index, block) in self.get_blocks().iter().enumerate() {
-            if block.timestamp >= timestamp {
+            if block.timestamp >= timestamp && block.txns.len() == 0 {
                 return Some(index);
             }
         }
@@ -340,26 +350,37 @@ impl NodeManager<'_> {
         None
     }
 
-    fn check_blockchain_integrity(&self) -> Result<(), String> {
-        // let blocks = self.get_blocks();
+    fn check_blockchain_integrity(&self) -> bool {
+        let blocks = self.get_blocks();
 
-        // for (index, block) in blocks.iter().enumerate() {
-        //     if index == 0 {
-        //         continue;
-        //     }
+        if blocks.len() == 0 {
+            return true;
+        }
 
-        //     let prev_block = &blocks[index - 1];
+        let mut index = 1;
+        while index < blocks.len() {
+            let prev_block = &blocks[index - 1];
+            let actual_block = &blocks[index];
 
-        //     if block.get_prev() != prev_block.get_hash() {
-        //         return Err(format!(
-        //             "Blockchain integrity error: block {} prev hash is not equal to block {} hash",
-        //             index - 1,
-        //             index
-        //         ));
-        //     }
-        // }
-        Ok(())
+            if actual_block.get_prev() != prev_block.get_hash() {
+                return false;
+            }
+
+            index += 1;
+        }
+        true
     }
+}
+
+fn get_hash_block_genesis() -> [u8; 32] {
+    let mut hash_block_genesis: [u8; 32] = [
+        0x00, 0x00, 0x00, 0x00, 0x09, 0x33, 0xea, 0x01, 0xad, 0x0e, 0xe9, 0x84, 0x20, 0x97,
+        0x79, 0xba, 0xae, 0xc3, 0xce, 0xd9, 0x0f, 0xa3, 0xf4, 0x08, 0x71, 0x95, 0x26, 0xf8,
+        0xd7, 0x7f, 0x49, 0x43,
+    ];
+    hash_block_genesis.reverse();
+
+    hash_block_genesis
 }
 
 #[cfg(test)]
@@ -633,6 +654,24 @@ mod tests {
 
         assert!(node_manager.get_blocks().len() >= 2000);
         // std::fs::remove_file("block_headers.bin").unwrap();
+        Ok(())
+    }
+
+    #[test]
+    #[ignore]
+    fn test_check_blockchain_integrity() -> Result<(), String> {
+        let logger: Logger = Logger::stdout();
+        let config = Config::from_file("nodo.config")
+            .map_err(|err| err.to_string())
+            .unwrap();
+
+        let mut node_manager = NodeManager::new(config, &logger);
+        node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
+        node_manager.handshake();
+
+        node_manager.initial_block_download()?;
+        assert!(node_manager.check_blockchain_integrity());
+
         Ok(())
     }
 

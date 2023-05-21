@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut router = Router::new();
     router.branch("/test", handler_handshake);
-    let mut server = Server::new(router, &logger);
+    let mut server = Server::new(router, &logger, config);
     server.run(&"127.0.0.1:8090").unwrap();
     Ok(())
 }

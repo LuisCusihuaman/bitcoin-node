@@ -1,16 +1,16 @@
-use crate::node::block::Block;
+use crate::config::Config;
+use crate::node::message::block::Block;
+use crate::node::message::get_blocks::PayloadGetBlocks;
+use crate::node::message::get_data::PayloadGetData;
 use crate::node::message::version::PayloadVersion;
 use crate::node::message::MessagePayload;
 use crate::node::p2p_connection::P2PConnection;
+use crate::utils::date_to_timestamp;
 use crate::{logger::Logger, node::message::get_headers::PayloadGetHeaders};
+use std::thread;
 
 use std::fs;
 use std::net::{IpAddr, ToSocketAddrs};
-
-pub struct Config {
-    pub addrs: String,
-    pub port: u16,
-}
 
 pub struct NodeNetwork<'a> {
     pub peer_connections: Vec<P2PConnection>,
@@ -107,13 +107,52 @@ impl NodeManager<'_> {
                     }
                 }
                 MessagePayload::BlockHeader(blocks) => {
-                    if commands.contains(&"headers") {
-                        matched_messages.push(MessagePayload::BlockHeader(blocks.clone()));
+                    self.logger
+                        .log(format!("Received block headers from {}", peer_address));
+
+                    // Primeros headers
+                    if self.get_blocks().len() == 0 {
+                        if commands.contains(&"headers") {
+                            matched_messages.push(MessagePayload::BlockHeader(blocks.clone()));
+                        }
+                        self.blocks.extend(blocks.clone());
+                        Block::encode_blocks_to_file(&blocks, "block_headers.bin");
                     }
-                    self.blocks.extend(blocks.clone());
-                    // total size_of of blocks
-                    Block::encode_blocks_to_file(&blocks, "block_headers.bin");
+
+                    // Continuidad de la blockchain
+                    if let Some(actual_last_block) = self.blocks.last() {
+
+                        if actual_last_block.get_hash() == blocks.first().unwrap().get_prev() {
+                            if commands.contains(&"headers") {
+                                matched_messages.push(MessagePayload::BlockHeader(blocks.clone()));
+                            }
+
+                            self.blocks.extend(blocks.clone());
+                            Block::encode_blocks_to_file(&blocks, "block_headers.bin");
+                        }
+                    }
                 }
+                MessagePayload::Block(block) => {
+                    self.logger
+                        .log(format!("Received block from {}", peer_address));
+
+                    if commands.contains(&"block") {
+                        matched_messages.push(MessagePayload::Block(block.clone()));
+                    }
+
+                    if let Some(index) = self.get_block_index_by_prev_hash(block.get_prev()) {
+                        self.blocks[index] = block;
+                    }
+                }
+                MessagePayload::Inv(inv) => {
+                    self.logger
+                        .log(format!("Received inv from {}", peer_address));
+
+                    if commands.contains(&"inv") {
+                        matched_messages.push(MessagePayload::Inv(inv.clone()));
+                    }
+                }
+
                 _ => {}
             }
         }
@@ -148,7 +187,7 @@ impl NodeManager<'_> {
 
     pub fn get_initial_nodes(&mut self) -> Result<Vec<String>, String> {
         let ips = self
-            .resolve_hostname(&self.config.addrs, self.config.port)
+            .resolve_hostname(&self.config.dns, self.config.port)
             .map_err(|e| format!("Error resolving hostname: {}", e))?;
         let ipv4_addresses: Vec<String> = ips
             .into_iter()
@@ -186,64 +225,180 @@ impl NodeManager<'_> {
     }
 
     pub fn initial_block_download(&mut self) -> Result<(), String> {
+        // Block headers first
+
         let file_path = "block_headers.bin";
+
         if fs::metadata(file_path).is_ok() {
             // Blocks file already exists, no need to perform initial block download
             self.blocks = Block::decode_blocks_from_file(file_path);
-            if self.blocks.len() >= 2000 {
-                return Err("Blocks failed to decode".to_string());
-            }
-            return Ok(());
         }
-        // Create getheaders message
-        let mut last_block_prev_hash: [u8; 32] = [
-            0x00, 0x00, 0x00, 0x00, 0x09, 0x33, 0xea, 0x01, 0xad, 0x0e, 0xe9, 0x84, 0x20, 0x97,
-            0x79, 0xba, 0xae, 0xc3, 0xce, 0xd9, 0x0f, 0xa3, 0xf4, 0x08, 0x71, 0x95, 0x26, 0xf8,
-            0xd7, 0x7f, 0x49, 0x43,
-        ];
-        last_block_prev_hash.reverse();
+        println!("{:?} blocks loaded by file", self.blocks.len());
+        self.initial_block_headers_download();
 
-        let stop_hash = [0u8; 32];
+        // Block from date
 
-        let mut is_finished: bool = false;
-        let mut messages: Vec<MessagePayload> = vec![];
+        // if let Some(timestamp) = date_to_timestamp("2023-04-11") {
+        //     // TODO integrar fecha del config &self.config.download_blocks_since_date) {
 
-        while !is_finished {
-            let payload_get_headers =
-                PayloadGetHeaders::new(70015, 1, last_block_prev_hash, stop_hash);
-            let get_headers_message = MessagePayload::GetHeaders(payload_get_headers);
+        //     let blocks = self.get_blocks();
 
-            self.broadcast(&get_headers_message);
-            messages = self.wait_for(vec!["headers"]);
+        //     let mut index = match self.get_block_index_by_timestamp(timestamp) {
+        //         Some(index) => index,
+        //         None => blocks.len(),
+        //     };
 
-            last_block_prev_hash = match self.blocks.last() {
-                Some(block) => block.get_prev().clone(),
-                None => return Err("No blocks received".to_string()), // Err(Error::NoBlocksReceived)
-            };
-            last_block_prev_hash.reverse();
-            println!("{:?}", self.blocks.len());
-            is_finished = messages.is_empty();
-        }
+        //     while index < blocks.len() {
+        //         let block = blocks[index].clone();
+
+        //         let mut block_hash = block.get_prev();
+        //         block_hash.reverse();
+
+        //         self.block_download_since_block_hash(&block_hash);
+
+        //         index += 500;
+        //     }
+        // }
         Ok(())
     }
+
+    fn block_download_since_block_hash(&mut self, block_hash: &[u8; 32]) {
+        let stop_hash = [0u8; 32];
+
+        let get_blocks_message =
+            MessagePayload::GetBlocks(PayloadGetBlocks::new(70015, 1, *block_hash, stop_hash));
+
+        // Send get block messages
+        self.broadcast(&get_blocks_message);
+
+        // Receive inv messages
+        let messages = self.wait_for(vec!["inv"]);
+
+        // implementar threadpool de inv
+        match messages.first() {
+            Some(MessagePayload::Inv(inventories)) => {
+                for inv in inventories.iter() {
+                    self.update_block_by_inv(*inv);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn update_block_by_inv(&mut self, inv: [u8; 36]) {
+        let get_data_message = MessagePayload::GetData(PayloadGetData::new(1, inv));
+
+        // Send get data messages
+        self.broadcast(&get_data_message);
+
+        // Receive block
+        self.wait_for(vec!["block"]);
+    }
+
+    fn initial_block_headers_download(&mut self) {
+        let mut last_block: [u8; 32] = 
+            if self.blocks.len() == 0 {
+                get_hash_block_genesis()
+            } else {
+                    let last_block_found = self.blocks.last().unwrap();
+                    last_block_found.get_hash()
+            };
+            
+
+        let mut is_finished: bool = false;
+
+        while !is_finished {
+            let messages = self.send_get_headers_with_block_hash(&last_block);
+
+            if let Some(block) = self.blocks.last() {
+                last_block = block.get_hash().clone();
+            }
+
+            is_finished = messages.is_empty();
+        }
+    }
+
+    fn send_get_headers_with_block_hash(&mut self, block_hash: &[u8; 32]) -> Vec<MessagePayload> {
+        let stop_hash = [0u8; 32];
+
+        let mut hash_reversed: [u8; 32] = block_hash.clone();
+        hash_reversed.reverse();
+
+        let payload_get_headers = PayloadGetHeaders::new(70015, 1, hash_reversed, stop_hash);
+
+        let get_headers_message = MessagePayload::GetHeaders(payload_get_headers);
+
+        self.broadcast(&get_headers_message);
+        self.wait_for(vec!["headers"])
+    }
+
+    pub fn get_block_index_by_timestamp(&self, timestamp: u32) -> Option<usize> {
+        for (index, block) in self.get_blocks().iter().enumerate() {
+            if block.timestamp >= timestamp && block.txns.len() == 0 {
+                return Some(index);
+            }
+        }
+        None
+    }
+
+    pub fn get_block_index_by_prev_hash(&self, prev_hash: [u8; 32]) -> Option<usize> {
+        for (index, block) in self.get_blocks().iter().enumerate() {
+            if block.get_prev() == prev_hash {
+                return Some(index);
+            }
+        }
+        None
+    }
+
+    fn check_blockchain_integrity(&self) -> bool {
+        let blocks = self.get_blocks();
+
+        if blocks.len() == 0 {
+            return true;
+        }
+
+        let mut index = 1;
+        while index < blocks.len() {
+            let prev_block = &blocks[index - 1];
+            let actual_block = &blocks[index];
+
+            if actual_block.get_prev() != prev_block.get_hash() {
+                return false;
+            }
+
+            index += 1;
+        }
+        true
+    }
+}
+
+fn get_hash_block_genesis() -> [u8; 32] {
+    let mut hash_block_genesis: [u8; 32] = [
+        0x00, 0x00, 0x00, 0x00, 0x09, 0x33, 0xea, 0x01, 0xad, 0x0e, 0xe9, 0x84, 0x20, 0x97,
+        0x79, 0xba, 0xae, 0xc3, 0xce, 0xd9, 0x0f, 0xa3, 0xf4, 0x08, 0x71, 0x95, 0x26, 0xf8,
+        0xd7, 0x7f, 0x49, 0x43,
+    ];
+    hash_block_genesis.reverse();
+
+    hash_block_genesis
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::node::message::get_blocks::PayloadGetBlocks;
+    use crate::node::message::get_data::PayloadGetData;
     use crate::node::message::get_headers::PayloadGetHeaders;
     use crate::node::message::version::PayloadVersion;
 
     #[test]
     fn test_get_all_ips_from_dns() {
         let logger = Logger::stdout();
-        let mut node_manager = NodeManager::new(
-            Config {
-                addrs: "seed.testnet.bitcoin.sprovoost.nl".to_string(),
-                port: 80,
-            },
-            &logger,
-        );
+        let config = Config::from_file("nodo.config")
+            .map_err(|err| err.to_string())
+            .unwrap();
+
+        let mut node_manager = NodeManager::new(config, &logger);
         let node_network_ips = node_manager.get_initial_nodes().unwrap();
         assert_ne!(node_network_ips.len(), 0);
     }
@@ -251,13 +406,9 @@ mod tests {
     #[test]
     fn test_connect_node_with_external_nodes_not_refuse_connection() -> Result<(), String> {
         let logger = Logger::stdout();
-        let mut node_manager = NodeManager::new(
-            Config {
-                addrs: "seed.testnet.bitcoin.sprovoost.nl".to_string(),
-                port: 80,
-            },
-            &logger,
-        );
+        let config = Config::from_file("nodo.config").map_err(|err| err.to_string())?;
+
+        let mut node_manager = NodeManager::new(config, &logger);
         let node_network_ips = node_manager.get_initial_nodes().unwrap();
         node_manager.connect(
             node_network_ips
@@ -271,14 +422,10 @@ mod tests {
     #[test]
     fn test_node_handshake() -> Result<(), String> {
         let logger = Logger::stdout();
-        let mut node_manager = NodeManager::new(
-            Config {
-                addrs: "seed.testnet.bitcoin.sprovoost.nl".to_string(),
-                port: 80,
-            },
-            &logger,
-        );
-        node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
+        let config = Config::new();
+
+        let mut node_manager = NodeManager::new(config, &logger);
+        node_manager.connect(vec!["5.9.73.173:18333".to_string()])?;
 
         let payload_version_message = MessagePayload::Version(PayloadVersion::default_version());
         node_manager.broadcast(&payload_version_message);
@@ -291,25 +438,18 @@ mod tests {
     }
 
     #[test]
-    fn test_node_send_get_headers() -> Result<(), String> {
-        let logger = Logger::stdout();
-        let mut node_manager = NodeManager::new(
-            Config {
-                addrs: "seed.testnet.bitcoin.sprovoost.nl".to_string(),
-                port: 80,
-            },
-            &logger,
-        );
-        node_manager.connect(vec!["69.197.185.106:18333".to_string()])?;
+    fn test_node_send_get_headers_receives_headers() -> Result<(), String> {
+        let logger: Logger = Logger::stdout();
+        let config = Config::from_file("nodo.config")
+            .map_err(|err| err.to_string())
+            .unwrap();
+
+        let mut node_manager = NodeManager::new(config, &logger);
+        node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
         node_manager.handshake();
 
         // Create getheaders message
-        let mut hash_block_genesis: [u8; 32] = [
-            0x00, 0x00, 0x00, 0x00, 0x09, 0x33, 0xea, 0x01, 0xad, 0x0e, 0xe9, 0x84, 0x20, 0x97,
-            0x79, 0xba, 0xae, 0xc3, 0xce, 0xd9, 0x0f, 0xa3, 0xf4, 0x08, 0x71, 0x95, 0x26, 0xf8,
-            0xd7, 0x7f, 0x49, 0x43,
-        ];
-        hash_block_genesis.reverse();
+        let hash_block_genesis: [u8; 32] = get_first_hash_reversed();
 
         let stop_hash = [0u8; 32];
 
@@ -329,21 +469,222 @@ mod tests {
     }
 
     #[test]
-    fn test_complete_initial_block_download() -> Result<(), String> {
+    fn test_node_send_get_blocks_receives_inv() -> Result<(), String> {
         let logger: Logger = Logger::stdout();
-        let mut node_manager = NodeManager::new(
-            Config {
-                addrs: "seed.testnet.bitcoin.sprovoost.nl".to_string(),
-                port: 80,
-            },
-            &logger,
-        );
+        let config = Config::from_file("nodo.config")
+            .map_err(|err| err.to_string())
+            .unwrap();
+
+        let mut node_manager = NodeManager::new(config, &logger);
         node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
         node_manager.handshake();
+
+        let hash_beginning_project = get_first_hash_reversed();
+
+        let stop_hash = [0u8; 32];
+
+        let get_blocks_message = MessagePayload::GetBlocks(PayloadGetBlocks::new(
+            70015,
+            1,
+            hash_beginning_project,
+            stop_hash,
+        ));
+
+        node_manager.broadcast(&get_blocks_message);
+        let messages_inv = node_manager.wait_for(vec!["inv"]);
+
+        assert!(messages_inv.len() > 0);
+
+        Ok(())
+    }
+
+    #[test]
+    #[ignore]
+    fn test_node_send_get_blocks_receives_inv_sends_get_data() -> Result<(), String> {
+        let logger: Logger = Logger::stdout();
+        let config = Config::from_file("nodo.config")
+            .map_err(|err| err.to_string())
+            .unwrap();
+
+        let mut node_manager = NodeManager::new(config, &logger);
+        node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
+        node_manager.handshake();
+
+        let hash_beginning_project = get_first_hash_reversed();
+
+        let stop_hash = [0u8; 32];
+
+        let get_blocks_message = MessagePayload::GetBlocks(PayloadGetBlocks::new(
+            70015,
+            1,
+            hash_beginning_project,
+            stop_hash,
+        ));
+
+        node_manager.broadcast(&get_blocks_message);
+
+        // Recibo inventario
+        let messages = node_manager.wait_for(vec!["inv"]);
+
+        match messages.first() {
+            Some(MessagePayload::Inv(inventories)) => {
+                for inv in inventories.iter() {
+                    let get_data_message = MessagePayload::GetData(PayloadGetData::new(1, *inv));
+
+                    // Enviar el mensaje get data
+                    node_manager.broadcast(&get_data_message);
+
+                    // Esperamos respuesta
+                    if let Some(MessagePayload::Block(block_payload)) =
+                        node_manager.wait_for(vec!["block"]).first()
+                    {
+                        let _hash: [u8; 32] = block_payload.get_prev();
+                        node_manager.blocks.push(block_payload.clone());
+                    }
+                }
+            }
+            _ => return Err("No inv message received".to_string()),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_send_get_headers_and_get_blocks_from_a_date() -> Result<(), String> {
+        let logger: Logger = Logger::stdout();
+        let config = Config::from_file("nodo.config")
+            .map_err(|err| err.to_string())
+            .unwrap();
+
+        let mut node_manager = NodeManager::new(config, &logger);
+        node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
+        node_manager.handshake();
+
+        // Send getheaders message
+        let hash_block_genesis: [u8; 32] = get_first_hash_reversed();
+        let stop_hash = [0u8; 32];
+
+        let get_headers_message = MessagePayload::GetHeaders(PayloadGetHeaders::new(
+            70015,
+            1,
+            hash_block_genesis,
+            stop_hash,
+        ));
+        node_manager.broadcast(&get_headers_message);
+        node_manager.wait_for(vec!["headers"]).first();
+
+        let initial_blocks = node_manager.get_blocks();
+
+        let mut indice = 0;
+
+        assert!(initial_blocks.len() > 0);
+
+        let timestamp = 1337966303;
+
+        if let Some(index) = node_manager.get_block_index_by_timestamp(timestamp) {
+            // Create getblocks message
+            let block_by_date = initial_blocks[index].clone();
+            let mut block_hash = block_by_date.get_prev();
+            block_hash.reverse();
+
+            let stop_hash = [0u8; 32];
+
+            let get_blocks_message =
+                MessagePayload::GetBlocks(PayloadGetBlocks::new(70015, 1, block_hash, stop_hash));
+
+            // Send get block messages
+            node_manager.broadcast(&get_blocks_message);
+
+            // Receive inv messages
+            let messages = node_manager.wait_for(vec!["inv"]);
+
+            match messages.first() {
+                Some(MessagePayload::Inv(inventories)) => {
+                    for inv in inventories.iter() {
+                        let get_data_message =
+                            MessagePayload::GetData(PayloadGetData::new(1, *inv));
+
+                        // Enviar el mensaje get data
+                        node_manager.broadcast(&get_data_message);
+
+                        // Esperamos respuesta
+                        if let Some(MessagePayload::Block(block_payload)) =
+                            node_manager.wait_for(vec!["block"]).first()
+                        {
+                            // Block actualizado
+                            if let Some(index) =
+                                node_manager.get_block_index_by_prev_hash(block_payload.get_prev())
+                            {
+                                // Just for assert
+                                indice = index.clone();
+                                node_manager.blocks[indice] = block_payload.clone();
+                            }
+                        }
+                        break; // Pruebo solo un inv
+                    }
+                }
+                _ => return Err("No inv message received".to_string()),
+            }
+        } else {
+            println!("No se encontró un bloque a partir de esa fecha")
+        }
+
+        let final_blocks = node_manager.get_blocks();
+
+        assert_ne!(initial_blocks[indice], final_blocks[indice]);
+
+        Ok(())
+    }
+
+    #[test]
+    #[ignore]
+    fn test_complete_initial_block_download() -> Result<(), String> {
+        let logger: Logger = Logger::stdout();
+        let config = Config::from_file("nodo.config")
+            .map_err(|err| err.to_string())
+            .unwrap();
+
+        let mut node_manager = NodeManager::new(config, &logger);
+        node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
+        node_manager.handshake();
+
         node_manager.initial_block_download()?;
 
+        // 2 184 477 bloques?
+
         assert!(node_manager.get_blocks().len() >= 2000);
-        std::fs::remove_file("block_headers.bin").unwrap();
+        // std::fs::remove_file("block_headers.bin").unwrap();
         Ok(())
+    }
+
+    #[test]
+    #[ignore]
+    fn test_check_blockchain_integrity() -> Result<(), String> {
+        let logger: Logger = Logger::stdout();
+        let config = Config::from_file("nodo.config")
+            .map_err(|err| err.to_string())
+            .unwrap();
+
+        let mut node_manager = NodeManager::new(config, &logger);
+        node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
+        node_manager.handshake();
+
+        node_manager.initial_block_download()?;
+        assert!(node_manager.check_blockchain_integrity());
+
+        Ok(())
+    }
+
+    // Helpers functions for manager tests
+
+    fn get_first_hash_reversed() -> [u8; 32] {
+        let mut hash_block_genesis: [u8; 32] = [
+            0x00, 0x00, 0x00, 0x00, 0x09, 0x33, 0xea, 0x01, 0xad, 0x0e, 0xe9, 0x84, 0x20, 0x97,
+            0x79, 0xba, 0xae, 0xc3, 0xce, 0xd9, 0x0f, 0xa3, 0xf4, 0x08, 0x71, 0x95, 0x26, 0xf8,
+            0xd7, 0x7f, 0x49, 0x43,
+        ];
+        hash_block_genesis.reverse();
+
+        hash_block_genesis
     }
 }

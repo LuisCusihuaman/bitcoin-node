@@ -18,7 +18,7 @@ impl Logger {
         }
     }
     pub fn new(config: &Config) -> Result<Self, Box<dyn Error>> {
-        let file = File::create(&config.logfile)?;
+        let file = File::create(&config.log_file)?;
         Ok(Self {
             file: RefCell::new(file),
             only_stdout: false,
@@ -42,10 +42,12 @@ mod tests {
     #[test]
     fn test_log() {
         let config = Config {
-            logfile: "test.log".to_owned(),
-            direccion_ip: "".to_string(),
-            puerto: "".to_string(),
+            log_file: "test.log".to_owned(),
+            addrs: "".to_string(),
+            port: 0,
+            dns_port: 0,
             dns: "".to_string(),
+            download_blocks_since_date: "".to_string(),
         };
         let logger = Logger::new(&config).unwrap();
         logger.log("test message".to_owned());

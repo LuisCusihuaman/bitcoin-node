@@ -48,7 +48,7 @@ impl P2PConnection {
         buffer_total[20..24].copy_from_slice(&payload_checksum[..]);
         buffer_total[24..].copy_from_slice(&buffer_payload[..]);
 
-        thread::sleep(Duration::from_millis(500)); // Strategy to not overload server limit rate
+        thread::sleep(Duration::from_millis(350)); // Strategy to not overload server limit rate
         self.tcp_stream
             .write(&buffer_total[..])
             .map_err(|e| e.to_string())?;
@@ -61,7 +61,7 @@ impl P2PConnection {
         let mut is_finished = false;
 
         while !is_finished {
-            thread::sleep(Duration::from_millis(500));
+            thread::sleep(Duration::from_millis(350));
 
             match self.tcp_stream.read(&mut buffer) {
                 Ok(bytes_read) => {
@@ -110,7 +110,6 @@ fn parse_messages_from(buf: &mut Vec<u8>) -> Vec<MessagePayload> {
 
         if header.magic_number != 118034699 {
             println!("Invalid magic number: 0x{:08x}", header.magic_number);
-            cursor += (header.payload_size as usize) + 24;
             break;
         }
 

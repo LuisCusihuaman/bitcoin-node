@@ -1,4 +1,5 @@
 use bitcoin_hashes::{sha256, Hash};
+use chrono::{NaiveDate, NaiveDateTime, Timelike};
 use std::io;
 use std::io::{Read, Write};
 
@@ -68,6 +69,21 @@ pub fn get_offset(buff: &[u8]) -> usize {
     }
 }
 
+pub fn write_varint<W: Write>(writer: &mut W, value: usize) -> Result<(), io::Error> {
+    if value < 0xfd {
+        writer.write_all(&[value as u8])
+    } else if value <= 0xffff {
+        writer.write_all(&[0xfd])?;
+        writer.write_all(&value.to_le_bytes()[0..2])
+    } else if value <= 0xffffffff {
+        writer.write_all(&[0xfe])?;
+        writer.write_all(&value.to_le_bytes()[0..4])
+    } else {
+        writer.write_all(&[0xff])?;
+        writer.write_all(&value.to_le_bytes()[0..8])
+    }
+}
+
 pub fn read_varint<R: Read>(reader: &mut R) -> Result<usize, String> {
     let mut buffer = [0u8; 8];
     reader
@@ -103,6 +119,16 @@ pub fn read_varint<R: Read>(reader: &mut R) -> Result<usize, String> {
     };
 
     Ok(value as usize)
+}
+
+pub fn date_to_timestamp(date_str: &str) -> Option<u32> {
+    if let Ok(parsed_date) = NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
+        if let Some(datetime) = parsed_date.and_hms_opt(0, 0, 0) {
+            let timestamp = datetime.timestamp() as u32;
+            return Some(timestamp);
+        }
+    }
+    None
 }
 
 /// MockTcpStream es una mock que implementa los traits Read y Write, los mismos que implementa el TcpStream

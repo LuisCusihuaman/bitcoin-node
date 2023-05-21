@@ -1,6 +1,8 @@
+use super::block::Block;
 use super::MessagePayload;
-use crate::node::block::Block;
+
 use crate::utils::*;
+use bitcoin_hashes::Hash;
 use std::vec;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -70,6 +72,11 @@ pub fn decode_header(buffer: &[u8]) -> Option<Block> {
 
     let version = read_u32_le(&buffer, 0);
 
+    let raw_hash = double_sha256(&buffer[0..80]).to_byte_array();
+    let mut hash: [u8; 32] = [0u8; 32];
+    copy_bytes_to_array(&raw_hash, &mut hash);
+    hash.reverse();
+
     let mut previous_block_header_hash: [u8; 32] = [0u8; 32];
     copy_bytes_to_array(&buffer[4..36], &mut previous_block_header_hash);
     previous_block_header_hash.reverse();
@@ -82,21 +89,16 @@ pub fn decode_header(buffer: &[u8]) -> Option<Block> {
     let n_bits = read_le(&buffer[72..76]) as u32;
     let nonce = read_le(&buffer[76..80]) as u32;
 
-    let tx_count = read_varint(&mut &buffer[80..]).unwrap();
-
-    let tx_hashes: Vec<[u8; 32]> = if tx_count != 0 {
-        Vec::new() // TODO Block reading
-    } else {
-        Vec::new()
-    };
+    let txn_count = read_varint(&mut &buffer[80..]).unwrap() as u8;
 
     Some(Block::new(
         version,
+        hash,
         previous_block_header_hash,
         merkle_root_hash,
         timestamp,
         n_bits,
         nonce,
-        tx_hashes,
+        txn_count,
     ))
 }

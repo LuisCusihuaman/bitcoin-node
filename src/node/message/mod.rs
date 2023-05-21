@@ -1,11 +1,21 @@
-use crate::node::block::Block;
+use crate::node::message::block::decode_block;
+use crate::node::message::block::Block;
+use crate::node::message::get_blocks::PayloadGetBlocks;
+use crate::node::message::get_data::PayloadGetData;
 use crate::node::message::get_headers::decode_headers;
 use crate::node::message::get_headers::PayloadGetHeaders;
+use crate::node::message::inv::decode_inv;
 use crate::node::message::version::decode_version;
 use crate::node::message::version::PayloadVersion;
+
 use crate::utils::read_le;
 
+pub mod block;
+pub mod get_blocks;
+pub mod get_data;
 pub mod get_headers;
+pub mod inv;
+pub mod tx;
 pub mod version;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -14,6 +24,10 @@ pub enum MessagePayload {
     Verack,
     GetHeaders(PayloadGetHeaders),
     BlockHeader(Vec<Block>),
+    GetBlocks(PayloadGetBlocks),
+    Inv(Vec<[u8; 36]>),
+    GetData(PayloadGetData),
+    Block(Block),
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -88,6 +102,10 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::Verack => Ok(0),
             MessagePayload::GetHeaders(get_headers) => Ok(get_headers.size()),
             MessagePayload::BlockHeader(_) => Ok(0), // CHEQUEAR No se envía
+            MessagePayload::GetBlocks(get_blocks) => Ok(get_blocks.size()),
+            MessagePayload::Inv(_) => Ok(0), // No enviamos Inventario por ahora
+            MessagePayload::GetData(get_data) => Ok(get_data.size()),
+            MessagePayload::Block(_) => Ok(0),
         }
     }
 
@@ -100,7 +118,15 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::GetHeaders(get_headers) => {
                 get_headers.encode(buffer);
             }
-            MessagePayload::BlockHeader(_) => {} // CHEQUEAR No se envía
+            MessagePayload::BlockHeader(_) => {} // TODO No enviamos headers
+            MessagePayload::GetBlocks(get_blocks) => {
+                get_blocks.encode(buffer);
+            }
+            MessagePayload::Inv(_) => {} // TODO No enviamos inv
+            MessagePayload::GetData(get_data) => {
+                get_data.encode(buffer);
+            }
+            MessagePayload::Block(_) => {}
         }
         Ok(())
     }
@@ -110,7 +136,11 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::Version(_) => Ok("version"),
             MessagePayload::Verack => Ok("verack"),
             MessagePayload::GetHeaders(_) => Ok("getheaders"),
+            MessagePayload::GetBlocks(_) => Ok("getblocks"),
             MessagePayload::BlockHeader(_) => Ok("headers"),
+            MessagePayload::Inv(_) => Ok("inv"),
+            MessagePayload::GetData(_) => Ok("getdata"),
+            MessagePayload::Block(_) => Ok("block"),
         }
     }
 
@@ -118,7 +148,9 @@ impl Encoding<MessagePayload> for MessagePayload {
         match cmd.as_str() {
             "version" => decode_version(buffer),
             "headers" => decode_headers(buffer),
+            "inv" => decode_inv(buffer),
             "verack" => Ok(MessagePayload::Verack),
+            "block" => decode_block(buffer),
             _ => Err("Unknown command: ".to_owned() + cmd),
         }
     }

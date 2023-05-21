@@ -15,6 +15,7 @@ pub mod get_blocks;
 pub mod get_data;
 pub mod get_headers;
 pub mod inv;
+pub mod merkle_tree;
 pub mod tx;
 pub mod version;
 

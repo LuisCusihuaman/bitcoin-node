@@ -168,7 +168,6 @@ pub fn decode_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
     let mut id: [u8; 32] = [0u8; 32];
     copy_bytes_to_array(&raw_hash, &mut id);
     id.reverse();
-    println!("id: {:?}", id);
 
     Some(Tx {
         id,

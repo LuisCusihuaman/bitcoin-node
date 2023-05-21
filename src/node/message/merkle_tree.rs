@@ -14,7 +14,7 @@ pub struct MerkleTree {
 impl MerkleTree {
     pub fn new() -> Self {
         Self {
-            root: sha256::Hash::hash("".as_bytes()), 
+            root: sha256::Hash::hash("".as_bytes()),
             hashed_leaves: Vec::new(),
         }
     }
@@ -49,7 +49,10 @@ impl MerkleTree {
         if data.len() == 0 {
             return;
         }
-
+        if data.len() == 1 {
+            self.root = sha256::Hash::from_slice(data[0]).unwrap();
+            return;
+        }
         let mut hashed_leaves = Vec::new();
 
         // Convierto las hojas a hashes
@@ -57,11 +60,9 @@ impl MerkleTree {
             let hash = self.hash256(l);
             hashed_leaves.push(hash);
         }
-
         if hashed_leaves.len() % 2 == 1 {
             hashed_leaves.push(hashed_leaves.last().unwrap().clone());
         }
-
         self.add_hashes(hashed_leaves.clone());
 
         self.root = match self.merkle_root(hashed_leaves) {
@@ -117,7 +118,6 @@ impl MerkleTree {
 
     // To get the Merkle root we calculate successive Merkle parent levels until we get a single hash
     fn merkle_root(&mut self, mut hashes: Vec<sha256::Hash>) -> Result<sha256::Hash, Error> {
-       
         while hashes.len() > 1 {
             match self.merkle_parent_level(hashes) {
                 Ok(parent_level) => {
@@ -176,7 +176,13 @@ mod tests {
     fn test_create_merkle_tree_with_five_leaves() {
         let mut merkle_tree = MerkleTree::new();
 
-        let data = vec!["1".as_bytes(), "2".as_bytes(), "3".as_bytes(), "4".as_bytes(), "5".as_bytes()];
+        let data = vec![
+            "1".as_bytes(),
+            "2".as_bytes(),
+            "3".as_bytes(),
+            "4".as_bytes(),
+            "5".as_bytes(),
+        ];
 
         merkle_tree.generate_merkle_tree(data);
 
@@ -187,7 +193,12 @@ mod tests {
     fn test_merkle_tree_with_four_leaves_has_seven_nodes_in_total() {
         let mut merkle_tree = MerkleTree::new();
 
-        let data = vec!["1".as_bytes(), "2".as_bytes(), "3".as_bytes(), "5".as_bytes()];
+        let data = vec![
+            "1".as_bytes(),
+            "2".as_bytes(),
+            "3".as_bytes(),
+            "5".as_bytes(),
+        ];
 
         merkle_tree.generate_merkle_tree(data);
 
@@ -200,18 +211,17 @@ mod tests {
 
         assert!(hash.to_string().is_empty() == false);
     }
-    
 
     #[test]
     fn test_generates_merkle_node_parent_correctly() {
         let merkle_tree = MerkleTree::new();
-        
+
         let left_hash = merkle_tree.hash256("1".as_bytes());
         let right_hash = merkle_tree.hash256("2".as_bytes());
 
         // concatenate right and left hashes
         let owned_string = format!("{}{}", left_hash.to_string(), right_hash.to_string());
-        
+
         let expected_hash = merkle_tree.hash256(&owned_string.as_bytes());
 
         let parent = merkle_tree.merkle_parent(&left_hash.to_string(), &right_hash.to_string());
@@ -261,7 +271,12 @@ mod tests {
         // Resultado sacado de https://blockchain-academy.hs-mittweida.de/merkle-tree/
         let expected_root = "58c89d709329eb37285837b042ab6ff72c7c8f74de0446b091b6a0131c102cfd";
 
-        let hex_hashes = vec!["a".as_bytes(), "b".as_bytes(), "c".as_bytes(), "d".as_bytes()];
+        let hex_hashes = vec![
+            "a".as_bytes(),
+            "b".as_bytes(),
+            "c".as_bytes(),
+            "d".as_bytes(),
+        ];
 
         merkle_tree.generate_merkle_tree(hex_hashes);
 
@@ -277,7 +292,12 @@ mod tests {
         // Resultado sacado de https://blockchain-academy.hs-mittweida.de/merkle-tree/
         let expected_root = "85df8945419d2b5038f7ac83ec1ec6b8267c40fdb3b1e56ff62f6676eb855e70";
 
-        let hex_hashes = vec!["1".as_bytes(), "2".as_bytes(), "3".as_bytes(), "4".as_bytes()];
+        let hex_hashes = vec![
+            "1".as_bytes(),
+            "2".as_bytes(),
+            "3".as_bytes(),
+            "4".as_bytes(),
+        ];
 
         merkle_tree.generate_merkle_tree(hex_hashes);
 
@@ -305,11 +325,19 @@ mod tests {
     fn test_generates_root_merkle_tree_from_leaves() {
         let mut merkle_tree = MerkleTree::new();
 
-        let data = vec!["1".as_bytes(), "2".as_bytes(), "3".as_bytes(), "5".as_bytes()];
+        let data = vec![
+            "1".as_bytes(),
+            "2".as_bytes(),
+            "3".as_bytes(),
+            "5".as_bytes(),
+        ];
 
         merkle_tree.generate_merkle_tree(data);
 
-        assert_eq!(merkle_tree.get_root().unwrap().to_string().is_empty(), false);
+        assert_eq!(
+            merkle_tree.get_root().unwrap().to_string().is_empty(),
+            false
+        );
     }
 
     // Ejemplo del libro
@@ -335,7 +363,12 @@ mod tests {
     fn test_proof_of_inclution() {
         let mut merkle_tree = MerkleTree::new();
 
-        let data = vec!["1".as_bytes(), "2".as_bytes(), "3".as_bytes(), "5".as_bytes()];
+        let data = vec![
+            "1".as_bytes(),
+            "2".as_bytes(),
+            "3".as_bytes(),
+            "5".as_bytes(),
+        ];
         let tx = "1".as_bytes();
 
         merkle_tree.generate_merkle_tree(data);
@@ -347,7 +380,12 @@ mod tests {
     fn test_proof_of_inclution_does_not_contain_foul_transaction() {
         let mut merkle_tree = MerkleTree::new();
 
-        let data = vec!["1".as_bytes(), "2".as_bytes(), "3".as_bytes(), "5".as_bytes()];
+        let data = vec![
+            "1".as_bytes(),
+            "2".as_bytes(),
+            "3".as_bytes(),
+            "5".as_bytes(),
+        ];
         let tx = "10".as_bytes();
 
         merkle_tree.generate_merkle_tree(data);
@@ -356,15 +394,14 @@ mod tests {
     }
 
     #[test]
-    fn test_hash_produces_orignal_merkel_root(){
-
+    fn test_hash_produces_orignal_merkel_root() {
         let mut merkle_tree = MerkleTree::new();
-        
-
-        let origin_merkle_root:[u8;32] = [240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53,
-        141, 211, 116, 95, 60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186];
+        let origin_merkle_root: [u8; 32] = [
+            240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53, 141, 211, 116, 95,
+            60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186,
+        ];
         let respuesta = merkle_tree.hash256(&origin_merkle_root);
 
-        println!("Respuesta: {:?}", respuesta.to_string()); 
+        println!("Respuesta: {:?}", respuesta.to_string());
     }
 }

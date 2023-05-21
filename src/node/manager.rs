@@ -121,15 +121,20 @@ impl NodeManager<'_> {
 
                     // Continuidad de la blockchain
                     if let Some(actual_last_block) = self.blocks.last() {
-                        if actual_last_block.get_hash() == blocks.first().unwrap().get_prev() {
-                            if commands.contains(&"headers") {
-                                matched_messages.push(MessagePayload::BlockHeader(blocks.clone()));
+                        match blocks.first(){
+                            Some(first_block) => {
+                                if actual_last_block.get_hash() == first_block.get_prev() {
+                                    if commands.contains(&"headers") { // only i want to save msg on correct blockchain integrity
+                                        matched_messages.push(MessagePayload::BlockHeader(blocks.clone()));
+                                    }
+                                    self.blocks.extend(blocks.clone());
+                                    Block::encode_blocks_to_file(&blocks, "block_headers.bin");
+                                }
                             }
-
-                            self.blocks.extend(blocks.clone());
-                            Block::encode_blocks_to_file(&blocks, "block_headers.bin");
+                            None => {}
                         }
                     }
+
                 }
                 MessagePayload::Block(block) => {
                     self.logger
@@ -461,7 +466,7 @@ mod tests {
         let blocks = node_manager.get_blocks();
 
         assert!(blocks.len() > 0);
-        std::fs::remove_file("block_headers.bin").unwrap();
+        fs::remove_file("block_headers.bin").unwrap();
         Ok(())
     }
 

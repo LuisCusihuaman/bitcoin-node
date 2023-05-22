@@ -318,7 +318,7 @@ impl NodeManager<'_> {
 
         let address = self.get_random_peer_address();
         self.send_to(address.clone(), &get_headers_message);
-        let response = self.wait_for(vec!["headers"]);
+        let response: Vec<(String, Vec<MessagePayload>)> = self.wait_for(vec!["headers"]);
         filter_by(response, address)
     }
 
@@ -344,7 +344,6 @@ impl NodeManager<'_> {
 
                 let mut block_hash: [u8; 32] = block.get_prev();
                 block_hash.reverse();
-                println!("Downloading block: {:?}", block_hash);
                 self.block_download_since_block_hash(&block_hash);
 
                 index += 500;

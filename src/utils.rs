@@ -130,6 +130,13 @@ pub fn date_to_timestamp(date_str: &str) -> Option<u32> {
     }
     None
 }
+pub fn little_endian_to_int(bytes: &[u8; 32]) -> u128 {
+    let mut result: u128 = 0;
+    for i in 0..16 {
+        result |= u128::from(bytes[i]) << (8 * i);
+    }
+    result
+}
 
 /// MockTcpStream es una mock que implementa los traits Read y Write, los mismos que implementa el TcpStream
 pub struct MockTcpStream {

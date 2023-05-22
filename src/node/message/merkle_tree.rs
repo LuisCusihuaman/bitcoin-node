@@ -155,77 +155,65 @@ impl MerkleTree {
 mod tests {
     use super::*;
 
-    // #[test]
-    // #[should_panic]
-    // fn test_create_merkle_tree_with_empty_root() {
-    //     let merkle_tree = MerkleTree::new();
-    //     let expected = "";
+    // Relleno las hojas hasta que tengan multiplo de 2
+    #[test]
+    fn test_create_merkle_tree_with_five_leaves() {
+        let mut merkle_tree = MerkleTree::new();
 
-    //     merkle_tree.get_root().unwrap();
-    // }
+        let data = vec![
+            [0u8;32],
+            [1u8;32],
+            [2u8;32],
+            [3u8;32],
+            [4u8;32],
+        ];
+        let data_as_ref = data.iter().map(|x| x.as_ref()).collect::<Vec<&[u8]>>();
 
-    // #[test]
-    // #[should_panic]
-    // fn test_create_merkle_tree_with_empty_leaves() {
-    //     let merkle_tree = MerkleTree::new();
+        merkle_tree.generate_merkle_tree(data_as_ref);
 
-    //     merkle_tree.get_hashed_nodes().unwrap();
-    // }
+        assert_eq!(merkle_tree.get_hashed_nodes().unwrap().len(), 6);
+    }
 
-    // // Relleno las hojas hasta que tengan multiplo de 2
-    // #[test]
-    // fn test_create_merkle_tree_with_five_leaves() {
-    //     let mut merkle_tree = MerkleTree::new();
+    #[test]
+    fn test_merkle_tree_with_four_leaves_has_four_nodes_in_total() {
+        let mut merkle_tree = MerkleTree::new();
 
-    //     let data = vec![
-    //         "1".as_bytes(),
-    //         "2".as_bytes(),
-    //         "3".as_bytes(),
-    //         "4".as_bytes(),
-    //         "5".as_bytes(),
-    //     ];
+        let data = vec![
+            [0u8;32],
+            [1u8;32],
+            [2u8;32],
+            [3u8;32],
+        ];
+        let data_as_ref = data.iter().map(|x| x.as_ref()).collect::<Vec<&[u8]>>();
 
-    //     merkle_tree.generate_merkle_tree(data);
 
-    //     assert_eq!(merkle_tree.get_hashed_nodes().unwrap().len(), 6);
-    // }
+        merkle_tree.generate_merkle_tree(data_as_ref);
 
-    // #[test]
-    // fn test_merkle_tree_with_four_leaves_has_seven_nodes_in_total() {
-    //     let mut merkle_tree = MerkleTree::new();
+        assert_eq!(merkle_tree.get_hashed_nodes().unwrap().len(), 4);
+    }
 
-    //     let data = vec![
-    //         "1".as_bytes(),
-    //         "2".as_bytes(),
-    //         "3".as_bytes(),
-    //         "5".as_bytes(),
-    //     ];
+    #[test]
+    fn test_generates_hash_number_correctly() {
+        let hash = MerkleTree::new().hash256("1".as_bytes());
 
-    //     merkle_tree.generate_merkle_tree(data);
-
-    //     assert_eq!(merkle_tree.get_hashed_nodes().unwrap().len(), 4);
-    // }
-
-    // #[test]
-    // fn test_generates_hash_number_correctly() {
-    //     let hash = MerkleTree::new().hash256("1".as_bytes());
-
-    //     assert!(hash.to_string().is_empty() == false);
-    // }
+        assert!(hash.to_string().is_empty() == false);
+    }
 
     // #[test]
     // fn test_generates_merkle_node_parent_correctly() {
     //     let merkle_tree = MerkleTree::new();
 
-    //     let left_hash = merkle_tree.hash256("1".as_bytes());
-    //     let right_hash = merkle_tree.hash256("2".as_bytes());
+    //     let left = &vec![0u8;32];
+    //     let right = &vec![1u8;32];
 
     //     // concatenate right and left hashes
-    //     let owned_string = format!("{}{}", left_hash.to_string(), right_hash.to_string());
+    //     let mut concat_left_right = Vec::new();
+    //     concat_left_right.extend_from_slice(&left);
+    //     concat_left_right.extend_from_slice(&right);
 
-    //     let expected_hash = merkle_tree.hash256(&owned_string.as_bytes());
+    //     let expected_hash = merkle_tree.hash256(&concat_left_right);
 
-    //     let parent = merkle_tree.merkle_parent(&left_hash.to_string(), &right_hash.to_string());
+    //     let parent = merkle_tree.merkle_parent(&sha256::Hash::from_slice(left).unwrap(), &&sha256::Hash::from_slice(right).unwrap());
 
     //     assert_eq!(parent, expected_hash);
     // }

@@ -22,7 +22,7 @@ impl P2PConnection {
         tcp_stream.set_nonblocking(true);
 
         Ok(Self {
-            handshaked: false,
+            handshaked: true,
             peer_address: addr.clone(),
             tcp_stream,
         })
@@ -49,6 +49,11 @@ impl P2PConnection {
         buffer_total[24..].copy_from_slice(&buffer_payload[..]);
 
         thread::sleep(Duration::from_millis(350)); // Strategy to not overload server limit rate
+        println!(
+            "Sending message: {:?} for peer: {}",
+            payload.command_name()?,
+            self.peer_address.as_str()
+        );
         self.tcp_stream
             .write(&buffer_total[..])
             .map_err(|e| e.to_string())?;
@@ -79,12 +84,13 @@ impl P2PConnection {
                 }
                 Err(err) => {
                     eprintln!("Error reading from TCP stream: {}", err);
+                    self.handshaked = false;
                     break;
                 }
             }
         }
 
-        let messages = parse_messages_from(&mut received_bytes);
+        let messages: Vec<MessagePayload> = parse_messages_from(&mut received_bytes);
         (self.peer_address.clone(), messages)
     }
 

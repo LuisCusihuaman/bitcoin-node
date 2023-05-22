@@ -84,6 +84,7 @@ impl P2PConnection {
                 }
                 Err(err) => {
                     eprintln!("Error reading from TCP stream: {}", err);
+                    self.handshaked = false;
                     break;
                 }
             }

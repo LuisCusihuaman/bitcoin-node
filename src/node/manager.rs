@@ -7,6 +7,7 @@ use crate::node::message::MessagePayload;
 use crate::node::p2p_connection::P2PConnection;
 use crate::utils::date_to_timestamp;
 use crate::{logger::Logger, node::message::get_headers::PayloadGetHeaders};
+use rand::seq::SliceRandom;
 use std::thread;
 
 use std::fs;
@@ -74,21 +75,23 @@ impl NodeNetwork<'_> {
     pub fn receive_from_all_peers(&mut self) -> Vec<(String, Vec<MessagePayload>)> {
         self.peer_connections
             .iter_mut()
-            .map(|connection| connection.receive())
+            .map(|connection: &mut P2PConnection| connection.receive())
             .filter(|(_, messages)| !messages.is_empty())
             .collect()
     }
 
     fn get_one_peer_address(&self) -> String {
-        let mut peer_address = String::new();
-        if let Some(peer_connection) = self
+        let handshaked_connections: Vec<&P2PConnection> = self
             .peer_connections
             .iter()
-            .find(|connection| connection.handshaked)
-        {
-            peer_address = peer_connection.peer_address.clone();
+            .filter(|connection| connection.handshaked)
+            .collect();
+
+        if let Some(peer_connection) = handshaked_connections.choose(&mut rand::thread_rng()) {
+            peer_connection.peer_address.clone()
+        } else {
+            String::from("")
         }
-        peer_address
     }
 }
 
@@ -282,6 +285,49 @@ impl NodeManager<'_> {
         println!("{:?} blocks loaded by file", self.blocks.len());
         self.initial_block_headers_download();
     }
+
+    fn initial_block_headers_download(&mut self) {
+        let mut last_block: [u8; 32] = if self.blocks.len() == 0 {
+            get_hash_block_genesis()
+        } else {
+            let last_block_found = self.blocks.last().unwrap();
+            last_block_found.get_hash()
+        };
+
+        let mut is_finished: bool = false;
+
+        while !is_finished {
+            let messages: Vec<MessagePayload> = self.send_get_headers_with_block_hash(&last_block);
+
+            if let Some(block) = self.blocks.last() {
+                last_block = block.get_hash().clone();
+            }
+
+            is_finished = messages.is_empty();
+        }
+    }
+
+    fn send_get_headers_with_block_hash(&mut self, block_hash: &[u8; 32]) -> Vec<MessagePayload> {
+        let stop_hash = [0u8; 32];
+
+        let mut hash_reversed: [u8; 32] = block_hash.clone();
+        hash_reversed.reverse();
+
+        let payload_get_headers = PayloadGetHeaders::new(70015, 1, hash_reversed, stop_hash);
+        let get_headers_message = MessagePayload::GetHeaders(payload_get_headers);
+
+        let address = self.get_random_peer_address();
+        self.send_to(address.clone(), &get_headers_message);
+        let response = self.wait_for(vec!["headers"]);
+        filter_by(response, address)
+    }
+
+    pub fn initial_block_download(&mut self) -> Result<(), String> {
+        self.headers_first();
+        self.blocks_download();
+        Ok(())
+    }
+
     fn blocks_download(&mut self) {
         if let Some(timestamp) = date_to_timestamp("2023-04-11") {
             // TODO integrar fecha del config &self.config.download_blocks_since_date) {
@@ -306,12 +352,6 @@ impl NodeManager<'_> {
         }
     }
 
-    pub fn initial_block_download(&mut self) -> Result<(), String> {
-        self.headers_first();
-        self.blocks_download();
-        Ok(())
-    }
-
     fn block_download_since_block_hash(&mut self, block_hash: &[u8; 32]) {
         let stop_hash = [0u8; 32];
 
@@ -325,13 +365,13 @@ impl NodeManager<'_> {
         // Receive inv messages
         let response = self.wait_for(vec!["inv"]);
         let messages = filter_by(response, address);
-        match messages.first() {
-            Some(MessagePayload::Inv(inventories)) => {
+
+        for message_inv in messages.iter() {
+            if let MessagePayload::Inv(inventories) = message_inv {
                 for inv in inventories.iter() {
                     self.update_block_by_inv(*inv);
                 }
             }
-            _ => {}
         }
     }
 
@@ -344,42 +384,6 @@ impl NodeManager<'_> {
 
         // Receive block
         self.wait_for(vec!["block"]);
-    }
-
-    fn initial_block_headers_download(&mut self) {
-        let mut last_block: [u8; 32] = if self.blocks.len() == 0 {
-            get_hash_block_genesis()
-        } else {
-            let last_block_found = self.blocks.last().unwrap();
-            last_block_found.get_hash()
-        };
-
-        let mut is_finished: bool = false;
-
-        while !is_finished {
-            let messages = self.send_get_headers_with_block_hash(&last_block);
-
-            if let Some(block) = self.blocks.last() {
-                last_block = block.get_hash().clone();
-            }
-
-            is_finished = messages.is_empty();
-        }
-    }
-
-    fn send_get_headers_with_block_hash(&mut self, block_hash: &[u8; 32]) -> Vec<MessagePayload> {
-        let stop_hash = [0u8; 32];
-
-        let mut hash_reversed: [u8; 32] = block_hash.clone();
-        hash_reversed.reverse();
-
-        let payload_get_headers = PayloadGetHeaders::new(70015, 1, hash_reversed, stop_hash);
-        let get_headers_message = MessagePayload::GetHeaders(payload_get_headers);
-
-        let address = self.get_random_peer_address();
-        self.send_to(address.clone(), &get_headers_message);
-        let response = self.wait_for(vec!["headers"]);
-        filter_by(response, address)
     }
 
     pub fn get_block_index_by_timestamp(&self, timestamp: u32) -> Option<usize> {
@@ -433,7 +437,10 @@ impl NodeManager<'_> {
     }
 }
 
-pub fn filter_by(messages: Vec<(String, Vec<MessagePayload>)>, address: String) -> Vec<MessagePayload> {
+pub fn filter_by(
+    messages: Vec<(String, Vec<MessagePayload>)>,
+    address: String,
+) -> Vec<MessagePayload> {
     let messages_from_peer = messages
         .iter()
         .find(|(peer_address, _)| peer_address == &address);
@@ -607,8 +614,11 @@ mod tests {
                     node_manager.broadcast(&get_data_message);
 
                     // Esperamos respuesta
-                    if let Some(MessagePayload::Block(block_payload)) =
-                        filter_by(node_manager.wait_for(vec!["block"]), "18.191.253.246:18333".to_string()).first()
+                    if let Some(MessagePayload::Block(block_payload)) = filter_by(
+                        node_manager.wait_for(vec!["block"]),
+                        "18.191.253.246:18333".to_string(),
+                    )
+                    .first()
                     {
                         let _hash: [u8; 32] = block_payload.get_prev();
 
@@ -682,8 +692,11 @@ mod tests {
                         node_manager.broadcast(&get_data_message);
 
                         // Esperamos respuesta
-                        if let Some(MessagePayload::Block(block_payload)) =
-                        filter_by(node_manager.wait_for(vec!["block"]), "5.9.149.16:18333".to_string()).first()
+                        if let Some(MessagePayload::Block(block_payload)) = filter_by(
+                            node_manager.wait_for(vec!["block"]),
+                            "5.9.149.16:18333".to_string(),
+                        )
+                        .first()
                         {
                             // Block actualizado
                             if let Some(index) =

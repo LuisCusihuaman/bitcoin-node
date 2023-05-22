@@ -18,6 +18,12 @@ pub struct NodeNetwork<'a> {
 }
 
 impl NodeNetwork<'_> {
+    pub fn connection_count(&self) -> usize {
+        self.peer_connections
+            .iter()
+            .filter(|connection| connection.handshaked)
+            .count()
+    }
     pub fn new(logger: &Logger) -> NodeNetwork {
         NodeNetwork {
             peer_connections: vec![],
@@ -38,12 +44,29 @@ impl NodeNetwork<'_> {
     }
     pub fn send_to_all_peers(&mut self, payload: &MessagePayload) -> Result<(), String> {
         for connection in &mut self.peer_connections {
-            if let Err(e) = connection.send(payload) {
-                eprintln!("Error sending message to peer: {:?}", e);
+            if connection.handshaked {
+                if let Err(e) = connection.send(payload) {
+                    eprintln!("Error sending message to peer: {:?}", e);
+                    connection.handshaked = false;
+                }
             }
         }
         Ok(())
     }
+    pub fn send_to_peer(&mut self, payload: &MessagePayload, peer_address: &String)-> Result<(), String> {
+        if let Some(peer_connection) = self
+        .peer_connections
+        .iter_mut()
+        .find(|connection| connection.peer_address == *peer_address)
+    {
+        if let Err(e) = peer_connection.send(payload) {
+            eprintln!("Error sending message to peer: {:?}", e);
+            peer_connection.handshaked = false;
+        }
+    }
+    Ok(())
+    }
+
 
     pub fn receive_from_all_peers(&mut self) -> Vec<(String, Vec<MessagePayload>)> {
         self.peer_connections
@@ -61,6 +84,13 @@ pub struct NodeManager<'a> {
 }
 
 impl NodeManager<'_> {
+    pub fn block_broadcasting(&mut self) -> Result<(), String> {
+        loop {
+            let block = self.blocks.last().unwrap();
+            let payload = MessagePayload::Block(block.clone());
+            self.broadcast(&payload);
+        }
+    }
     pub fn new(config: Config, logger: &Logger) -> NodeManager {
         NodeManager {
             config,
@@ -79,85 +109,79 @@ impl NodeManager<'_> {
     pub fn wait_for(&mut self, commands: Vec<&str>) -> Vec<MessagePayload> {
         let mut matched_messages = Vec::new();
         let received_messages = self.node_network.receive_from_all_peers();
-
-        let (peer_address, messages_from_first_peer) = match received_messages.first() {
-            Some((peer_address, messages)) => (peer_address.clone(), messages.clone()),
-            None => {
-                println!("No se conectó");
-                (String::from(""), matched_messages.clone())
-            }
-        };
-
-        for message in messages_from_first_peer {
-            match message {
-                MessagePayload::Verack => {
-                    self.logger
-                        .log(format!("Received verack from {}", peer_address));
-                    self.node_network.handshake_complete(&peer_address);
-                    if commands.contains(&"verack") {
-                        matched_messages.push(MessagePayload::Verack);
-                    }
-                }
-                MessagePayload::Version(version) => {
-                    self.broadcast(&MessagePayload::Verack);
-                    self.logger
-                        .log(format!("Received version from {}", peer_address));
-                    if commands.contains(&"version") {
-                        matched_messages.push(MessagePayload::Version(version.clone()));
-                    }
-                }
-                MessagePayload::BlockHeader(blocks) => {
-                    self.logger
-                        .log(format!("Received block headers from {}", peer_address));
-
-                    // Primeros headers
-                    if self.get_blocks().len() == 0 {
-                        if commands.contains(&"headers") {
-                            matched_messages.push(MessagePayload::BlockHeader(blocks.clone()));
+        for (peer_address, messages) in received_messages.iter() {
+            for message in messages {
+                match message {
+                    MessagePayload::Verack => {
+                        self.logger
+                            .log(format!("Received verack from {}", peer_address));
+                        self.node_network.handshake_complete(&peer_address);
+                        if commands.contains(&"verack") {
+                            matched_messages.push(MessagePayload::Verack);
                         }
-                        self.blocks.extend(blocks.clone());
-                        Block::encode_blocks_to_file(&blocks, "block_headers.bin");
                     }
+                    MessagePayload::Version(version) => {
+                        self.send_to(peer_address.clone(), &MessagePayload::Verack);
+                        self.logger
+                            .log(format!("Received version from {}", peer_address));
+                        if commands.contains(&"version") {
+                            matched_messages.push(MessagePayload::Version(version.clone()));
+                        }
+                    }
+                    MessagePayload::BlockHeader(blocks) => {
+                        self.logger
+                            .log(format!("Received block headers from {}", peer_address));
 
-                    // Continuidad de la blockchain
-                    if let Some(actual_last_block) = self.blocks.last() {
-                        match blocks.first(){
-                            Some(first_block) => {
-                                if actual_last_block.get_hash() == first_block.get_prev() {
-                                    if commands.contains(&"headers") { // only i want to save msg on correct blockchain integrity
-                                        matched_messages.push(MessagePayload::BlockHeader(blocks.clone()));
-                                    }
-                                    self.blocks.extend(blocks.clone());
-                                    Block::encode_blocks_to_file(&blocks, "block_headers.bin");
-                                }
+                        // Primeros headers
+                        if self.get_blocks().len() == 0 {
+                            if commands.contains(&"headers") {
+                                matched_messages.push(MessagePayload::BlockHeader(blocks.clone()));
                             }
-                            None => {}
+                            self.blocks.extend(blocks.clone());
+                            Block::encode_blocks_to_file(&blocks, "block_headers.bin");
+                        }
+
+                        // Continuidad de la blockchain
+                        if let Some(actual_last_block) = self.blocks.last() {
+                            match blocks.first() {
+                                Some(first_block) => {
+                                    if actual_last_block.get_hash() == first_block.get_prev() {
+                                        if commands.contains(&"headers") {
+                                            // only i want to save msg on correct blockchain integrity
+                                            matched_messages
+                                                .push(MessagePayload::BlockHeader(blocks.clone()));
+                                        }
+                                        self.blocks.extend(blocks.clone());
+                                        Block::encode_blocks_to_file(&blocks, "block_headers.bin");
+                                    }
+                                }
+                                None => {}
+                            }
+                        }
+                    }
+                    MessagePayload::Block(block) => {
+                        self.logger
+                            .log(format!("Received block from {}", peer_address));
+
+                        if commands.contains(&"block") {
+                            matched_messages.push(MessagePayload::Block(block.clone()));
+                        }
+
+                        if let Some(index) = self.get_block_index_by_prev_hash(block.get_prev()) {
+                            self.blocks[index] = block.clone();
+                        }
+                    }
+                    MessagePayload::Inv(inv) => {
+                        self.logger
+                            .log(format!("Received inv from {}", peer_address));
+
+                        if commands.contains(&"inv") {
+                            matched_messages.push(MessagePayload::Inv(inv.clone()));
                         }
                     }
 
+                    _ => {}
                 }
-                MessagePayload::Block(block) => {
-                    self.logger
-                        .log(format!("Received block from {}", peer_address));
-
-                    if commands.contains(&"block") {
-                        matched_messages.push(MessagePayload::Block(block.clone()));
-                    }
-
-                    if let Some(index) = self.get_block_index_by_prev_hash(block.get_prev()) {
-                        self.blocks[index] = block;
-                    }
-                }
-                MessagePayload::Inv(inv) => {
-                    self.logger
-                        .log(format!("Received inv from {}", peer_address));
-
-                    if commands.contains(&"inv") {
-                        matched_messages.push(MessagePayload::Inv(inv.clone()));
-                    }
-                }
-
-                _ => {}
             }
         }
         matched_messages
@@ -223,6 +247,7 @@ impl NodeManager<'_> {
                 .log(format!("Error sending message to peer: {:?}", e));
         }
     }
+    
 
     pub fn receive_all(&mut self) -> Vec<(String, Vec<MessagePayload>)> {
         self.node_network.receive_from_all_peers()
@@ -240,29 +265,29 @@ impl NodeManager<'_> {
         println!("{:?} blocks loaded by file", self.blocks.len());
         self.initial_block_headers_download();
 
-        // Block from date
+        //Block from date
 
-        // if let Some(timestamp) = date_to_timestamp("2023-04-11") {
-        //     // TODO integrar fecha del config &self.config.download_blocks_since_date) {
+        if let Some(timestamp) = date_to_timestamp("2023-04-11") {
+            // TODO integrar fecha del config &self.config.download_blocks_since_date) {
 
-        //     let blocks = self.get_blocks();
+            let blocks = self.get_blocks();
 
-        //     let mut index = match self.get_block_index_by_timestamp(timestamp) {
-        //         Some(index) => index,
-        //         None => blocks.len(),
-        //     };
+            let mut index = match self.get_block_index_by_timestamp(timestamp) {
+                Some(index) => index,
+                None => blocks.len(),
+            };
 
-        //     while index < blocks.len() {
-        //         let block = blocks[index].clone();
+            while index < blocks.len() {
+                let block = blocks[index].clone();
 
-        //         let mut block_hash = block.get_prev();
-        //         block_hash.reverse();
+                let mut block_hash = block.get_prev();
+                block_hash.reverse();
 
-        //         self.block_download_since_block_hash(&block_hash);
+                self.block_download_since_block_hash(&block_hash);
 
-        //         index += 500;
-        //     }
-        // }
+                index += 500;
+            }
+        }
         Ok(())
     }
 
@@ -371,6 +396,14 @@ impl NodeManager<'_> {
             index += 1;
         }
         true
+    }
+
+    fn send_to(&mut self, peer_address: String, payload: &MessagePayload){
+        if let Err(e) = self.node_network.send_to_peer(payload, &peer_address) {
+            self.logger
+                .log(format!("Error sending message to peer: {:?}", e));
+        }
+        
     }
 }
 
@@ -574,7 +607,7 @@ mod tests {
             stop_hash,
         ));
         node_manager.broadcast(&get_headers_message);
-        node_manager.wait_for(vec!["headers"]).first();
+        node_manager.wait_for(vec!["headers"]);
 
         let initial_blocks = node_manager.get_blocks();
 

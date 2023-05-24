@@ -26,7 +26,7 @@ pub enum MessagePayload {
     GetHeaders(PayloadGetHeaders),
     BlockHeader(Vec<Block>),
     GetBlocks(PayloadGetBlocks),
-    Inv(Vec<[u8; 36]>),
+    Inv(Vec<u8>),
     GetData(PayloadGetData),
     Block(Block),
 }

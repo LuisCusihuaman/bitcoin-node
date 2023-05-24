@@ -69,6 +69,24 @@ pub fn get_offset(buff: &[u8]) -> usize {
     }
 }
 
+pub fn write_varint_2(value: usize) -> Vec<u8> {
+    let mut result = vec![];
+
+    if value < 0xfd {
+        result.push(value as u8);
+    } else if value <= 0xffff {
+        result.push(0xfd);
+        result.extend_from_slice(&value.to_le_bytes()[0..2]);
+    } else if value <= 0xffffffff {
+        result.push(0xfe);
+        result.extend_from_slice(&value.to_le_bytes()[0..4]);
+    } else {
+        result.push(0xff);
+        result.extend_from_slice(&value.to_le_bytes()[0..8]);
+    }
+    result
+}
+
 pub fn write_varint<W: Write>(writer: &mut W, value: usize) -> Result<(), io::Error> {
     if value < 0xfd {
         writer.write_all(&[value as u8])

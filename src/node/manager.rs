@@ -363,26 +363,16 @@ impl NodeManager<'_> {
 
         // Receive inv messages
         let response = self.wait_for(vec!["inv"]);
-        let messages = filter_by(response, address);
+        let messages = filter_by(response, address.clone());
 
         for message_inv in messages.iter() {
             if let MessagePayload::Inv(inventories) = message_inv {
-                for inv in inventories.iter() {
-                    self.update_block_by_inv(*inv);
-                }
+                let get_data_message =
+                    MessagePayload::GetData(PayloadGetData::new(500, inventories.clone()));
+                self.send_to(address.clone(), &get_data_message);
+                self.wait_for(vec!["block"]);
             }
         }
-    }
-
-    fn update_block_by_inv(&mut self, inv: [u8; 36]) {
-        let get_data_message = MessagePayload::GetData(PayloadGetData::new(1, inv));
-
-        // Send get data messages
-        let address = self.get_random_peer_address();
-        self.send_to(address, &get_data_message);
-
-        // Receive block
-        self.wait_for(vec!["block"]);
     }
 
     pub fn get_block_index_by_timestamp(&self, timestamp: u32) -> Option<usize> {
@@ -575,149 +565,109 @@ mod tests {
         Ok(())
     }
 
+    // #[test]
+    // #[ignore]
+    // fn test_node_send_get_blocks_receives_inv_sends_get_data() -> Result<(), String> {
+    //     let logger: Logger = Logger::stdout();
+    //     let config = Config::from_file("nodo.config")
+    //         .map_err(|err| err.to_string())
+    //         .unwrap();
+
+    //     let mut node_manager = NodeManager::new(config, &logger);
+    //     node_manager.connect(vec!["18.191.253.246:18333".to_string()])?;
+    //     node_manager.handshake();
+
+    //     let hash_beginning_project = get_first_hash_reversed();
+
+    //     let stop_hash = [0u8; 32];
+
+    //     let get_blocks_message = MessagePayload::GetBlocks(PayloadGetBlocks::new(
+    //         70015,
+    //         1,
+    //         hash_beginning_project,
+    //         stop_hash,
+    //     ));
+
+    //     node_manager.broadcast(&get_blocks_message);
+
+    //     // Recibo inventario
+    //     let response = node_manager.wait_for(vec!["inv"]);
+    //     let messages = filter_by(response, "18.191.253.246:18333".to_string());
+
+    //     match messages.first() {
+    //         Some(MessagePayload::Inv(inventories)) => {
+
+    //             let get_data_message = MessagePayload::GetData(PayloadGetData::new(inventories.len(), *inventories));
+
+    //             // Enviar el mensaje get data
+    //             node_manager.broadcast(&get_data_message);
+
+    //             // Esperamos respuesta
+    //             if let Some(MessagePayload::Block(block_payload)) = filter_by(
+    //                 node_manager.wait_for(vec!["block"]),
+    //                 "18.191.253.246:18333".to_string(),
+    //             )
+    //             .first()
+    //             {
+    //                 let _hash: [u8; 32] = block_payload.get_prev();
+
+    //                 node_manager.blocks.push(block_payload.clone());
+    //             }
+
+    //         }
+    //         _ => return Err("No inv message received".to_string()),
+    //     }
+
+    //     Ok(())
+    // }
+
     #[test]
-    #[ignore]
-    fn test_node_send_get_blocks_receives_inv_sends_get_data() -> Result<(), String> {
+    fn test_send_get_blocks() -> Result<(), String> {
         let logger: Logger = Logger::stdout();
-        let config = Config::from_file("nodo.config")
-            .map_err(|err| err.to_string())
-            .unwrap();
-
-        let mut node_manager = NodeManager::new(config, &logger);
-        node_manager.connect(vec!["18.191.253.246:18333".to_string()])?;
-        node_manager.handshake();
-
-        let hash_beginning_project = get_first_hash_reversed();
-
-        let stop_hash = [0u8; 32];
-
-        let get_blocks_message = MessagePayload::GetBlocks(PayloadGetBlocks::new(
-            70015,
-            1,
-            hash_beginning_project,
-            stop_hash,
-        ));
-
-        node_manager.broadcast(&get_blocks_message);
-
-        // Recibo inventario
-        let response = node_manager.wait_for(vec!["inv"]);
-        let messages = filter_by(response, "18.191.253.246:18333".to_string());
-
-        match messages.first() {
-            Some(MessagePayload::Inv(inventories)) => {
-                for inv in inventories.iter() {
-                    let get_data_message = MessagePayload::GetData(PayloadGetData::new(1, *inv));
-
-                    // Enviar el mensaje get data
-                    node_manager.broadcast(&get_data_message);
-
-                    // Esperamos respuesta
-                    if let Some(MessagePayload::Block(block_payload)) = filter_by(
-                        node_manager.wait_for(vec!["block"]),
-                        "18.191.253.246:18333".to_string(),
-                    )
-                    .first()
-                    {
-                        let _hash: [u8; 32] = block_payload.get_prev();
-
-                        node_manager.blocks.push(block_payload.clone());
-                    }
-                }
-            }
-            _ => return Err("No inv message received".to_string()),
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_send_get_headers_and_get_blocks_from_a_date() -> Result<(), String> {
-        let logger: Logger = Logger::stdout();
-        let config = Config::from_file("nodo.config")
-            .map_err(|err| err.to_string())
-            .unwrap();
+        let config = Config::new();
 
         let mut node_manager = NodeManager::new(config, &logger);
         node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
         node_manager.handshake();
 
-        // Send getheaders message
-        let hash_block_genesis: [u8; 32] = get_first_hash_reversed();
-        let stop_hash = [0u8; 32];
-
-        let get_headers_message = MessagePayload::GetHeaders(PayloadGetHeaders::new(
-            70015,
-            1,
-            hash_block_genesis,
-            stop_hash,
-        ));
-        node_manager.broadcast(&get_headers_message);
-        node_manager.wait_for(vec!["headers"]);
-
-        let initial_blocks = node_manager.get_blocks();
-
-        let mut indice = 0;
-
-        assert!(initial_blocks.len() > 0);
-
-        let timestamp = 1337966303;
-
-        if let Some(index) = node_manager.get_block_index_by_timestamp(timestamp) {
-            // Create getblocks message
-            let block_by_date = initial_blocks[index].clone();
-            let mut block_hash = block_by_date.get_prev();
-            block_hash.reverse();
-
-            let stop_hash = [0u8; 32];
-
-            let get_blocks_message =
-                MessagePayload::GetBlocks(PayloadGetBlocks::new(70015, 1, block_hash, stop_hash));
-
-            // Send get block messages
-            node_manager.broadcast(&get_blocks_message);
-
-            // Receive inv messages
-            let reponse = node_manager.wait_for(vec!["inv"]);
-            let messages = filter_by(reponse, "5.9.149.16:18333".to_string());
-
-            match messages.first() {
-                Some(MessagePayload::Inv(inventories)) => {
-                    for inv in inventories.iter() {
-                        let get_data_message =
-                            MessagePayload::GetData(PayloadGetData::new(1, *inv));
-
-                        // Enviar el mensaje get data
-                        node_manager.broadcast(&get_data_message);
-
-                        // Esperamos respuesta
-                        if let Some(MessagePayload::Block(block_payload)) = filter_by(
-                            node_manager.wait_for(vec!["block"]),
-                            "5.9.149.16:18333".to_string(),
-                        )
-                        .first()
-                        {
-                            // Block actualizado
-                            if let Some(index) =
-                                node_manager.get_block_index_by_prev_hash(block_payload.get_prev())
-                            {
-                                // Just for assert
-                                indice = index.clone();
-                                node_manager.blocks[indice] = block_payload.clone();
-                            }
-                        }
-                        break; // Pruebo solo un inv
-                    }
-                }
-                _ => return Err("No inv message received".to_string()),
-            }
-        } else {
-            println!("No se encontró un bloque a partir de esa fecha")
+        let file_path = "block_headers.bin";
+        if fs::metadata(file_path).is_ok() {
+            // Blocks file already exists, no need to perform initial block download
+            node_manager.blocks = Block::decode_blocks_from_file(file_path);
         }
 
-        let final_blocks = node_manager.get_blocks();
+        let genesis_hash = get_first_hash_reversed();
+        let stop_hash = [0u8; 32];
 
-        assert_ne!(initial_blocks[indice], final_blocks[indice]);
+        let get_blocks_message: MessagePayload =
+            MessagePayload::GetBlocks(PayloadGetBlocks::new(70015, 1, genesis_hash, stop_hash));
+
+        // Send get block messages
+        node_manager.send_to("5.9.149.16:18333".to_string(), &get_blocks_message);
+
+        // Receive inv messages
+        let reponse = node_manager.wait_for(vec!["inv"]);
+        let messages = filter_by(reponse, "5.9.149.16:18333".to_string());
+
+        match messages.first() {
+            Some(MessagePayload::Inv(inventories)) => {
+                let coso = 500; // JEJEJJ
+                let get_data_message =
+                    MessagePayload::GetData(PayloadGetData::new(coso, inventories.clone()));
+
+                // Enviar el mensaje get data
+                node_manager.send_to("5.9.149.16:18333".to_string(), &get_data_message);
+
+                // Esperamos respuesta
+                let result = node_manager.wait_for(vec!["block"]);
+                filter_by(result, "5.9.149.16:18333".to_string());
+            }
+            _ => return Err("No inv message received".to_string()),
+        }
+
+        let blocks = node_manager.blocks;
+
+        assert!(blocks[0].txns.len() > 0);
 
         Ok(())
     }

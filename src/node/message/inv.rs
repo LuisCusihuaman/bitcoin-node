@@ -12,7 +12,7 @@ pub fn decode_inv(buffer: &[u8]) -> Result<MessagePayload, String> {
     for bufercito in chunked.clone() {
         match decode_inventory(bufercito) {
             Some(block) => {
-                inv.push(block);
+                inv.extend(block);
             }
             None => continue,
         }
@@ -21,14 +21,9 @@ pub fn decode_inv(buffer: &[u8]) -> Result<MessagePayload, String> {
     Ok(MessagePayload::Inv(inv))
 }
 
-fn decode_inventory(buffer: &[u8]) -> Option<[u8; 36]> {
+fn decode_inventory(buffer: &[u8]) -> Option<Vec<u8>> {
     if buffer.len() != 36 {
         return None;
     }
-
-    // let type_inv = read_u32_le(&buffer, 0);
-    let mut inv: [u8; 36] = [0u8; 36];
-    copy_bytes_to_array(&buffer[..], &mut inv);
-
-    Some(inv)
+    Some(buffer.to_vec())
 }

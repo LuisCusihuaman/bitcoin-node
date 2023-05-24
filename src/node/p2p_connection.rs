@@ -3,6 +3,7 @@ use crate::node::message::{Encoding, MessageHeader, MessagePayload};
 use crate::utils::double_sha256;
 use std::io::{Read, Write};
 use std::net::TcpStream;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use std::vec;
@@ -11,6 +12,17 @@ pub struct P2PConnection {
     pub handshaked: bool,
     pub peer_address: String,
     tcp_stream: TcpStream,
+}
+
+
+impl Clone for P2PConnection {
+    fn clone(&self) -> Self {
+        P2PConnection {
+            handshaked: self.handshaked,
+            peer_address: self.peer_address.clone(),
+            tcp_stream: self.tcp_stream.try_clone().unwrap(),
+        }
+    }
 }
 
 impl P2PConnection {
@@ -84,7 +96,7 @@ impl P2PConnection {
                 }
                 Err(err) => {
                     eprintln!("Error reading from TCP stream: {}", err);
-                    self.handshaked = false;
+                    //self.handshaked = false;
                     break;
                 }
             }

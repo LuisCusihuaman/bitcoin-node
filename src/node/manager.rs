@@ -13,27 +13,26 @@ use std::thread;
 use std::fs;
 use std::net::{IpAddr, ToSocketAddrs};
 
-pub struct NodeNetwork<'a> {
+pub struct NodeNetwork {
     pub peer_connections: Vec<P2PConnection>,
-    logger: &'a Logger,
 }
 
-impl NodeNetwork<'_> {
+impl NodeNetwork {
     pub fn connection_count(&self) -> usize {
         self.peer_connections
             .iter()
             .filter(|connection| connection.handshaked)
             .count()
     }
-    pub fn new(logger: &Logger) -> NodeNetwork {
+    pub fn new() -> NodeNetwork {
         NodeNetwork {
             peer_connections: vec![],
-            logger,
         }
     }
     pub fn handshake_complete(&mut self, peer_address: &String) {
-        self.logger
-            .log(format!("Handshake complete with peer: {}", peer_address));
+        //self.logger
+        //    .log(format!("Handshake complete with peer: {}", peer_address));
+        println!("Handshake complete with peer: {}", peer_address);
         // added handshaked attribute of P2PConnection turned into true, filter first by peer_address
         if let Some(peer_connection) = self
             .peer_connections
@@ -43,17 +42,30 @@ impl NodeNetwork<'_> {
             peer_connection.handshaked();
         }
     }
-    pub fn send_to_all_peers(&mut self, payload: &MessagePayload) -> Result<(), String> {
-        for connection in &mut self.peer_connections {
+    pub fn send_to_all_peers(&self, payload: &MessagePayload) -> Result<(), String> {
+        let mut threads = Vec::new();
+
+        for connection in self.peer_connections.iter() {
             if connection.handshaked {
-                if let Err(e) = connection.send(payload) {
-                    eprintln!("Error sending message to peer: {:?}", e);
-                    connection.handshaked = false;
-                }
+                let mut connection = connection.clone();
+                let payload = payload.clone();
+                threads.push(thread::spawn(move || {
+                    if let Err(e) = connection.send(&payload) {
+                        eprintln!("Error sending message to peer: {:?}", e);
+                        // self.connection.handshaked = false; <-- CANT U DOIT BECAUSE ITS NOT A MUTABLE REFERENCE
+                    }
+                }));
             }
         }
+
+        for thread in threads {
+            thread.join().expect("Failed to join thread");
+        }
+
         Ok(())
     }
+
+
     pub fn send_to_peer(
         &mut self,
         payload: &MessagePayload,
@@ -73,12 +85,23 @@ impl NodeNetwork<'_> {
     }
 
     pub fn receive_from_all_peers(&mut self) -> Vec<(String, Vec<MessagePayload>)> {
-        self.peer_connections
-            .iter_mut()
-            .map(|connection: &mut P2PConnection| connection.receive())
+        let mut threads = Vec::new();
+
+        for connection in self.peer_connections.iter_mut() {
+            let mut connection = connection.clone();
+            threads.push(thread::spawn(move || connection.receive()));
+        }
+
+        let received_messages: Vec<_> = threads
+            .into_iter()
+            .map(|thread| thread.join().unwrap())
             .filter(|(_, messages)| !messages.is_empty())
-            .collect()
+            .collect();
+
+        received_messages
     }
+
+
 
     fn get_one_peer_address(&self) -> String {
         let handshaked_connections: Vec<&P2PConnection> = self
@@ -96,7 +119,7 @@ impl NodeNetwork<'_> {
 }
 
 pub struct NodeManager<'a> {
-    node_network: NodeNetwork<'a>,
+    node_network: NodeNetwork,
     config: Config,
     logger: &'a Logger,
     blocks: Vec<Block>,
@@ -111,7 +134,7 @@ impl NodeManager<'_> {
     pub fn new(config: Config, logger: &Logger) -> NodeManager {
         NodeManager {
             config,
-            node_network: NodeNetwork::new(logger),
+            node_network: NodeNetwork::new(),
             logger,
             blocks: vec![], // inicializar el block genesis (con el config)
         }

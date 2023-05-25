@@ -48,7 +48,7 @@ impl PayloadGetHeaders {
 
 pub fn decode_headers(buffer: &[u8]) -> Result<MessagePayload, String> {
     let _count = read_varint(&mut &buffer[0..])?;
-    let offset = get_offset(&buffer[..]);
+    let offset = get_offset(buffer);
 
     let chunked = buffer[offset..].chunks(81);
     let mut blocks = vec![];
@@ -70,16 +70,16 @@ pub fn decode_header(buffer: &[u8]) -> Option<Block> {
         return None;
     }
 
-    let version = read_u32_le(&buffer, 0);
+    let version = read_u32_le(buffer, 0);
 
     let raw_hash = double_sha256(&buffer[0..80]).to_byte_array();
     let mut hash: [u8; 32] = [0u8; 32];
     copy_bytes_to_array(&raw_hash, &mut hash);
     hash.reverse();
 
-    let mut previous_block_header_hash: [u8; 32] = [0u8; 32];
-    copy_bytes_to_array(&buffer[4..36], &mut previous_block_header_hash);
-    previous_block_header_hash.reverse();
+    let mut previous_block: [u8; 32] = [0u8; 32];
+    copy_bytes_to_array(&buffer[4..36], &mut previous_block);
+    previous_block.reverse();
 
     let mut merkle_root_hash: [u8; 32] = [0u8; 32];
     copy_bytes_to_array(&buffer[36..68], &mut merkle_root_hash);
@@ -91,14 +91,15 @@ pub fn decode_header(buffer: &[u8]) -> Option<Block> {
 
     let txn_count = read_varint(&mut &buffer[80..]).unwrap() as u8;
 
-    Some(Block::new(
+    Some(Block {
         version,
         hash,
-        previous_block_header_hash,
+        previous_block,
         merkle_root_hash,
         timestamp,
         n_bits,
         nonce,
         txn_count,
-    ))
+        txns: vec![],
+    })
 }

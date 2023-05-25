@@ -1,10 +1,10 @@
 use super::merkle_tree::MerkleTree;
-use super::tx::{Tx, TxIn, TxOut};
+use super::tx::Tx;
 use super::MessagePayload;
 use crate::error::Error;
-use crate::node::message::{merkle_tree, tx::decode_tx};
+use crate::node::message::tx::decode_tx;
 use crate::utils::*;
-use bitcoin_hashes::{sha256, Hash, HashEngine};
+use bitcoin_hashes::Hash;
 use std::vec;
 
 use std::{
@@ -17,43 +17,18 @@ use super::get_headers::decode_header;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Block {
-    version: u32,
-    hash: [u8; 32],
-    previous_block: [u8; 32],
-    merkle_root_hash: [u8; 32],
+    pub version: u32,
+    pub hash: [u8; 32],
+    pub previous_block: [u8; 32],
+    pub merkle_root_hash: [u8; 32],
     pub timestamp: u32,
-    n_bits: u32,
-    nonce: u32,
+    pub n_bits: u32,
+    pub nonce: u32,
     pub txn_count: u8, // TODO Variable size
     pub txns: Vec<Tx>, // TODO Variable size
 }
 
 impl Block {
-    pub fn new(
-        version: u32,
-        hash: [u8; 32],
-        previous_block: [u8; 32],
-        merkle_root_hash: [u8; 32],
-        timestamp: u32,
-        n_bits: u32,
-        nonce: u32,
-        txn_count: u8,
-    ) -> Self {
-        let txns: Vec<Tx> = Vec::new();
-
-        Self {
-            version,
-            hash,
-            previous_block,
-            merkle_root_hash,
-            timestamp,
-            n_bits,
-            nonce,
-            txn_count,
-            txns,
-        }
-    }
-
     // // generates the target to validate proof of work using this formula
     // // target = coefficient * 256**(exponent - 3)
     pub fn target(&self) -> u64 {
@@ -108,13 +83,6 @@ impl Block {
         println!("sha_num: {}\n", sha_num);
 
         sha_num < target
-    }
-
-    fn add_txns(&mut self, txns: Vec<Tx>) {
-        //TODO if (txns.len()!=self.txn_count as usize){
-        //    Error
-        //}
-        self.txns = txns;
     }
 
     fn init_merkle_tree(&self) -> MerkleTree {
@@ -184,7 +152,6 @@ impl Block {
 
         // txn_count
         buffer[offset..offset + 1].copy_from_slice(&self.txn_count.to_le_bytes());
-        offset += 1; // Es variable
 
         // Encode txns, for complete initial download is zero.
         // buffer[offset..offset + 1].copy_from_slice(&[0]);
@@ -246,18 +213,18 @@ impl Block {
 }
 
 pub fn decode_block(buffer: &[u8]) -> Result<MessagePayload, String> {
-    if buffer.len() == 0 {
+    if buffer.is_empty() {
         return Err("Empty buffer".to_string());
     }
 
-    let mut block = decode_internal_block(&buffer).unwrap();
+    let mut block = decode_internal_block(buffer).unwrap();
     let mut transactions = Vec::new();
 
     let tnx_count = read_varint(&mut &buffer[80..]).unwrap() as u8;
     let mut offset = 80 + get_offset(&buffer[80..]);
 
     for _ in 0..tnx_count {
-        if let Some(tx) = decode_tx(&buffer, &mut offset) {
+        if let Some(tx) = decode_tx(buffer, &mut offset) {
             transactions.push(tx);
         } else {
             return Err("Failed to decode transaction".to_string());
@@ -270,11 +237,11 @@ pub fn decode_block(buffer: &[u8]) -> Result<MessagePayload, String> {
 }
 
 pub fn decode_internal_block(buffer: &[u8]) -> Option<Block> {
-    let version = read_u32_le(&buffer, 0);
+    let version = read_u32_le(buffer, 0);
 
-    let mut previous_block_header_hash: [u8; 32] = [0u8; 32];
-    copy_bytes_to_array(&buffer[4..36], &mut previous_block_header_hash);
-    previous_block_header_hash.reverse();
+    let mut previous_block: [u8; 32] = [0u8; 32];
+    copy_bytes_to_array(&buffer[4..36], &mut previous_block);
+    previous_block.reverse();
 
     let mut merkle_root_hash: [u8; 32] = [0u8; 32];
     copy_bytes_to_array(&buffer[36..68], &mut merkle_root_hash);
@@ -289,42 +256,47 @@ pub fn decode_internal_block(buffer: &[u8]) -> Option<Block> {
     copy_bytes_to_array(&raw_hash, &mut hash);
     hash.reverse();
 
-    Some(Block::new(
+    Some(Block {
         version,
         hash,
-        previous_block_header_hash,
+        previous_block,
         merkle_root_hash,
         timestamp,
         n_bits,
         nonce,
-        0,
-    ))
+        txn_count: 0,
+        txns: Vec::new(),
+    })
 }
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
+    use crate::node::message::tx::{Tx, TxIn, TxOut};
+
     #[test]
     fn test_proof_of_inclution_doesnt_have_invalid_tx() {
-        let mut block = Block::new(
-            1,
-            [
+        let mut block = Block {
+            version: 1,
+            hash: [
                 0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
                 217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
             ],
-            [
+            previous_block: [
                 0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
                 217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
             ],
-            [
+            merkle_root_hash: [
                 240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53, 141, 211, 116,
                 95, 60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186,
             ],
-            1296688928,
-            486604799,
-            1924588547,
-            3,
-        );
+            timestamp: 1296688928,
+            n_bits: 486604799,
+            nonce: 1924588547,
+            txn_count: 3,
+            txns: Vec::new(),
+        };
 
         let tx_1 = Tx {
             id: [0u8; 32],
@@ -384,35 +356,6 @@ mod tests {
             lock_time: 0,
         };
 
-        let tx_3 = Tx {
-            id: [0u8; 32],
-            version: 1,
-            flag: 0,
-            tx_in_count: 2, // varint
-            tx_in: vec![
-                TxIn {
-                    previous_output: [0; 36],
-                    script_length: 0, // varint
-                    signature_script: vec![],
-                    sequence: 0,
-                },
-                TxIn {
-                    previous_output: [0; 36],
-                    script_length: 0, // varint
-                    signature_script: vec![],
-                    sequence: 0,
-                },
-            ],
-            tx_out_count: 1, // varint
-            tx_out: vec![TxOut {
-                value: 100_000_000,
-                pk_script_length: 0, // varint
-                pk_script: vec![],
-            }],
-            tx_witness: vec![],
-            lock_time: 0,
-        };
-
         let not_expected_tnx = Tx {
             id: [1u8; 32],
             version: 1,
@@ -434,34 +377,34 @@ mod tests {
             lock_time: 0,
         };
 
-        let txns = vec![tx_1, tx_2];
-
-        block.add_txns(txns);
+        block.txns = vec![tx_1, tx_2];
 
         assert_eq!(block.proof_of_inclusion(not_expected_tnx), false);
     }
 
     #[test]
     fn test_proof_of_inclusion_is_included() {
-        let mut block = Block::new(
-            2,
-            [
+        let mut block = Block {
+            version: 2,
+            hash: [
                 0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
                 217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
             ],
-            [
+            previous_block: [
                 0, 0, 0, 0, 0, 2, 60, 60, 152, 89, 35, 223, 255, 89, 74, 130, 64, 234, 30, 151, 40,
                 37, 10, 91, 84, 236, 23, 192, 158, 144, 91, 89,
             ],
-            [
+            merkle_root_hash: [
                 136, 122, 27, 116, 246, 94, 78, 137, 248, 236, 162, 104, 55, 210, 207, 205, 139,
                 16, 92, 241, 228, 96, 167, 60, 7, 168, 155, 54, 29, 202, 64, 99,
             ],
-            1384047529,
-            486604799,
-            2442677017,
-            2,
-        );
+            timestamp: 1384047529,
+            n_bits: 486604799,
+            nonce: 2442677017,
+            txn_count: 2,
+            txns: Vec::new(),
+        };
+
         let tx1 = Tx {
             id: [
                 163, 249, 79, 52, 224, 98, 202, 218, 50, 159, 58, 108, 242, 175, 222, 216, 208, 9,
@@ -709,32 +652,33 @@ mod tests {
             lock_time: 0,
         };
 
-        block.add_txns(vec![tx1.clone(), tx2]);
+        block.txns = vec![tx1.clone(), tx2];
 
         assert_eq!(block.proof_of_inclusion(tx1), true);
     }
 
     #[test]
     fn test_generates_origin_block_merkle() {
-        let mut block = Block::new(
-            1,
-            [
+        let mut block = Block {
+            version: 1,
+            hash: [
+                0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 33, 132, 32, 151, 121, 186, 174, 195, 206, 217,
+                15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
+            ],
+            previous_block: [
                 0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
                 217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
             ],
-            [
-                0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
-                217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
-            ],
-            [
+            merkle_root_hash: [
                 240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53, 141, 211, 116,
                 95, 60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186,
             ],
-            1296688928,
-            486604799,
-            1924588547,
-            1,
-        );
+            timestamp: 1296688928,
+            n_bits: 486604799,
+            nonce: 1924588547,
+            txn_count: 1,
+            txns: vec![],
+        };
 
         let tx = Tx {
             id: [
@@ -766,7 +710,7 @@ mod tests {
             lock_time: 0,
         };
 
-        block.add_txns(vec![tx]);
+        block.txns = vec![tx];
 
         let expected_merkle_root = [
             240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53, 141, 211, 116, 95,
@@ -778,25 +722,27 @@ mod tests {
 
     #[test]
     fn test_generates_merkle_root_on_block_with_many_transaction() {
-        let mut block = Block::new(
-            2,
-            [
+        let mut block = Block {
+            version: 2,
+            hash: [
                 0, 0, 0, 0, 0, 2, 60, 60, 152, 89, 35, 223, 255, 89, 74, 130, 64, 234, 30, 151, 40,
                 37, 10, 91, 84, 236, 23, 192, 158, 144, 91, 89,
             ],
-            [
+            previous_block: [
                 0, 0, 0, 0, 0, 2, 60, 60, 152, 89, 35, 223, 255, 89, 74, 130, 64, 234, 30, 151, 40,
                 37, 10, 91, 84, 236, 23, 192, 158, 144, 91, 89,
             ],
-            [
+            merkle_root_hash: [
                 136, 122, 27, 116, 246, 94, 78, 137, 248, 236, 162, 104, 55, 210, 207, 205, 139,
                 16, 92, 241, 228, 96, 167, 60, 7, 168, 155, 54, 29, 202, 64, 99,
             ],
-            1384047529,
-            486604799,
-            2442677017,
-            2,
-        );
+            timestamp: 1384047529,
+            n_bits: 486604799,
+            nonce: 2442677017,
+            txn_count: 2,
+            txns: vec![],
+        };
+
         let tx1 = Tx {
             id: [
                 163, 249, 79, 52, 224, 98, 202, 218, 50, 159, 58, 108, 242, 175, 222, 216, 208, 9,
@@ -1044,7 +990,7 @@ mod tests {
             lock_time: 0,
         };
 
-        block.add_txns(vec![tx1, tx2]);
+        block.txns = vec![tx1, tx2];
 
         let expected_merkle_root = [
             136, 122, 27, 116, 246, 94, 78, 137, 248, 236, 162, 104, 55, 210, 207, 205, 139, 16,
@@ -1052,6 +998,7 @@ mod tests {
         ];
         assert_eq!(block.get_merkle_tree_root().unwrap(), expected_merkle_root);
     }
+
     // #[test]
 
     // fn test_validate_proof_of_work(){

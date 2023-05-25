@@ -80,7 +80,7 @@ impl Tx {
 
 pub fn decode_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
     let old_offset = *offset;
-    let version = read_u32_le(&buffer, 0);
+    let version = read_u32_le(buffer, 0);
     *offset += 4;
 
     // If present, always 0x0001 , and indicates the presence of witness data
@@ -109,7 +109,7 @@ pub fn decode_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
         signature_script.extend(&buffer[*offset..*offset + script_length as usize]);
         *offset += script_length as usize;
 
-        let sequence = read_u32_le(&buffer, *offset);
+        let sequence = read_u32_le(buffer, *offset);
         *offset += 4;
 
         let tx_input = TxIn {
@@ -161,7 +161,7 @@ pub fn decode_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
         // Offset no se actualiza
     };
 
-    let lock_time = read_u32_le(&buffer, *offset);
+    let lock_time = read_u32_le(buffer, *offset);
     *offset += 4;
 
     let raw_hash = double_sha256(&buffer[old_offset..*offset]).to_byte_array();

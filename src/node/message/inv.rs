@@ -10,7 +10,7 @@ pub struct PayloadInv {
 
 pub fn decode_inv(buffer: &[u8]) -> Result<MessagePayload, String> {
     let count = read_varint(&mut &buffer[0..])?;
-    let offset = get_offset(&buffer[..]);
+    let offset = get_offset(buffer);
 
     let chunked = buffer[offset..].chunks(36);
     let mut invs = vec![];

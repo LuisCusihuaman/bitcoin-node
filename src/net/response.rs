@@ -15,7 +15,7 @@ impl Response {
         Response::new(body)
     }
     pub fn result_into(&self, stream: &mut TcpStream) {
-        let result = format!("{}", self.body);
+        let result = self.body.to_string();
         let _ = stream.write_all(result.as_bytes());
     }
 }

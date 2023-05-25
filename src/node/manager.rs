@@ -136,7 +136,7 @@ impl NodeManager<'_> {
                     MessagePayload::Verack => {
                         message_name = String::from("verack");
 
-                        self.node_network.handshake_complete(&peer_address);
+                        self.node_network.handshake_complete(peer_address);
                         if commands.contains(&"verack") {
                             matched_peer_messages.push(MessagePayload::Verack);
                         }
@@ -154,13 +154,13 @@ impl NodeManager<'_> {
                         message_name = String::from("headers");
 
                         // Primeros headers
-                        if self.get_blocks().len() == 0 {
+                        if self.get_blocks().is_empty() {
                             if commands.contains(&"headers") {
                                 matched_peer_messages
                                     .push(MessagePayload::BlockHeader(blocks.clone()));
                             }
                             self.blocks.extend(blocks.clone());
-                            Block::encode_blocks_to_file(&blocks, "block_headers.bin");
+                            Block::encode_blocks_to_file(blocks, "block_headers.bin");
                         }
 
                         // Continuidad de la blockchain
@@ -174,7 +174,7 @@ impl NodeManager<'_> {
                                                 .push(MessagePayload::BlockHeader(blocks.clone()));
                                         }
                                         self.blocks.extend(blocks.clone());
-                                        Block::encode_blocks_to_file(&blocks, "block_headers.bin");
+                                        Block::encode_blocks_to_file(blocks, "block_headers.bin");
                                     }
                                 }
                                 None => {}
@@ -269,7 +269,7 @@ impl NodeManager<'_> {
     }
 
     pub fn broadcast(&mut self, payload: &MessagePayload) {
-        if let Err(e) = self.node_network.send_to_all_peers(&payload) {
+        if let Err(e) = self.node_network.send_to_all_peers(payload) {
             self.logger
                 .log(format!("Error sending message to peer: {:?}", e));
         }
@@ -291,7 +291,7 @@ impl NodeManager<'_> {
     }
 
     fn initial_block_headers_download(&mut self) {
-        let mut last_block: [u8; 32] = if self.blocks.len() == 0 {
+        let mut last_block: [u8; 32] = if self.blocks.is_empty() {
             get_hash_block_genesis()
         } else {
             let last_block_found = self.blocks.last().unwrap();
@@ -304,7 +304,7 @@ impl NodeManager<'_> {
             let messages: Vec<MessagePayload> = self.send_get_headers_with_block_hash(&last_block);
 
             if let Some(block) = self.blocks.last() {
-                last_block = block.get_hash().clone();
+                last_block = block.get_hash();
             }
 
             is_finished = messages.is_empty();
@@ -314,7 +314,7 @@ impl NodeManager<'_> {
     fn send_get_headers_with_block_hash(&mut self, block_hash: &[u8; 32]) -> Vec<MessagePayload> {
         let stop_hash = [0u8; 32];
 
-        let mut hash_reversed: [u8; 32] = block_hash.clone();
+        let mut hash_reversed: [u8; 32] = *block_hash;
         hash_reversed.reverse();
 
         let payload_get_headers = PayloadGetHeaders::new(70015, 1, hash_reversed, stop_hash);

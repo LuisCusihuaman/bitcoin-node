@@ -1,10 +1,6 @@
-use std::hash;
-
 // Implementacion de merkle tree
 use crate::error::Error;
-use bitcoin_hashes::{sha256, Hash, HashEngine};
-
-use super::tx::Tx;
+use bitcoin_hashes::{sha256, Hash};
 
 pub struct MerkleTree {
     root: sha256::Hash,
@@ -29,16 +25,6 @@ impl MerkleTree {
         Ok(self.root)
     }
 
-    fn get_hashed_nodes(&self) -> Result<Vec<sha256::Hash>, Error> {
-        if self.hashed_leaves.is_empty() {
-            return Err(Error::MerkleTreeNotGenerated(String::from(
-                "No se ha generado el Merkle Tree",
-            )));
-        }
-
-        Ok(self.hashed_leaves.clone())
-    }
-
     fn add_hashes(&mut self, hashes: Vec<sha256::Hash>) {
         for h in hashes {
             self.hashed_leaves.push(h);
@@ -47,7 +33,7 @@ impl MerkleTree {
 
     // Generates the merkle root from the vector of leaves
     pub fn generate_merkle_tree(&mut self, data: Vec<&[u8]>) {
-        if data.len() == 0 {
+        if data.is_empty() {
             return;
         }
         if data.len() == 1 {
@@ -62,7 +48,7 @@ impl MerkleTree {
             hashed_leaves.push(hash);
         }
         if hashed_leaves.len() % 2 == 1 {
-            hashed_leaves.push(hashed_leaves.last().unwrap().clone());
+            hashed_leaves.push(*hashed_leaves.last().unwrap());
         }
         self.add_hashes(hashed_leaves.clone());
 
@@ -103,7 +89,7 @@ impl MerkleTree {
                     )))
                 }
             };
-            hashes.push(last.clone());
+            hashes.push(*last);
         }
 
         let mut parent_level = Vec::new();
@@ -137,7 +123,7 @@ impl MerkleTree {
 
     // Indica si la transaccion pertenece al merkle tree
     pub fn proof_of_inclusion(&self, tx: &[u8]) -> bool {
-        let tx_hash = sha256::Hash::from_slice(&tx).unwrap();
+        let tx_hash = sha256::Hash::from_slice(tx).unwrap();
         let mut proof = false;
 
         for h in &self.hashed_leaves {
@@ -165,7 +151,10 @@ mod tests {
 
         merkle_tree.generate_merkle_tree(data_as_ref);
 
-        assert_eq!(merkle_tree.get_hashed_nodes().unwrap().len(), 6);
+        assert_eq!(
+            get_hashed_nodes(merkle_tree.hashed_leaves).unwrap().len(),
+            6
+        );
     }
 
     #[test]
@@ -177,7 +166,10 @@ mod tests {
 
         merkle_tree.generate_merkle_tree(data_as_ref);
 
-        assert_eq!(merkle_tree.get_hashed_nodes().unwrap().len(), 4);
+        assert_eq!(
+            get_hashed_nodes(merkle_tree.hashed_leaves).unwrap().len(),
+            4
+        );
     }
 
     #[test]
@@ -381,4 +373,14 @@ mod tests {
 
     //     println!("Respuesta: {:?}", respuesta.to_string());
     // }
+
+    fn get_hashed_nodes(hashed_leaves: Vec<sha256::Hash>) -> Result<Vec<sha256::Hash>, Error> {
+        if hashed_leaves.is_empty() {
+            return Err(Error::MerkleTreeNotGenerated(String::from(
+                "No se ha generado el Merkle Tree",
+            )));
+        }
+
+        Ok(hashed_leaves.clone())
+    }
 }

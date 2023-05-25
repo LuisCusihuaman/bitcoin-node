@@ -1,7 +1,6 @@
 use crate::node::message::MessagePayload;
 use crate::utils::{
-    copy_bytes_to_array, get_offset, read_be, read_le, read_string, read_u16_be, read_u32_le,
-    read_u64_le, read_varint,
+    copy_bytes_to_array, read_string, read_u16_be, read_u32_le, read_u64_le, read_varint,
 };
 
 type CompactSizeUint = String;
@@ -65,40 +64,6 @@ impl PayloadVersion {
 }
 
 impl PayloadVersion {
-    pub fn new(
-        version: u32,
-        services: u64,
-        timestamp: u64,
-        addr_recv_services: u64,
-        addr_recv_ip_address: [u8; 16],
-        addr_recv_port: u16,
-        addr_trans_services: u64,
-        addr_trans_ip_address: [u8; 16],
-        addr_trans_port: u16,
-        nonce: u64,
-        user_agent_bytes: CompactSizeUint,
-        user_agent: String,
-        start_height: u32,
-        relay: u8,
-    ) -> Self {
-        Self {
-            version,
-            services,
-            timestamp,
-            addr_recv_services,
-            addr_recv_ip_address,
-            addr_recv_port,
-            addr_trans_services,
-            addr_trans_ip_address,
-            addr_trans_port,
-            nonce,
-            user_agent_bytes,
-            user_agent,
-            start_height,
-            relay,
-        }
-    }
-
     pub fn default_version() -> Self {
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -113,22 +78,22 @@ impl PayloadVersion {
         let addr_recv_port = 18333;
         let addr_trans_port = 18333;
 
-        Self::new(
-            70015, //Bitcoin Core 0.13.2 (Jan 2017)
-            0,     //Unnamed receiving node
+        Self {
+            version: 70015, //Bitcoin Core 0.13.2 (Jan 2017)
+            services: 0,    //Unnamed receiving node
             timestamp,
-            0, // Same format as the "services" field above.
-            addr_recv_ipv6_from_ipv4,
+            addr_recv_services: 0, // Same format as the "services" field above.
+            addr_recv_ip_address: addr_recv_ipv6_from_ipv4,
             addr_recv_port,
-            0, //Unnamed transmitting node
-            addr_trans_ipv6_from_ipv4,
+            addr_trans_services: 0, //Unnamed transmitting node
+            addr_trans_ip_address: addr_trans_ipv6_from_ipv4,
             addr_trans_port,
-            0,                // If the nonce is 0, the nonce field is ignored.
+            nonce: 0,         // If the nonce is 0, the nonce field is ignored.
             user_agent_bytes, // is a var int
             user_agent,
-            0,
-            0,
-        )
+            start_height: 0,
+            relay: 0,
+        }
     }
 }
 
@@ -152,7 +117,7 @@ pub fn decode_version(buffer: &[u8]) -> Result<MessagePayload, String> {
     let start_height = read_u32_le(buffer, payload_size - 5);
     let relay = buffer[payload_size - 1];
 
-    let message_payload = PayloadVersion::new(
+    let message_payload = PayloadVersion {
         version,
         services,
         timestamp,
@@ -160,13 +125,14 @@ pub fn decode_version(buffer: &[u8]) -> Result<MessagePayload, String> {
         addr_recv_ip_address,
         addr_recv_port,
         addr_trans_services,
-        addr_recv_ip_address,
+        addr_trans_ip_address: addr_recv_ip_address,
         addr_trans_port,
         nonce,
-        user_agent.len().to_string(),
+        user_agent_bytes: user_agent.len().to_string(),
         user_agent,
         start_height,
         relay,
-    );
+    };
+
     Ok(MessagePayload::Version(message_payload))
 }

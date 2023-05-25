@@ -1,11 +1,8 @@
 use crate::config::Config;
 use crate::logger::Logger;
 use crate::net::request::Request;
-use crate::net::response::Response;
 use crate::net::router::{Handler, Router};
 use crate::node::manager::NodeManager;
-use crate::node::message::version::PayloadVersion;
-use crate::node::message::MessagePayload;
 use std::net::{TcpListener, TcpStream};
 
 pub struct Server<'a> {

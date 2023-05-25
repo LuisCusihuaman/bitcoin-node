@@ -22,7 +22,7 @@ pub fn get_hash_block_genesis() -> [u8; 32] {
 }
 
 pub fn check_blockchain_integrity(blocks: Vec<Block>) -> bool {
-    if blocks.len() == 0 {
+    if blocks.is_empty() {
         return true;
     }
 
@@ -95,14 +95,14 @@ pub fn read_string(buffer: &[u8], offset: usize, length: usize) -> String {
 pub fn get_offset(buff: &[u8]) -> usize {
     let i: u8 = buff[0];
 
-    if i == 0xfdu8 as u8 {
-        2 + 1 as usize
-    } else if i == 0xfeu8 as u8 {
-        4 + 1 as usize
-    } else if i == 0xffu8 as u8 {
-        8 + 1 as usize
+    if i == 0xfdu8 {
+        3_usize
+    } else if i == 0xfeu8 {
+        5_usize
+    } else if i == 0xffu8 {
+        9_usize
     } else {
-        1 as usize
+        1_usize
     }
 }
 
@@ -187,6 +187,7 @@ pub fn date_to_timestamp(date_str: &str) -> Option<u32> {
 }
 pub fn little_endian_to_int(bytes: &[u8; 32]) -> u128 {
     let mut result: u128 = 0;
+
     for i in 0..16 {
         result |= u128::from(bytes[i]) << (8 * i);
     }

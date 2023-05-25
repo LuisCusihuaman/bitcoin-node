@@ -50,13 +50,15 @@ mod tests {
             download_blocks_since_date: "".to_string(),
         };
         let logger = Logger::new(&config).unwrap();
+
         logger.log("test message".to_owned());
+        let time_now = get_time();
 
         let mut file = File::open("test.log").unwrap();
         let mut contents = String::new();
         file.read_to_string(&mut contents).unwrap();
 
-        assert_eq!(contents, "test message\n");
+        assert_eq!(contents, format!("{} test message\n", time_now));
 
         // Remove the log file after the test
         let path = Path::new("test.log");

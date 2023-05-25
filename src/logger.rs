@@ -1,34 +1,34 @@
+use crate::config::Config;
+use crate::utils::get_time;
 use std::cell::RefCell;
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
 
-use crate::config::Config;
-
 pub struct Logger {
     file: RefCell<File>,
-    only_stdout: bool,
 }
 
 impl Logger {
     pub fn stdout() -> Self {
         Self {
             file: RefCell::new(File::create("/dev/null").unwrap()),
-            only_stdout: true,
         }
     }
     pub fn new(config: &Config) -> Result<Self, Box<dyn Error>> {
         let file = File::create(&config.log_file)?;
         Ok(Self {
             file: RefCell::new(file),
-            only_stdout: false,
         })
     }
 
     pub fn log(&self, msg: String) {
-        println!("{}", msg);
+        let time_now = get_time();
+        let message = format!("{} {}", time_now, msg);
+
+        println!("{}", message);
         let mut file = self.file.borrow_mut();
-        if let Err(err) = file.write_all(format!("{}\n", msg).as_bytes()) {
+        if let Err(err) = file.write_all(format!("{}\n", message).as_bytes()) {
             eprintln!("Failed to write to log file: {}", err);
         }
     }

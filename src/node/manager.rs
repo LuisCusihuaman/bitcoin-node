@@ -8,7 +8,6 @@ use crate::node::p2p_connection::P2PConnection;
 use crate::utils::*;
 use crate::{logger::Logger, node::message::get_headers::PayloadGetHeaders};
 use rand::seq::SliceRandom;
-
 use std::fs;
 use std::net::{IpAddr, ToSocketAddrs};
 
@@ -131,26 +130,28 @@ impl NodeManager<'_> {
             let mut matched_peer_messages = Vec::new();
 
             for message in messages {
+                let mut message_name = String::from("unknown message");
+
                 match message {
                     MessagePayload::Verack => {
-                        self.logger
-                            .log(format!("Received verack from {}", peer_address));
+                        message_name = String::from("verack");
+
                         self.node_network.handshake_complete(&peer_address);
                         if commands.contains(&"verack") {
                             matched_peer_messages.push(MessagePayload::Verack);
                         }
                     }
                     MessagePayload::Version(version) => {
+                        message_name = String::from("version");
+
                         self.send_to(peer_address.clone(), &MessagePayload::Verack);
-                        self.logger
-                            .log(format!("Received version from {}", peer_address));
+
                         if commands.contains(&"version") {
                             matched_peer_messages.push(MessagePayload::Version(version.clone()));
                         }
                     }
                     MessagePayload::BlockHeader(blocks) => {
-                        self.logger
-                            .log(format!("Received block headers from {}", peer_address));
+                        message_name = String::from("headers");
 
                         // Primeros headers
                         if self.get_blocks().len() == 0 {
@@ -181,8 +182,7 @@ impl NodeManager<'_> {
                         }
                     }
                     MessagePayload::Block(block) => {
-                        self.logger
-                            .log(format!("Received block from {}", peer_address));
+                        message_name = String::from("block");
 
                         if commands.contains(&"block") {
                             matched_peer_messages.push(MessagePayload::Block(block.clone()));
@@ -197,8 +197,7 @@ impl NodeManager<'_> {
                         }
                     }
                     MessagePayload::Inv(inv) => {
-                        self.logger
-                            .log(format!("Received inv from {}", peer_address));
+                        message_name = String::from("inv");
 
                         if commands.contains(&"inv") {
                             matched_peer_messages.push(MessagePayload::Inv(inv.clone()));
@@ -207,6 +206,8 @@ impl NodeManager<'_> {
 
                     _ => {}
                 }
+                self.logger
+                    .log(format!("Received {} from {}", message_name, peer_address));
             }
             matched_messages.push((peer_address.clone(), matched_peer_messages));
         }

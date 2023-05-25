@@ -1,8 +1,14 @@
 use crate::node::message::block::Block;
 use bitcoin_hashes::{sha256, Hash};
+use chrono::prelude::*;
 use chrono::NaiveDate;
 use std::io;
 use std::io::{Read, Write};
+
+pub fn get_time() -> String {
+    let local: DateTime<Local> = Local::now();
+    local.format("%H:%M:%S").to_string()
+}
 
 pub fn get_hash_block_genesis() -> [u8; 32] {
     let mut hash_block_genesis: [u8; 32] = [

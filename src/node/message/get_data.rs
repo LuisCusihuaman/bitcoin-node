@@ -1,4 +1,4 @@
-use crate::utils::write_varint_2;
+use crate::utils::get_le_varint;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PayloadGetData {
@@ -13,8 +13,7 @@ impl PayloadGetData {
 
     pub fn size(&self) -> u64 {
         let mut size = 0;
-        let count = write_varint_2(self.count);
-
+        let count = get_le_varint(self.count);
 
         size += count.len(); // TODO Variable size
         size += self.inventory.len(); // TODO Variable size
@@ -23,7 +22,7 @@ impl PayloadGetData {
     }
 
     pub fn encode(&self, buffer: &mut [u8]) {
-        let count = write_varint_2(self.count);
+        let count = get_le_varint(self.count);
         let count_size = count.len();
 
         buffer[0..count_size].copy_from_slice(&count);
@@ -37,21 +36,23 @@ mod tests {
 
     #[test]
     fn test_encode_get_data() {
-        let inventory = vec![0; 36];
+        let inventory = [
+            2, 0, 0, 0, 6, 18, 142, 135, 190, 139, 27, 77, 234, 71, 167, 36, 125, 85, 40, 210, 112,
+            44, 150, 130, 108, 122, 100, 132, 151, 231, 115, 184, 0, 0, 0, 0,
+        ]
+        .to_vec();
 
         let payload = PayloadGetData::new(500, inventory);
 
-        let mut buffer = [0u8; 36];
+        let mut buffer = [0u8; 39];
+
         payload.encode(&mut buffer);
 
         let payload_expected = [
-            0x01, // count,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, // inventory
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00,
+            253, 244, 1, 2, 0, 0, 0, 6, 18, 142, 135, 190, 139, 27, 77, 234, 71, 167, 36, 125, 85,
+            40, 210, 112, 44, 150, 130, 108, 122, 100, 132, 151, 231, 115, 184, 0, 0, 0, 0,
         ];
 
-        // assert_eq!(payload_expected, buffer);
+        assert_eq!(buffer, payload_expected);
     }
 }

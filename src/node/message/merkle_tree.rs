@@ -160,13 +160,7 @@ mod tests {
     fn test_create_merkle_tree_with_five_leaves() {
         let mut merkle_tree = MerkleTree::new();
 
-        let data = vec![
-            [0u8;32],
-            [1u8;32],
-            [2u8;32],
-            [3u8;32],
-            [4u8;32],
-        ];
+        let data = vec![[0u8; 32], [1u8; 32], [2u8; 32], [3u8; 32], [4u8; 32]];
         let data_as_ref = data.iter().map(|x| x.as_ref()).collect::<Vec<&[u8]>>();
 
         merkle_tree.generate_merkle_tree(data_as_ref);
@@ -178,14 +172,8 @@ mod tests {
     fn test_merkle_tree_with_four_leaves_has_four_nodes_in_total() {
         let mut merkle_tree = MerkleTree::new();
 
-        let data = vec![
-            [0u8;32],
-            [1u8;32],
-            [2u8;32],
-            [3u8;32],
-        ];
+        let data = vec![[0u8; 32], [1u8; 32], [2u8; 32], [3u8; 32]];
         let data_as_ref = data.iter().map(|x| x.as_ref()).collect::<Vec<&[u8]>>();
-
 
         merkle_tree.generate_merkle_tree(data_as_ref);
 

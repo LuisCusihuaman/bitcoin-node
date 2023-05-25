@@ -54,11 +54,9 @@ impl Block {
         }
     }
 
-
- // // generates the target to validate proof of work using this formula
+    // // generates the target to validate proof of work using this formula
     // // target = coefficient * 256**(exponent - 3)
     pub fn target(&self) -> u64 {
-
         let bits = self.n_bits.to_le_bytes();
         let exponent = bits[3] as u32;
         let coefficient = u32::from_le_bytes([bits[0], bits[1], bits[2], 0]);
@@ -66,57 +64,51 @@ impl Block {
         coefficient as u64 * 256u64.pow(exponent - 3)
     }
 
-
     // generates the target to validate proof of work
     // // target = coefficient * 256**(exponent - 3)
     // pub fn target(&self) -> u32 {
-        
+
     //     let bits = self.n_bits.to_le_bytes();
     //     let exponent = bits[3] as u32;
     //     let coefficient = read_le(&[bits[0], bits[1], bits[2]]) as u32;
 
-
     //     coefficient * 256u32.pow((exponent - 3) as u32)
     // }
-    
 
     /*
-        Otra opcion
+       Otra opcion
 
-        pub fn target(&self) -> [u8,32] {
+       pub fn target(&self) -> [u8,32] {
 
-            let bits = self.n_bits.to_le_bytes();
-            let exponent = (bits[3] >> 3) as usize;
-            let mantissa = u32::from_le_bytes([bits[0], bits[1], bits[2], 0]) >> exponent;
+           let bits = self.n_bits.to_le_bytes();
+           let exponent = (bits[3] >> 3) as usize;
+           let mantissa = u32::from_le_bytes([bits[0], bits[1], bits[2], 0]) >> exponent;
 
-            let mut target = [0u8; 32];
-            target[31] = (mantissa & 0xff) as u8;
-            target[30] = ((mantissa >> 8) & 0xff) as u8;
-            target[29] = ((mantissa >> 16) & 0xff) as u8;
-            target
+           let mut target = [0u8; 32];
+           target[31] = (mantissa & 0xff) as u8;
+           target[30] = ((mantissa >> 8) & 0xff) as u8;
+           target[29] = ((mantissa >> 16) & 0xff) as u8;
+           target
 
-            // coefficient * 256**(exponent - 3)
-        }
-    
-     */
+           // coefficient * 256**(exponent - 3)
+       }
 
-     pub fn validate_pow(&self) -> bool {
+    */
 
+    pub fn validate_pow(&self) -> bool {
         let _target = self.target() as u128;
 
         let target: u128 = 0x00000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
 
         println!("Target: {}\n", target);
 
-        // little_endian_to_int(sha(required_target)); 
+        // little_endian_to_int(sha(required_target));
         let sha = self.hash;
         let sha_num = little_endian_to_int(&sha);
         println!("sha_num: {}\n", sha_num);
 
         sha_num < target
     }
-
-
 
     fn add_txns(&mut self, txns: Vec<Tx>) {
         //TODO if (txns.len()!=self.txn_count as usize){

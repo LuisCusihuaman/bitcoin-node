@@ -1,25 +1,58 @@
+use crate::utils::get_le_varint;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PayloadGetData {
-    count: u8,
-    inventory: [u8; 36],
+    count: usize,
+    inventory: Vec<u8>,
 }
 
 impl PayloadGetData {
+    pub fn new(count: usize, inventory: Vec<u8>) -> Self {
+        Self { count, inventory }
+    }
+
     pub fn size(&self) -> u64 {
         let mut size = 0;
-        size += 1; // TODO Variable size
-        size += 36; // TODO Variable size
+        let count = get_le_varint(self.count);
 
-        size
+        size += count.len(); // TODO Variable size
+        size += self.inventory.len(); // TODO Variable size
+
+        size as u64
     }
 
     pub fn encode(&self, buffer: &mut [u8]) {
-        let count = 1u8.to_le_bytes();
-        buffer[0..1].copy_from_slice(&count);
-        buffer[1..].copy_from_slice(&self.inventory);
-    }
+        let count = get_le_varint(self.count);
+        let count_size = count.len();
 
-    pub fn new(count: u8, inventory: [u8; 36]) -> Self {
-        Self { count, inventory }
+        buffer[0..count_size].copy_from_slice(&count);
+        buffer[count_size..].copy_from_slice(&self.inventory);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_encode_get_data() {
+        let inventory = [
+            2, 0, 0, 0, 6, 18, 142, 135, 190, 139, 27, 77, 234, 71, 167, 36, 125, 85, 40, 210, 112,
+            44, 150, 130, 108, 122, 100, 132, 151, 231, 115, 184, 0, 0, 0, 0,
+        ]
+        .to_vec();
+
+        let payload = PayloadGetData::new(500, inventory);
+
+        let mut buffer = [0u8; 39];
+
+        payload.encode(&mut buffer);
+
+        let payload_expected = [
+            253, 244, 1, 2, 0, 0, 0, 6, 18, 142, 135, 190, 139, 27, 77, 234, 71, 167, 36, 125, 85,
+            40, 210, 112, 44, 150, 130, 108, 122, 100, 132, 151, 231, 115, 184, 0, 0, 0, 0,
+        ];
+
+        assert_eq!(buffer, payload_expected);
     }
 }

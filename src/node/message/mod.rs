@@ -1,12 +1,9 @@
-use crate::node::message::block::decode_block;
-use crate::node::message::block::Block;
+use crate::node::message::block::{decode_block, Block};
 use crate::node::message::get_blocks::PayloadGetBlocks;
 use crate::node::message::get_data::PayloadGetData;
-use crate::node::message::get_headers::decode_headers;
-use crate::node::message::get_headers::PayloadGetHeaders;
-use crate::node::message::inv::decode_inv;
-use crate::node::message::version::decode_version;
-use crate::node::message::version::PayloadVersion;
+use crate::node::message::get_headers::{decode_headers, PayloadGetHeaders};
+use crate::node::message::inv::{decode_inv, PayloadInv};
+use crate::node::message::version::{decode_version, PayloadVersion};
 
 use crate::utils::read_le;
 
@@ -26,7 +23,7 @@ pub enum MessagePayload {
     GetHeaders(PayloadGetHeaders),
     BlockHeader(Vec<Block>),
     GetBlocks(PayloadGetBlocks),
-    Inv(Vec<[u8; 36]>),
+    Inv(PayloadInv),
     GetData(PayloadGetData),
     Block(Block),
 }

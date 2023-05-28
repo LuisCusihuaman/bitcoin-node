@@ -1,7 +1,38 @@
+use crate::node::message::block::Block;
 use bitcoin_hashes::{sha256, Hash};
-use chrono::{NaiveDate, NaiveDateTime, Timelike};
+use chrono::NaiveDate;
 use std::io;
 use std::io::{Read, Write};
+
+pub fn get_hash_block_genesis() -> [u8; 32] {
+    let mut hash_block_genesis: [u8; 32] = [
+        0x00, 0x00, 0x00, 0x00, 0x09, 0x33, 0xea, 0x01, 0xad, 0x0e, 0xe9, 0x84, 0x20, 0x97, 0x79,
+        0xba, 0xae, 0xc3, 0xce, 0xd9, 0x0f, 0xa3, 0xf4, 0x08, 0x71, 0x95, 0x26, 0xf8, 0xd7, 0x7f,
+        0x49, 0x43,
+    ];
+    hash_block_genesis.reverse();
+
+    hash_block_genesis
+}
+
+pub fn check_blockchain_integrity(blocks: Vec<Block>) -> bool {
+    if blocks.len() == 0 {
+        return true;
+    }
+
+    let mut index = 1;
+    while index < blocks.len() {
+        let prev_block = &blocks[index - 1];
+        let actual_block = &blocks[index];
+
+        if actual_block.get_prev() != prev_block.get_hash() {
+            return false;
+        }
+
+        index += 1;
+    }
+    true
+}
 
 pub fn read_le(bytes: &[u8]) -> usize {
     let mut result: usize = 0;
@@ -67,6 +98,24 @@ pub fn get_offset(buff: &[u8]) -> usize {
     } else {
         1 as usize
     }
+}
+
+pub fn get_le_varint(value: usize) -> Vec<u8> {
+    let mut result = vec![];
+
+    if value < 0xfd {
+        result.push(value as u8);
+    } else if value <= 0xffff {
+        result.push(0xfd);
+        result.extend_from_slice(&value.to_le_bytes()[0..2]);
+    } else if value <= 0xffffffff {
+        result.push(0xfe);
+        result.extend_from_slice(&value.to_le_bytes()[0..4]);
+    } else {
+        result.push(0xff);
+        result.extend_from_slice(&value.to_le_bytes()[0..8]);
+    }
+    result
 }
 
 pub fn write_varint<W: Write>(writer: &mut W, value: usize) -> Result<(), io::Error> {

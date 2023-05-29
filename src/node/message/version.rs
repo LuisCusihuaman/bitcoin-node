@@ -1,9 +1,9 @@
 use crate::node::message::MessagePayload;
 use crate::utils::{
-    copy_bytes_to_array, read_string, read_u16_be, read_u32_le, read_u64_le, read_varint,
+    copy_bytes_to_array, get_le_varint, read_string, read_u16_be, read_u32_le, read_u64_le,
+    read_varint,
 };
-
-type CompactSizeUint = String;
+use std::mem;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PayloadVersion {
@@ -17,35 +17,42 @@ pub struct PayloadVersion {
     pub addr_trans_ip_address: [u8; 16],
     pub addr_trans_port: u16,
     pub nonce: u64,
-    pub user_agent_bytes: CompactSizeUint,
+    pub user_agent_bytes: usize,
     pub user_agent: String,
     pub start_height: u32,
     pub relay: u8,
 }
 
 impl PayloadVersion {
-    pub fn size(&self) -> u64 {
+    pub fn size(&self) -> usize {
         let mut size = 0;
-        size += 4; // version
-        size += 8; // services
-        size += 8; // timestamp
-        size += 8; // addr_recv_services
-        size += 16; // addr_recv_ip_address
-        size += 2; // addr_recv_port
-        size += 8; // addr_trans_services
-        size += 16; // addr_trans_ip_address
-        size += 2; // addr_trans_port
-        size += 8; // nonce
-        size += 1; // user_agent_bytes hardcoded
-        size += 0; // "" hardcoded
-        size += 4; // start_height
-        size += 1; // relay
+        let user_agent_bytes = get_le_varint(self.user_agent_bytes);
+
+        size += mem::size_of::<u32>(); // version
+        size += mem::size_of::<u64>(); // services
+        size += mem::size_of::<u64>(); // timestamp
+        size += mem::size_of::<u64>(); // addr_recv_services
+        size += self.addr_recv_ip_address.len(); // addr_recv_ip_address
+        size += mem::size_of::<u16>(); // addr_recv_port
+        size += mem::size_of::<u64>(); // addr_trans_services
+        size += self.addr_trans_ip_address.len(); // addr_trans_ip_address
+        size += mem::size_of::<u16>(); // addr_trans_port
+        size += mem::size_of::<u64>(); // nonce
+        size += mem::size_of::<u32>(); // start_height
+        size += mem::size_of::<u8>(); // relay
+
+        size += user_agent_bytes.len(); // user_agent_bytes variable size
+
+        if !user_agent_bytes.is_empty() {
+            size += self.user_agent.len();
+        }
+
         size
     }
 }
 
 impl PayloadVersion {
-    pub fn encode(&self, buffer: &mut [u8]) -> Result<(), String> {
+    pub fn encode(&self, buffer: &mut [u8]) {
         buffer[0..4].copy_from_slice(&self.version.to_le_bytes()); // 4 bytes
         buffer[4..12].copy_from_slice(&self.services.to_le_bytes()); // 8 bytes
         buffer[12..20].copy_from_slice(&self.timestamp.to_le_bytes()); // 8 bytes
@@ -59,7 +66,6 @@ impl PayloadVersion {
                                                                    //buffer[80..81].copy_from_slice(&version.user_agent_bytes.as_bytes()); // REVISAR VARIOS
         buffer[81..85].copy_from_slice(&self.start_height.to_le_bytes()); // 4 bytes
         buffer[85..86].copy_from_slice(&self.relay.to_le_bytes()); // 1 bytes
-        Ok(())
     }
 }
 
@@ -70,7 +76,7 @@ impl PayloadVersion {
             .unwrap()
             .as_secs();
         let user_agent = String::default();
-        let user_agent_bytes = user_agent.len().to_string();
+        let user_agent_bytes = user_agent.len();
         let addr_recv_ipv6_from_ipv4: [u8; 16] =
             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0, 0, 0, 0];
         let addr_trans_ipv6_from_ipv4: [u8; 16] =
@@ -128,7 +134,7 @@ pub fn decode_version(buffer: &[u8]) -> Result<MessagePayload, String> {
         addr_trans_ip_address: addr_recv_ip_address,
         addr_trans_port,
         nonce,
-        user_agent_bytes: user_agent.len().to_string(),
+        user_agent_bytes: user_agent.len(),
         user_agent,
         start_height,
         relay,

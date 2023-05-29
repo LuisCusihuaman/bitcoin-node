@@ -2,7 +2,6 @@ use crate::node::message::{Encoding, MessageHeader, MessagePayload};
 use crate::utils::double_sha256;
 use std::io::{Read, Write};
 use std::net::TcpStream;
-use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use std::vec;
@@ -41,9 +40,9 @@ impl P2PConnection {
         let command_name_bytes = payload.command_name()?.as_bytes();
         let mut command_name = [0; 12];
         command_name[..command_name_bytes.len()].copy_from_slice(command_name_bytes);
-        let payload_size = payload.size_of()? as usize;
+        let payload_size = payload.size_of();
         let header = MessageHeader::new(0x0b110907_u32, command_name, payload_size as u32);
-        let header_size = header.size_of()? as usize;
+        let header_size = header.size_of();
         let total_size = header_size + payload_size;
 
         let mut buffer_total = vec![0; total_size];
@@ -231,8 +230,8 @@ mod tests {
         let get_headers_message = MessagePayload::GetHeaders(PayloadGetHeaders::new(
             70015,
             1,
-            hash_block_genesis,
-            stop_hash,
+            hash_block_genesis.to_vec(),
+            stop_hash.to_vec(),
         ));
 
         // Send getheaders message

@@ -24,8 +24,8 @@ pub struct Block {
     pub timestamp: u32,
     pub n_bits: u32,
     pub nonce: u32,
-    pub txn_count: u8, // TODO Variable size
-    pub txns: Vec<Tx>, // TODO Variable size
+    pub txn_count: usize, // variable size
+    pub txns: Vec<Tx>, // variable size
 }
 
 impl Block {
@@ -151,7 +151,8 @@ impl Block {
         offset += 4;
 
         // txn_count
-        buffer[offset..offset + 1].copy_from_slice(&self.txn_count.to_le_bytes());
+        let tx_count = get_le_varint(self.txn_count);
+        buffer[offset..offset + tx_count.len()].copy_from_slice(&tx_count);
 
         // Encode txns, for complete initial download is zero.
         // buffer[offset..offset + 1].copy_from_slice(&[0]);
@@ -220,7 +221,7 @@ pub fn decode_block(buffer: &[u8]) -> Result<MessagePayload, String> {
     let mut block = decode_internal_block(buffer).unwrap();
     let mut transactions = Vec::new();
 
-    let tnx_count = read_varint(&mut &buffer[80..]).unwrap() as u8;
+    let tnx_count = read_varint(&mut &buffer[80..]).unwrap();
     let mut offset = 80 + get_offset(&buffer[80..]);
 
     for _ in 0..tnx_count {

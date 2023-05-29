@@ -3,39 +3,51 @@ use super::MessagePayload;
 
 use crate::utils::*;
 use bitcoin_hashes::Hash;
-use std::vec;
+use std::{mem, vec};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PayloadGetHeaders {
     version: u32,
-    hash_count: u8,                // TODO Variable size
-    block_header_hashes: [u8; 32], // TODO Variable size
-    stop_hash: [u8; 32],
+    hash_count: usize,            // variable size
+    block_header_hashes: Vec<u8>, // variable size
+    stop_hash: Vec<u8>,
 }
 
 impl PayloadGetHeaders {
-    pub fn size(&self) -> u64 {
+    pub fn size(&self) -> usize {
         let mut size = 0;
-        size += 4; // version
-        size += 1; // TODO Variable size
-        size += 32; // TODO Variable size
-        size += 32; // stop_hash
+
+        let hash_count = get_le_varint(self.hash_count);
+
+        size += mem::size_of::<u32>(); // version
+        size += hash_count.len(); // variable size
+        size += self.block_header_hashes.len(); // variable size
+        size += self.stop_hash.len(); // stop_hash
 
         size
     }
 
     pub fn encode(&self, buffer: &mut [u8]) {
-        buffer[0..4].copy_from_slice(&self.version.to_le_bytes()); // 4 bytes
-        buffer[4..5].copy_from_slice(&self.hash_count.to_le_bytes()); // TODO Variable size
-        buffer[5..37].copy_from_slice(&self.block_header_hashes); // 8 bytes
-        buffer[37..].copy_from_slice(&self.stop_hash); // 8 bytes
+        let mut offset = 0;
+        let hash_count = get_le_varint(self.hash_count);
+
+        buffer[offset..4].copy_from_slice(&self.version.to_le_bytes()); // 4 bytes
+        offset += 4;
+
+        buffer[offset..offset + hash_count.len()].copy_from_slice(&hash_count); // variable size
+        offset += hash_count.len();
+
+        buffer[offset..37].copy_from_slice(&self.block_header_hashes); // variable size
+        offset += self.block_header_hashes.len();
+
+        buffer[offset..].copy_from_slice(&self.stop_hash); // 8 bytes
     }
 
     pub fn new(
         version: u32,
-        hash_count: u8,
-        block_header_hashes: [u8; 32],
-        stop_hash: [u8; 32],
+        hash_count: usize,
+        block_header_hashes: Vec<u8>,
+        stop_hash: Vec<u8>,
     ) -> Self {
         Self {
             version,
@@ -89,7 +101,7 @@ pub fn decode_header(buffer: &[u8]) -> Option<Block> {
     let n_bits = read_le(&buffer[72..76]) as u32;
     let nonce = read_le(&buffer[76..80]) as u32;
 
-    let txn_count = read_varint(&mut &buffer[80..]).unwrap() as u8;
+    let txn_count = read_varint(&mut &buffer[80..]).unwrap();
 
     Some(Block {
         version,

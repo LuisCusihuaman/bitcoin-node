@@ -1,6 +1,6 @@
 use bitcoin_hashes::Hash;
 
-use crate::utils::write_varint;
+use crate::utils::get_le_varint;
 
 use crate::utils::*;
 
@@ -42,20 +42,28 @@ impl Tx {
             encoded.extend(self.flag.to_le_bytes());
         }
 
-        write_varint(&mut encoded, self.tx_in_count as usize).unwrap();
+        let tx_in_count = get_le_varint(self.tx_in_count);
+        encoded.extend(tx_in_count);
 
         for tx_in in &self.tx_in {
             encoded.extend(tx_in.previous_output);
-            write_varint(&mut encoded, tx_in.script_length as usize).unwrap();
+
+            let script_length = get_le_varint(tx_in.script_length);
+            encoded.extend(script_length);
+
             encoded.extend(tx_in.signature_script.clone());
             encoded.extend(tx_in.sequence.to_le_bytes());
         }
 
-        write_varint(&mut encoded, self.tx_out_count as usize).unwrap();
+        let tx_out_count = get_le_varint(self.tx_out_count);
+        encoded.extend(tx_out_count);
 
         for tx_out in &self.tx_out {
             encoded.extend(tx_out.value.to_le_bytes());
-            write_varint(&mut encoded, tx_out.pk_script_length as usize).unwrap();
+
+            let pk_script_length = get_le_varint(tx_out.pk_script_length);
+            encoded.extend(pk_script_length);
+
             encoded.extend(tx_out.pk_script.clone());
         }
 

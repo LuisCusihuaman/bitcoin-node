@@ -124,21 +124,6 @@ pub fn get_le_varint(value: usize) -> Vec<u8> {
     result
 }
 
-pub fn write_varint<W: Write>(writer: &mut W, value: usize) -> Result<(), io::Error> {
-    if value < 0xfd {
-        writer.write_all(&[value as u8])
-    } else if value <= 0xffff {
-        writer.write_all(&[0xfd])?;
-        writer.write_all(&value.to_le_bytes()[0..2])
-    } else if value <= 0xffffffff {
-        writer.write_all(&[0xfe])?;
-        writer.write_all(&value.to_le_bytes()[0..4])
-    } else {
-        writer.write_all(&[0xff])?;
-        writer.write_all(&value.to_le_bytes()[0..8])
-    }
-}
-
 pub fn read_varint(buff: &[u8]) -> usize {
     match buff[0] {
         0xfd => u16::from_le_bytes([buff[1], buff[2]]) as usize,
@@ -213,5 +198,23 @@ mod tests {
         // Test case 4: Eight-byte integer
         let input4 = [0xff, 0xef, 0xcd, 0xab, 0x90, 0x78, 0x56, 0x34, 0x12];
         assert_eq!(read_varint(&input4), 0x1234567890abcdef);
+    }
+
+    #[test]
+    fn test_get_le_varint() {
+        // Test case 1: integer is single-byte varint
+        assert_eq!(get_le_varint(1), vec![1]);
+
+        // Test case 2: integer is two-byte varint
+        assert_eq!(get_le_varint(500), vec![253, 244, 1]);
+
+        // Test case 3: integer is four-byte varint
+        assert_eq!(get_le_varint(100000), vec![254, 160, 134, 1, 0]);
+
+        // Test case 4: integer is eight-byte varint
+        assert_eq!(
+            get_le_varint(10000000000),
+            vec![255, 0, 228, 11, 84, 2, 0, 0, 0]
+        );
     }
 }

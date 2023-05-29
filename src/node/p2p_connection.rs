@@ -1,8 +1,8 @@
-use crate::node::message::get_headers::PayloadGetHeaders;
 use crate::node::message::{Encoding, MessageHeader, MessagePayload};
 use crate::utils::double_sha256;
 use std::io::{Read, Write};
 use std::net::TcpStream;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use std::vec;
@@ -13,17 +13,27 @@ pub struct P2PConnection {
     tcp_stream: TcpStream,
 }
 
+impl Clone for P2PConnection {
+    fn clone(&self) -> Self {
+        P2PConnection {
+            handshaked: self.handshaked,
+            peer_address: self.peer_address.clone(),
+            tcp_stream: self.tcp_stream.try_clone().unwrap(),
+        }
+    }
+}
+
 impl P2PConnection {
-    pub fn connect(addr: &String) -> Result<Self, String> {
+    pub fn connect(addr: &str) -> Result<Self, String> {
         // TODO: save the peers that not pass the timeout
         let tcp_stream = TcpStream::connect_timeout(&addr.parse().unwrap(), Duration::from_secs(5))
             .map_err(|e| e.to_string())?;
 
-        tcp_stream.set_nonblocking(true);
+        tcp_stream.set_nonblocking(true).unwrap();
 
         Ok(Self {
-            handshaked: false,
-            peer_address: addr.clone(),
+            handshaked: true,
+            peer_address: addr.to_owned(),
             tcp_stream,
         })
     }
@@ -32,9 +42,9 @@ impl P2PConnection {
         let mut command_name = [0; 12];
         command_name[..command_name_bytes.len()].copy_from_slice(command_name_bytes);
         let payload_size = payload.size_of()? as usize;
-        let header = MessageHeader::new(0x0b110907 as u32, command_name, payload_size as u32);
+        let header = MessageHeader::new(0x0b110907_u32, command_name, payload_size as u32);
         let header_size = header.size_of()? as usize;
-        let total_size = header_size + payload_size as usize;
+        let total_size = header_size + payload_size;
 
         let mut buffer_total = vec![0; total_size];
         header.encode(&mut buffer_total[..header_size])?;
@@ -49,6 +59,11 @@ impl P2PConnection {
         buffer_total[24..].copy_from_slice(&buffer_payload[..]);
 
         thread::sleep(Duration::from_millis(350)); // Strategy to not overload server limit rate
+        println!(
+            "Sending message: {:?} for peer: {}",
+            payload.command_name()?,
+            self.peer_address.as_str()
+        );
         self.tcp_stream
             .write(&buffer_total[..])
             .map_err(|e| e.to_string())?;
@@ -79,12 +94,13 @@ impl P2PConnection {
                 }
                 Err(err) => {
                     eprintln!("Error reading from TCP stream: {}", err);
+                    //self.handshaked = false;
                     break;
                 }
             }
         }
 
-        let messages = parse_messages_from(&mut received_bytes);
+        let messages: Vec<MessagePayload> = parse_messages_from(&mut received_bytes);
         (self.peer_address.clone(), messages)
     }
 
@@ -116,7 +132,7 @@ fn parse_messages_from(buf: &mut Vec<u8>) -> Vec<MessagePayload> {
         let mut payload_size = header.payload_size as usize;
 
         payload_size = if buf.len() < (payload_size + 24) {
-            (buf.len() - 24 - cursor) as usize
+            buf.len() - 24 - cursor
         } else {
             payload_size
         };
@@ -139,12 +155,13 @@ fn parse_messages_from(buf: &mut Vec<u8>) -> Vec<MessagePayload> {
 }
 
 fn decode_message<T: Encoding<T>>(cmd: &String, data: &[u8]) -> Result<T, String> {
-    T::decode(cmd, &data[..]).map(|t| t)
+    T::decode(cmd, data)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::node::message::get_headers::PayloadGetHeaders;
     use crate::node::message::version::PayloadVersion;
     use crate::utils::MockTcpStream;
     use std::thread;

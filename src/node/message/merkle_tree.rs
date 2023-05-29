@@ -1,10 +1,6 @@
-use std::hash;
-
 // Implementacion de merkle tree
 use crate::error::Error;
-use bitcoin_hashes::{sha256, Hash, HashEngine};
-
-use super::tx::Tx;
+use bitcoin_hashes::{sha256, Hash};
 
 pub struct MerkleTree {
     root: sha256::Hash,
@@ -29,16 +25,6 @@ impl MerkleTree {
         Ok(self.root)
     }
 
-    fn get_hashed_nodes(&self) -> Result<Vec<sha256::Hash>, Error> {
-        if self.hashed_leaves.is_empty() {
-            return Err(Error::MerkleTreeNotGenerated(String::from(
-                "No se ha generado el Merkle Tree",
-            )));
-        }
-
-        Ok(self.hashed_leaves.clone())
-    }
-
     fn add_hashes(&mut self, hashes: Vec<sha256::Hash>) {
         for h in hashes {
             self.hashed_leaves.push(h);
@@ -47,7 +33,7 @@ impl MerkleTree {
 
     // Generates the merkle root from the vector of leaves
     pub fn generate_merkle_tree(&mut self, data: Vec<&[u8]>) {
-        if data.len() == 0 {
+        if data.is_empty() {
             return;
         }
         if data.len() == 1 {
@@ -62,7 +48,7 @@ impl MerkleTree {
             hashed_leaves.push(hash);
         }
         if hashed_leaves.len() % 2 == 1 {
-            hashed_leaves.push(hashed_leaves.last().unwrap().clone());
+            hashed_leaves.push(*hashed_leaves.last().unwrap());
         }
         self.add_hashes(hashed_leaves.clone());
 
@@ -103,7 +89,7 @@ impl MerkleTree {
                     )))
                 }
             };
-            hashes.push(last.clone());
+            hashes.push(*last);
         }
 
         let mut parent_level = Vec::new();
@@ -137,7 +123,7 @@ impl MerkleTree {
 
     // Indica si la transaccion pertenece al merkle tree
     pub fn proof_of_inclusion(&self, tx: &[u8]) -> bool {
-        let tx_hash = sha256::Hash::from_slice(&tx).unwrap();
+        let tx_hash = sha256::Hash::from_slice(tx).unwrap();
         let mut proof = false;
 
         for h in &self.hashed_leaves {
@@ -155,77 +141,59 @@ impl MerkleTree {
 mod tests {
     use super::*;
 
-    // #[test]
-    // #[should_panic]
-    // fn test_create_merkle_tree_with_empty_root() {
-    //     let merkle_tree = MerkleTree::new();
-    //     let expected = "";
+    // Relleno las hojas hasta que tengan multiplo de 2
+    #[test]
+    fn test_create_merkle_tree_with_five_leaves() {
+        let mut merkle_tree = MerkleTree::new();
 
-    //     merkle_tree.get_root().unwrap();
-    // }
+        let data = vec![[0u8; 32], [1u8; 32], [2u8; 32], [3u8; 32], [4u8; 32]];
+        let data_as_ref = data.iter().map(|x| x.as_ref()).collect::<Vec<&[u8]>>();
 
-    // #[test]
-    // #[should_panic]
-    // fn test_create_merkle_tree_with_empty_leaves() {
-    //     let merkle_tree = MerkleTree::new();
+        merkle_tree.generate_merkle_tree(data_as_ref);
 
-    //     merkle_tree.get_hashed_nodes().unwrap();
-    // }
+        assert_eq!(
+            get_hashed_nodes(merkle_tree.hashed_leaves).unwrap().len(),
+            6
+        );
+    }
 
-    // // Relleno las hojas hasta que tengan multiplo de 2
-    // #[test]
-    // fn test_create_merkle_tree_with_five_leaves() {
-    //     let mut merkle_tree = MerkleTree::new();
+    #[test]
+    fn test_merkle_tree_with_four_leaves_has_four_nodes_in_total() {
+        let mut merkle_tree = MerkleTree::new();
 
-    //     let data = vec![
-    //         "1".as_bytes(),
-    //         "2".as_bytes(),
-    //         "3".as_bytes(),
-    //         "4".as_bytes(),
-    //         "5".as_bytes(),
-    //     ];
+        let data = vec![[0u8; 32], [1u8; 32], [2u8; 32], [3u8; 32]];
+        let data_as_ref = data.iter().map(|x| x.as_ref()).collect::<Vec<&[u8]>>();
 
-    //     merkle_tree.generate_merkle_tree(data);
+        merkle_tree.generate_merkle_tree(data_as_ref);
 
-    //     assert_eq!(merkle_tree.get_hashed_nodes().unwrap().len(), 6);
-    // }
+        assert_eq!(
+            get_hashed_nodes(merkle_tree.hashed_leaves).unwrap().len(),
+            4
+        );
+    }
 
-    // #[test]
-    // fn test_merkle_tree_with_four_leaves_has_seven_nodes_in_total() {
-    //     let mut merkle_tree = MerkleTree::new();
+    #[test]
+    fn test_generates_hash_number_correctly() {
+        let hash = MerkleTree::new().hash256("1".as_bytes());
 
-    //     let data = vec![
-    //         "1".as_bytes(),
-    //         "2".as_bytes(),
-    //         "3".as_bytes(),
-    //         "5".as_bytes(),
-    //     ];
-
-    //     merkle_tree.generate_merkle_tree(data);
-
-    //     assert_eq!(merkle_tree.get_hashed_nodes().unwrap().len(), 4);
-    // }
-
-    // #[test]
-    // fn test_generates_hash_number_correctly() {
-    //     let hash = MerkleTree::new().hash256("1".as_bytes());
-
-    //     assert!(hash.to_string().is_empty() == false);
-    // }
+        assert!(hash.to_string().is_empty() == false);
+    }
 
     // #[test]
     // fn test_generates_merkle_node_parent_correctly() {
     //     let merkle_tree = MerkleTree::new();
 
-    //     let left_hash = merkle_tree.hash256("1".as_bytes());
-    //     let right_hash = merkle_tree.hash256("2".as_bytes());
+    //     let left = &vec![0u8;32];
+    //     let right = &vec![1u8;32];
 
     //     // concatenate right and left hashes
-    //     let owned_string = format!("{}{}", left_hash.to_string(), right_hash.to_string());
+    //     let mut concat_left_right = Vec::new();
+    //     concat_left_right.extend_from_slice(&left);
+    //     concat_left_right.extend_from_slice(&right);
 
-    //     let expected_hash = merkle_tree.hash256(&owned_string.as_bytes());
+    //     let expected_hash = merkle_tree.hash256(&concat_left_right);
 
-    //     let parent = merkle_tree.merkle_parent(&left_hash.to_string(), &right_hash.to_string());
+    //     let parent = merkle_tree.merkle_parent(&sha256::Hash::from_slice(left).unwrap(), &&sha256::Hash::from_slice(right).unwrap());
 
     //     assert_eq!(parent, expected_hash);
     // }
@@ -405,4 +373,14 @@ mod tests {
 
     //     println!("Respuesta: {:?}", respuesta.to_string());
     // }
+
+    fn get_hashed_nodes(hashed_leaves: Vec<sha256::Hash>) -> Result<Vec<sha256::Hash>, Error> {
+        if hashed_leaves.is_empty() {
+            return Err(Error::MerkleTreeNotGenerated(String::from(
+                "No se ha generado el Merkle Tree",
+            )));
+        }
+
+        Ok(hashed_leaves.clone())
+    }
 }

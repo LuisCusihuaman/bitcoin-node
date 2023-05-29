@@ -1,7 +1,44 @@
+use crate::node::message::block::Block;
 use bitcoin_hashes::{sha256, Hash};
-use chrono::{NaiveDate, NaiveDateTime, Timelike};
+use chrono::prelude::*;
+use chrono::NaiveDate;
 use std::io;
 use std::io::{Read, Write};
+
+pub fn get_time() -> String {
+    let local: DateTime<Local> = Local::now();
+    local.format("%H:%M:%S").to_string()
+}
+
+pub fn get_hash_block_genesis() -> [u8; 32] {
+    let mut hash_block_genesis: [u8; 32] = [
+        0x00, 0x00, 0x00, 0x00, 0x09, 0x33, 0xea, 0x01, 0xad, 0x0e, 0xe9, 0x84, 0x20, 0x97, 0x79,
+        0xba, 0xae, 0xc3, 0xce, 0xd9, 0x0f, 0xa3, 0xf4, 0x08, 0x71, 0x95, 0x26, 0xf8, 0xd7, 0x7f,
+        0x49, 0x43,
+    ];
+    hash_block_genesis.reverse();
+
+    hash_block_genesis
+}
+
+pub fn check_blockchain_integrity(blocks: Vec<Block>) -> bool {
+    if blocks.is_empty() {
+        return true;
+    }
+
+    let mut index = 1;
+    while index < blocks.len() {
+        let prev_block = &blocks[index - 1];
+        let actual_block = &blocks[index];
+
+        if actual_block.get_prev() != prev_block.get_hash() {
+            return false;
+        }
+
+        index += 1;
+    }
+    true
+}
 
 pub fn read_le(bytes: &[u8]) -> usize {
     let mut result: usize = 0;
@@ -58,15 +95,33 @@ pub fn read_string(buffer: &[u8], offset: usize, length: usize) -> String {
 pub fn get_offset(buff: &[u8]) -> usize {
     let i: u8 = buff[0];
 
-    if i == 0xfdu8 as u8 {
-        2 + 1 as usize
-    } else if i == 0xfeu8 as u8 {
-        4 + 1 as usize
-    } else if i == 0xffu8 as u8 {
-        8 + 1 as usize
+    if i == 0xfdu8 {
+        3_usize
+    } else if i == 0xfeu8 {
+        5_usize
+    } else if i == 0xffu8 {
+        9_usize
     } else {
-        1 as usize
+        1_usize
     }
+}
+
+pub fn get_le_varint(value: usize) -> Vec<u8> {
+    let mut result = vec![];
+
+    if value < 0xfd {
+        result.push(value as u8);
+    } else if value <= 0xffff {
+        result.push(0xfd);
+        result.extend_from_slice(&value.to_le_bytes()[0..2]);
+    } else if value <= 0xffffffff {
+        result.push(0xfe);
+        result.extend_from_slice(&value.to_le_bytes()[0..4]);
+    } else {
+        result.push(0xff);
+        result.extend_from_slice(&value.to_le_bytes()[0..8]);
+    }
+    result
 }
 
 pub fn write_varint<W: Write>(writer: &mut W, value: usize) -> Result<(), io::Error> {
@@ -129,6 +184,14 @@ pub fn date_to_timestamp(date_str: &str) -> Option<u32> {
         }
     }
     None
+}
+pub fn little_endian_to_int(bytes: &[u8; 32]) -> u128 {
+    let mut result: u128 = 0;
+
+    for i in 0..16 {
+        result |= u128::from(bytes[i]) << (8 * i);
+    }
+    result
 }
 
 /// MockTcpStream es una mock que implementa los traits Read y Write, los mismos que implementa el TcpStream

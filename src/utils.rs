@@ -139,41 +139,15 @@ pub fn write_varint<W: Write>(writer: &mut W, value: usize) -> Result<(), io::Er
     }
 }
 
-pub fn read_varint<R: Read>(reader: &mut R) -> Result<usize, String> {
-    let mut buffer = [0u8; 8];
-    reader
-        .read_exact(&mut buffer[0..1])
-        .map_err(|err| format!("Failed to read varint: {}", err))?;
-
-    let value = match buffer[0] {
-        0xfd => {
-            reader
-                .read(&mut buffer[0..2])
-                .map_err(|err| format!("Failed to read varint: {}", err))?;
-
-            u64::from_le_bytes([buffer[0], buffer[1], 0, 0, 0, 0, 0, 0])
-        }
-        0xfe => {
-            reader
-                .read(&mut buffer[0..4])
-                .map_err(|err| format!("Failed to read varint: {}", err))?;
-
-            u64::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3], 0, 0, 0, 0])
-        }
-        0xff => {
-            reader
-                .read(&mut buffer[0..8])
-                .map_err(|err| format!("Failed to read varint: {}", err))?;
-
-            u64::from_le_bytes([
-                buffer[0], buffer[1], buffer[2], buffer[3], buffer[4], buffer[5], buffer[6],
-                buffer[7],
-            ])
-        }
-        _ => u64::from(buffer[0]),
-    };
-
-    Ok(value as usize)
+pub fn read_varint(buff: &[u8]) -> usize {
+    match buff[0] {
+        0xfd => u16::from_le_bytes([buff[1], buff[2]]) as usize,
+        0xfe => u32::from_le_bytes([buff[1], buff[2], buff[3], buff[4]]) as usize,
+        0xff => u64::from_le_bytes([
+            buff[1], buff[2], buff[3], buff[4], buff[5], buff[6], buff[7], buff[8],
+        ]) as usize,
+        _ => buff[0] as usize,
+    }
 }
 
 pub fn date_to_timestamp(date_str: &str) -> Option<u32> {
@@ -221,28 +195,23 @@ impl Write for MockTcpStream {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Cursor;
 
     #[test]
     fn test_read_varint() {
-        // Test case 1: Single-byte integer (0x7f)
-        let input1 = &[0x7f];
-        let mut cursor1 = Cursor::new(input1);
-        assert_eq!(read_varint(&mut cursor1).unwrap(), 0x7f);
+        // Test case 1: Single-byte integer
+        let input1 = [0x7f];
+        assert_eq!(read_varint(&input1), 0x7f);
 
-        // Test case 2: Two-byte integer (0xfd0123)
-        let input2 = &[0xfd, 0x23, 0x01];
-        let mut cursor2 = Cursor::new(input2);
-        assert_eq!(read_varint(&mut cursor2).unwrap(), 0x0123);
+        // Test case 2: Two-byte integer
+        let input2 = [0xfd, 0x23, 0x01];
+        assert_eq!(read_varint(&input2), 0x0123);
 
-        // Test case 3: Four-byte integer (0xfeabcdef)
-        let input3 = &[0xfe, 0xef, 0xcd, 0xab];
-        let mut cursor3 = Cursor::new(input3);
-        assert_eq!(read_varint(&mut cursor3).unwrap(), 0xabcdef);
+        // Test case 3: Four-byte integer
+        let input3 = [0xfe, 0xef, 0xef, 0xcd, 0xab];
+        assert_eq!(read_varint(&input3), 0xabcdefef);
 
-        // Test case 4: Eight-byte integer (0xff1234567890abcdef)
-        let input4 = &[0xff, 0xef, 0xcd, 0xab, 0x90, 0x78, 0x56, 0x34, 0x12];
-        let mut cursor4 = Cursor::new(input4);
-        assert_eq!(read_varint(&mut cursor4).unwrap(), 0x1234567890abcdef);
+        // Test case 4: Eight-byte integer
+        let input4 = [0xff, 0xef, 0xcd, 0xab, 0x90, 0x78, 0x56, 0x34, 0x12];
+        assert_eq!(read_varint(&input4), 0x1234567890abcdef);
     }
 }

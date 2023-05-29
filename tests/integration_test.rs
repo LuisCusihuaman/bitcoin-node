@@ -8,7 +8,7 @@ use app::node::manager::NodeManager;
 use std::{
     io::{BufRead, BufReader, Write},
     net::TcpStream,
-    thread::{self, JoinHandle},
+    thread::{self},
     time::Duration,
 };
 

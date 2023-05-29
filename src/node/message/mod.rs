@@ -142,7 +142,6 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::Inv(_) => "inv",
             MessagePayload::GetData(_) => "getdata",
             MessagePayload::Block(_) => "block",
-            _ => "unknown command name",
         }
     }
 

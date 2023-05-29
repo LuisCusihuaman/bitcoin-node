@@ -59,7 +59,7 @@ impl PayloadGetHeaders {
 }
 
 pub fn decode_headers(buffer: &[u8]) -> Result<MessagePayload, String> {
-    let _count = read_varint(&mut &buffer[0..])?;
+    let _count = read_varint(&mut &buffer[0..]);
     let offset = get_offset(buffer);
 
     let chunked = buffer[offset..].chunks(81);
@@ -101,7 +101,7 @@ pub fn decode_header(buffer: &[u8]) -> Option<Block> {
     let n_bits = read_le(&buffer[72..76]) as u32;
     let nonce = read_le(&buffer[76..80]) as u32;
 
-    let txn_count = read_varint(&mut &buffer[80..]).unwrap();
+    let txn_count = read_varint(&mut &buffer[80..]);
 
     Some(Block {
         version,

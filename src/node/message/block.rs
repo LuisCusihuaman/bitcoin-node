@@ -99,8 +99,19 @@ impl Block {
         merkle_tree
     }
 
+    fn validate_merkle_root(&self) -> bool {
+        let merkle_tree = self.init_merkle_tree();
+
+        let hash_root = merkle_tree.get_root().unwrap();
+        let mut hash_root_array = [0u8; 32];
+        hash_root_array.copy_from_slice(&hash_root[..]);
+        hash_root_array.reverse();
+
+        hash_root_array == self.merkle_root_hash
+    }
+
     pub fn is_valid(&self)-> bool {
-        self.validate_pow()
+        self.validate_pow() && self.validate_merkle_root()
     }
 
     pub fn get_merkle_tree_root(&self) -> Result<[u8; 32], Error> {
@@ -1000,7 +1011,7 @@ mod tests {
             136, 122, 27, 116, 246, 94, 78, 137, 248, 236, 162, 104, 55, 210, 207, 205, 139, 16,
             92, 241, 228, 96, 167, 60, 7, 168, 155, 54, 29, 202, 64, 99,
         ];
-        assert!(block.is_valid());
+        assert!( usblock.is_valid());
     }
 
     // #[test]

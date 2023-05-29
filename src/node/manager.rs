@@ -10,28 +10,28 @@ use crate::{logger::Logger, node::message::get_headers::PayloadGetHeaders};
 use rand::seq::SliceRandom;
 use std::fs;
 use std::net::{IpAddr, ToSocketAddrs};
+use std::thread;
 
-pub struct NodeNetwork<'a> {
+pub struct NodeNetwork {
     pub peer_connections: Vec<P2PConnection>,
-    logger: &'a Logger,
 }
 
-impl NodeNetwork<'_> {
+impl NodeNetwork {
     pub fn connection_count(&self) -> usize {
         self.peer_connections
             .iter()
             .filter(|connection| connection.handshaked)
             .count()
     }
-    pub fn new(logger: &Logger) -> NodeNetwork {
+    pub fn new() -> NodeNetwork {
         NodeNetwork {
             peer_connections: vec![],
-            logger,
         }
     }
     pub fn handshake_complete(&mut self, peer_address: &String) {
-        self.logger
-            .log(format!("Handshake complete with peer: {}", peer_address));
+        //self.logger
+        //    .log(format!("Handshake complete with peer: {}", peer_address));
+        println!("Handshake complete with peer: {}", peer_address);
         // added handshaked attribute of P2PConnection turned into true, filter first by peer_address
         if let Some(peer_connection) = self
             .peer_connections
@@ -41,17 +41,51 @@ impl NodeNetwork<'_> {
             peer_connection.handshaked();
         }
     }
-    pub fn send_to_all_peers(&mut self, payload: &MessagePayload) -> Result<(), String> {
-        for connection in &mut self.peer_connections {
+    pub fn send_messages(&self, payloads: Vec<&MessagePayload>) {
+        let mut threads = Vec::new();
+
+        // TODO: connection must be at least one if not enter to infinite loop
+        for (payload, connection) in payloads.iter().cloned().zip(
+            self.peer_connections
+                .iter()
+                .cycle()
+                .filter(|connection| connection.handshaked),
+        ) {
+            let mut conn = connection.clone();
+            let payload = payload.clone();
+            threads.push(thread::spawn(move || {
+                conn.send(&payload).unwrap();
+            }));
+        }
+
+        for thread in threads {
+            thread.join().unwrap();
+        }
+    }
+
+    pub fn send_to_all_peers(&self, payload: &MessagePayload) -> Result<(), String> {
+        let mut threads = Vec::new();
+
+        for connection in self.peer_connections.iter() {
             if connection.handshaked {
-                if let Err(e) = connection.send(payload) {
-                    eprintln!("Error sending message to peer: {:?}", e);
-                    connection.handshaked = false;
-                }
+                let mut connection = connection.clone();
+                let payload = payload.clone();
+                threads.push(thread::spawn(move || {
+                    if let Err(e) = connection.send(&payload) {
+                        eprintln!("Error sending message to peer: {:?}", e);
+                        // self.connection.handshaked = false; <-- CANT U DOIT BECAUSE ITS NOT A MUTABLE REFERENCE
+                    }
+                }));
             }
         }
+
+        for thread in threads {
+            thread.join().expect("Failed to join thread");
+        }
+
         Ok(())
     }
+
     pub fn send_to_peer(
         &mut self,
         payload: &MessagePayload,
@@ -71,11 +105,20 @@ impl NodeNetwork<'_> {
     }
 
     pub fn receive_from_all_peers(&mut self) -> Vec<(String, Vec<MessagePayload>)> {
-        self.peer_connections
-            .iter_mut()
-            .map(|connection: &mut P2PConnection| connection.receive())
+        let mut threads = Vec::new();
+
+        for connection in self.peer_connections.iter_mut() {
+            let mut connection = connection.clone();
+            threads.push(thread::spawn(move || connection.receive()));
+        }
+
+        let received_messages: Vec<_> = threads
+            .into_iter()
+            .map(|thread| thread.join().unwrap())
             .filter(|(_, messages)| !messages.is_empty())
-            .collect()
+            .collect();
+
+        received_messages
     }
 
     fn get_one_peer_address(&self) -> String {
@@ -94,7 +137,7 @@ impl NodeNetwork<'_> {
 }
 
 pub struct NodeManager<'a> {
-    node_network: NodeNetwork<'a>,
+    node_network: NodeNetwork,
     config: Config,
     logger: &'a Logger,
     blocks: Vec<Block>,
@@ -109,7 +152,7 @@ impl NodeManager<'_> {
     pub fn new(config: Config, logger: &Logger) -> NodeManager {
         NodeManager {
             config,
-            node_network: NodeNetwork::new(logger),
+            node_network: NodeNetwork::new(),
             logger,
             blocks: vec![], // inicializar el block genesis (con el config)
         }
@@ -273,6 +316,9 @@ impl NodeManager<'_> {
             self.logger
                 .log(format!("Error sending message to peer: {:?}", e));
         }
+    }
+    pub fn send(&self, messages: Vec<&MessagePayload>) {
+        self.node_network.send_messages(messages);
     }
 
     pub fn receive_all(&mut self) -> Vec<(String, Vec<MessagePayload>)> {
@@ -692,5 +738,32 @@ mod tests {
         assert!(check_blockchain_integrity(node_manager.get_blocks()));
 
         Ok(())
+    }
+
+    #[test]
+    fn test_sends_messages_to_different_peers() -> Result<(), String> {
+        let logger: Logger = Logger::stdout();
+        let config = Config::new();
+
+        let mut node_manager = NodeManager::new(config, &logger);
+        node_manager.connect(vec!["5.9.149.16:18333", "18.218.30.118:18333"])?;
+        let verack1 = MessagePayload::Verack;
+        let verack2 = MessagePayload::Verack;
+        let verack3 = MessagePayload::Verack;
+
+        node_manager.send(vec![&verack1, &verack2, &verack3]);
+        Ok(())
+    }
+    // Helpers functions for manager tests
+
+    fn get_first_hash_reversed() -> [u8; 32] {
+        let mut hash_block_genesis: [u8; 32] = [
+            0x00, 0x00, 0x00, 0x00, 0x09, 0x33, 0xea, 0x01, 0xad, 0x0e, 0xe9, 0x84, 0x20, 0x97,
+            0x79, 0xba, 0xae, 0xc3, 0xce, 0xd9, 0x0f, 0xa3, 0xf4, 0x08, 0x71, 0x95, 0x26, 0xf8,
+            0xd7, 0x7f, 0x49, 0x43,
+        ];
+        hash_block_genesis.reverse();
+
+        hash_block_genesis
     }
 }

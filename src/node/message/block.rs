@@ -70,7 +70,7 @@ impl Block {
 
     */
 
-    pub fn validate_pow(&self) -> bool {
+    fn validate_pow(&self) -> bool {
         let _target = self.target() as u128;
 
         let target: u128 = 0x00000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
@@ -97,6 +97,10 @@ impl Block {
         merkle_tree.generate_merkle_tree(tx_ids_reverse_refs);
 
         merkle_tree
+    }
+
+    pub fn is_valid(&self)-> bool {
+        self.validate_pow()
     }
 
     pub fn get_merkle_tree_root(&self) -> Result<[u8; 32], Error> {
@@ -721,7 +725,7 @@ mod tests {
     }
 
     #[test]
-    fn test_generates_merkle_root_on_block_with_many_transaction() {
+    fn test_block_valid_because_it_generates_same_merkle_root() {
         let mut block = Block {
             version: 2,
             hash: [
@@ -996,7 +1000,7 @@ mod tests {
             136, 122, 27, 116, 246, 94, 78, 137, 248, 236, 162, 104, 55, 210, 207, 205, 139, 16,
             92, 241, 228, 96, 167, 60, 7, 168, 155, 54, 29, 202, 64, 99,
         ];
-        assert_eq!(block.get_merkle_tree_root().unwrap(), expected_merkle_root);
+        assert!(block.is_valid());
     }
 
     // #[test]

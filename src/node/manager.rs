@@ -232,6 +232,9 @@ impl NodeManager<'_> {
                         }
 
                         if let Some(index) = self.get_block_index_by_hash(block.get_prev()) {
+                            if !block.is_valid(){
+                                continue;
+                            }
                             if index == self.blocks.len() {
                                 self.blocks.push(block.clone());
                             } else {

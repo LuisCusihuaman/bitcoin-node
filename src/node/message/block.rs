@@ -24,20 +24,72 @@ pub struct Block {
     pub timestamp: u32,
     pub n_bits: u32,
     pub nonce: u32,
-    pub txn_count: u8, // TODO Variable size
+    pub txn_count: u8,
+    // TODO Variable size
     pub txns: Vec<Tx>, // TODO Variable size
 }
 
 impl Block {
-    // // generates the target to validate proof of work using this formula
-    // // target = coefficient * 256**(exponent - 3)
-    pub fn target(&self) -> u64 {
+    // generates the target to validate proof of work using this formula
+    // target = coefficient * 256**(exponent - 3)
+    fn pow_256(exponent: u32) -> Vec<u8> {
+        let mut result = Vec::with_capacity((exponent as usize) + 1);
+        result.push(1);
+
+        for _ in 0..exponent {
+            let mut carry = 0;
+            for byte in &mut result {
+                let val = (*byte as u16) * 256 + carry;
+                *byte = val as u8;
+                carry = val >> 8;
+            }
+
+            if carry > 0 {
+                result.push(carry as u8);
+            }
+        }
+
+        // Pad the result with zeros if the exponent is 0
+        while result.len() < 4 {
+            result.push(0);
+        }
+
+        result
+    }
+
+
+    fn multiply_bytes(lhs: &[u8], rhs: &[u8]) -> Vec<u8> {
+        let lhs_len = lhs.len();
+        let rhs_len = rhs.len();
+        let result_len = lhs_len + rhs_len;
+
+        let mut result = vec![0; result_len];
+
+        for i in 0..lhs_len {
+            let mut carry = 0;
+            for j in 0..rhs_len {
+                let val = u16::from(lhs[i]) * u16::from(rhs[j]) + u16::from(result[i + j]) + u16::from(carry);
+                result[i + j] = (val & 0xFF) as u8;
+                carry = (val >> 8) as u8;
+            }
+            result[i + rhs_len] = carry;
+        }
+
+        result
+    }
+
+    pub fn target(&self) -> Vec<u8> {
         let bits = self.n_bits.to_le_bytes();
         let exponent = bits[3] as u32;
-        let coefficient = u32::from_le_bytes([bits[0], bits[1], bits[2], 0]);
+        let pow = Self::pow_256(exponent - 3);
 
-        coefficient as u64 * 256u64.pow(exponent - 3)
+        let coefficient = u32::from_le_bytes([bits[0], bits[1], bits[2], 0]);
+        let coefficient_bytes = coefficient.to_le_bytes();
+        // this is the same as coefficient (*) 256**(exponent - 3), that multiply???
+        let target = Self::multiply_bytes(&coefficient_bytes, &pow);
+        target
     }
+
 
     // generates the target to validate proof of work
     // // target = coefficient * 256**(exponent - 3)
@@ -71,18 +123,13 @@ impl Block {
     */
 
     fn validate_pow(&self) -> bool {
-        let _target = self.target() as u128;
-
-        let target: u128 = 0x00000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
-
-        println!("Target: {}\n", target);
-
-        // little_endian_to_int(sha(required_target));
+        let target = self.target();
+        let target_int = u32::from_le_bytes([target[0], target[1], target[2], target[3]]);
         let sha = self.hash;
-        let sha_num = little_endian_to_int(&sha);
-        println!("sha_num: {}\n", sha_num);
+        let sha_int = u32::from_le_bytes([sha[0], sha[1], sha[2], sha[3]]);
+        println!("sha_num: {}\n", sha_int);
 
-        sha_num < target
+        sha_int < target_int
     }
 
     fn init_merkle_tree(&self) -> MerkleTree {
@@ -110,7 +157,7 @@ impl Block {
         hash_root_array == self.merkle_root_hash
     }
 
-    pub fn is_valid(&self)-> bool {
+    pub fn is_valid(&self) -> bool {
         self.validate_pow() && self.validate_merkle_root()
     }
 
@@ -286,7 +333,6 @@ pub fn decode_internal_block(buffer: &[u8]) -> Option<Block> {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
     use crate::node::message::tx::{Tx, TxIn, TxOut};
 
@@ -1011,32 +1057,101 @@ mod tests {
             136, 122, 27, 116, 246, 94, 78, 137, 248, 236, 162, 104, 55, 210, 207, 205, 139, 16,
             92, 241, 228, 96, 167, 60, 7, 168, 155, 54, 29, 202, 64, 99,
         ];
-        assert!( usblock.is_valid());
+        assert!(block.is_valid());
     }
 
-    // #[test]
+    #[test]
+    fn test_validate_proof_of_work() {
+        let mut block = Block {
+            version: 2,
+            hash: [
+                0, 0, 0, 0, 0, 2, 60, 60, 152, 89, 35, 223, 255, 89, 74, 130, 64, 234, 30, 151, 40,
+                37, 10, 91, 84, 236, 23, 192, 158, 144, 91, 89,
+            ],
+            previous_block: [
+                0, 0, 0, 0, 0, 2, 60, 60, 152, 89, 35, 223, 255, 89, 74, 130, 64, 234, 30, 151, 40,
+                37, 10, 91, 84, 236, 23, 192, 158, 144, 91, 89,
+            ],
+            merkle_root_hash: [
+                136, 122, 27, 116, 246, 94, 78, 137, 248, 236, 162, 104, 55, 210, 207, 205, 139,
+                16, 92, 241, 228, 96, 167, 60, 7, 168, 155, 54, 29, 202, 64, 99,
+            ],
+            timestamp: 1384047529,
+            n_bits: 486604799,
+            nonce: 2442677017,
+            txn_count: 2,
+            txns: vec![],
+        };
 
-    // fn test_validate_proof_of_work(){
-    //     let block = Block::new(
-    //         1,
-    //         [
-    //             0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
-    //             217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
-    //         ],
-    //         [
-    //             0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
-    //             217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
-    //         ],
-    //         [
-    //             240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53, 141, 211, 116,
-    //             95, 60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186,
-    //         ],
-    //         1296688928,
-    //         486604799,
-    //         1924588547,
-    //         1,
-    //     );
 
-    //     assert_eq!(block.validate_pow(), true);
-    // }
+        assert_eq!(block.validate_pow(), true);
+    }
+
+    #[test]
+    fn test_validate_target_expected() {
+        let mut block = Block {
+            version: 2,
+            hash: [
+                0, 0, 0, 0, 0, 2, 60, 60, 152, 89, 35, 223, 255, 89, 74, 130, 64, 234, 30, 151, 40,
+                37, 10, 91, 84, 236, 23, 192, 158, 144, 91, 89,
+            ],
+            previous_block: [
+                0, 0, 0, 0, 0, 2, 60, 60, 152, 89, 35, 223, 255, 89, 74, 130, 64, 234, 30, 151, 40,
+                37, 10, 91, 84, 236, 23, 192, 158, 144, 91, 89,
+            ],
+            merkle_root_hash: [
+                136, 122, 27, 116, 246, 94, 78, 137, 248, 236, 162, 104, 55, 210, 207, 205, 139,
+                16, 92, 241, 228, 96, 167, 60, 7, 168, 155, 54, 29, 202, 64, 99,
+            ],
+            timestamp: 1384047529,
+            n_bits: 83886081,// has a 5 as last byte
+            nonce: 2442677017,
+            txn_count: 2,
+            txns: vec![],
+        };
+        let target = block.target();
+        assert_eq!(u32::from_le_bytes([target[0], target[1], target[2], target[3]]), 65536);
+    }
+
+    #[test]
+    fn test_multiply_bytes() {
+        // Test case 1
+        let lhs = [1, 0, 0];//1
+        let rhs = [0, 1, 0];//256
+        let expected_array = [0, 1, 0, 0, 0, 0];
+        let expected_number = 256;
+        assert_eq!(Block::multiply_bytes(&lhs, &rhs), expected_array);
+        assert_eq!(u32::from_le_bytes([expected_array[0], expected_array[1], expected_array[2], expected_array[3]]), expected_number);
+
+        // Test case 2
+        let lhs = [2, 0, 0];//2
+        let rhs = [0, 3, 0]; //768
+        let expected_array = [0, 6, 0, 0, 0, 0];
+        let expected_number = 1536;
+        assert_eq!(Block::multiply_bytes(&lhs, &rhs), expected_array);
+        assert_eq!(u32::from_le_bytes([expected_array[0], expected_array[1], expected_array[2], expected_array[3]]), expected_number);
+
+// Test case 3 DOESN'T WORK
+//         let lhs = [254, 255, 0, 0];//65535 (little)
+//         let rhs = [254, 255, 0, 0];//65535 (little)
+//         let expected_array = [1, 0, 254, 255];// 4294836225 = 65535 * 65535
+//         let expected_number = 4294836225;
+//         assert_eq!(Block::multiply_bytes(&lhs, &rhs), expected_array);
+//         assert_eq!(u32::from_le_bytes([expected_array[0], expected_array[1], expected_array[2], expected_array[3]]), expected_number);
+    }
+
+    #[test]
+    fn test_pow_256() {
+        let result_with_0 = Block::pow_256(0);
+        assert_eq!(u32::from_le_bytes([result_with_0[0], result_with_0[1], result_with_0[2], result_with_0[3]]), 1);
+
+        let result_with_1 = Block::pow_256(1); // 256^1 = 256
+        assert_eq!(u32::from_le_bytes([result_with_1[0], result_with_1[1], result_with_1[2], result_with_1[3]]), 256);
+
+        let result_with_2 = Block::pow_256(2); // 256^2 = 65536
+        assert_eq!(u32::from_le_bytes([result_with_2[0], result_with_2[1], result_with_2[2], result_with_2[3]]), 65536);
+
+        let result_with_3 = Block::pow_256(3); // 256^3 = 16777216
+        assert_eq!(u32::from_le_bytes([result_with_3[0], result_with_3[1], result_with_3[2], result_with_3[3]]), 16777216);
+    }
 }

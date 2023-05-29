@@ -746,7 +746,7 @@ mod tests {
         let config = Config::new();
 
         let mut node_manager = NodeManager::new(config, &logger);
-        node_manager.connect(vec!["5.9.149.16:18333", "18.218.30.118:18333"])?;
+        node_manager.connect(vec!["5.9.149.16:18333".to_string(), "18.218.30.118:18333".to_string()])?;
         let verack1 = MessagePayload::Verack;
         let verack2 = MessagePayload::Verack;
         let verack3 = MessagePayload::Verack;

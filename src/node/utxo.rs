@@ -1,8 +1,8 @@
-use crate::node::message::tx::{Tx, TxIn, TxOut};
+use crate::node::message::tx::Tx;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 
-pub struct UTXO {
+pub struct Utxo {
     pub transaction_id: [u8; 32],
     pub output_index: u32,
     pub value: u64,
@@ -10,29 +10,11 @@ pub struct UTXO {
     pub spent: bool,
 }
 
-pub fn generate_utxos(tx: &Tx) -> Vec<UTXO> {
-    let mut utxos = Vec::new();
-    let transaction_id = tx.id;
-
-    for (output_index, tx_out) in tx.tx_out.iter().enumerate() {
-        let utxo = UTXO {
-            transaction_id,
-            output_index: output_index as u32,
-            value: tx_out.value,
-            recipient_address: tx_out.pk_script.clone(),
-            spent: false,
-        };
-        utxos.push(utxo);
-    }
-
-    utxos
-}
-
-pub fn update_utxo_set(utxo_set: &mut Vec<UTXO>, tx: &Tx) {
+pub fn update_utxo_set(utxo_set: &mut [Utxo], tx: &Tx) {
     for tx_in in &tx.tx_in {
-        let previous_output = &tx_in.previous_output;
+        let _previous_output = &tx_in.previous_output;
         for utxo in utxo_set.iter_mut() {
-            if utxo.transaction_id ==  tx.id{
+            if utxo.transaction_id == tx.id {
                 // Mark the UTXO as spent
                 // For example, you can set a flag or remove the UTXO from the set
                 // For simplicity, let's assume setting a `spent` flag to true
@@ -46,6 +28,7 @@ pub fn update_utxo_set(utxo_set: &mut Vec<UTXO>, tx: &Tx) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::node::message::tx::{Tx, TxIn, TxOut};
 
     #[test]
     fn test_generate_utxos_and_update_utxo_set() {
@@ -90,12 +73,14 @@ mod tests {
         assert_eq!(utxos[0].transaction_id, transaction.id);
         assert_eq!(utxos[0].output_index, 0);
         assert_eq!(utxos[0].value, 5000020000);
-        assert_eq!(utxos[0].recipient_address, vec![
-            118, 169, 20, 195, 208, 147, 199, 86, 220, 79, 141, 216, 23, 181, 3, 198, 78,
-            203, 128, 39, 118, 33, 52, 136, 172,
-        ]);
+        assert_eq!(
+            utxos[0].recipient_address,
+            vec![
+                118, 169, 20, 195, 208, 147, 199, 86, 220, 79, 141, 216, 23, 181, 3, 198, 78, 203,
+                128, 39, 118, 33, 52, 136, 172,
+            ]
+        );
 
-    
         // Create a UTXO set
         let mut utxo_set = utxos.clone();
 
@@ -320,7 +305,23 @@ mod tests {
         // Ensure that the UTXO set is updated correctly
         assert_eq!(utxo_set.len(), 1);
         assert_eq!(utxo_set[0].spent, false);
-    
+    }
+
+    // Test helpers
+    fn generate_utxos(tx: &Tx) -> Vec<Utxo> {
+        let mut utxos = Vec::new();
+        let transaction_id = tx.id;
+
+        for (output_index, tx_out) in tx.tx_out.iter().enumerate() {
+            let utxo = Utxo {
+                transaction_id,
+                output_index: output_index as u32,
+                value: tx_out.value,
+                recipient_address: tx_out.pk_script.clone(),
+                spent: false,
+            };
+            utxos.push(utxo);
+        }
+        utxos
     }
 }
-

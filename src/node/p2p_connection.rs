@@ -2,7 +2,6 @@ use crate::node::message::{Encoding, MessageHeader, MessagePayload};
 use crate::utils::double_sha256;
 use std::io::{Read, Write};
 use std::net::TcpStream;
-use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use std::vec;
@@ -154,7 +153,7 @@ fn parse_messages_from(buf: &mut Vec<u8>) -> Vec<MessagePayload> {
     messages
 }
 
-fn decode_message<T: Encoding<T>>(cmd: &String, data: &[u8]) -> Result<T, String> {
+fn decode_message<T: Encoding<T>>(cmd: &str, data: &[u8]) -> Result<T, String> {
     T::decode(cmd, data)
 }
 

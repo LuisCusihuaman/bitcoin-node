@@ -208,19 +208,16 @@ impl NodeManager<'_> {
 
                         // Continuidad de la blockchain
                         if let Some(actual_last_block) = self.blocks.last() {
-                            match blocks.first() {
-                                Some(first_block) => {
-                                    if actual_last_block.get_hash() == first_block.get_prev() {
-                                        if commands.contains(&"headers") {
-                                            // only i want to save msg on correct blockchain integrity
-                                            matched_peer_messages
-                                                .push(MessagePayload::BlockHeader(blocks.clone()));
-                                        }
-                                        self.blocks.extend(blocks.clone());
-                                        Block::encode_blocks_to_file(blocks, "block_headers.bin");
+                            if let Some(first_block) = blocks.first() {
+                                if actual_last_block.get_hash() == first_block.get_prev() {
+                                    if commands.contains(&"headers") {
+                                        // only i want to save msg on correct blockchain integrity
+                                        matched_peer_messages
+                                            .push(MessagePayload::BlockHeader(blocks.clone()));
                                     }
+                                    self.blocks.extend(blocks.clone());
+                                    Block::encode_blocks_to_file(blocks, "block_headers.bin");
                                 }
-                                None => {}
                             }
                         }
                     }
@@ -746,24 +743,15 @@ mod tests {
         let config = Config::new();
 
         let mut node_manager = NodeManager::new(config, &logger);
-        node_manager.connect(vec!["5.9.149.16:18333", "18.218.30.118:18333"])?;
+        node_manager.connect(vec![
+            "5.9.149.16:18333".to_string(),
+            "18.218.30.118:18333".to_string(),
+        ])?;
         let verack1 = MessagePayload::Verack;
         let verack2 = MessagePayload::Verack;
         let verack3 = MessagePayload::Verack;
 
         node_manager.send(vec![&verack1, &verack2, &verack3]);
         Ok(())
-    }
-    // Helpers functions for manager tests
-
-    fn get_first_hash_reversed() -> [u8; 32] {
-        let mut hash_block_genesis: [u8; 32] = [
-            0x00, 0x00, 0x00, 0x00, 0x09, 0x33, 0xea, 0x01, 0xad, 0x0e, 0xe9, 0x84, 0x20, 0x97,
-            0x79, 0xba, 0xae, 0xc3, 0xce, 0xd9, 0x0f, 0xa3, 0xf4, 0x08, 0x71, 0x95, 0x26, 0xf8,
-            0xd7, 0x7f, 0x49, 0x43,
-        ];
-        hash_block_genesis.reverse();
-
-        hash_block_genesis
     }
 }

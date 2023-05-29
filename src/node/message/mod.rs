@@ -62,7 +62,7 @@ pub trait Encoding<T> {
     fn size_of(&self) -> Result<u64, String>;
     fn encode(&self, buffer: &mut [u8]) -> Result<(), String>;
     fn command_name(&self) -> Result<&str, String>;
-    fn decode(cmd: &String, buffer: &[u8]) -> Result<T, String>;
+    fn decode(cmd: &str, buffer: &[u8]) -> Result<T, String>;
 }
 
 impl Encoding<MessageHeader> for MessageHeader {
@@ -79,7 +79,7 @@ impl Encoding<MessageHeader> for MessageHeader {
         Ok("")
     }
 
-    fn decode(_cmd: &String, buffer: &[u8]) -> Result<Self, String> {
+    fn decode(_cmd: &str, buffer: &[u8]) -> Result<Self, String> {
         let magic_number = read_le(&buffer[0..4]) as u32;
         let mut buff_tmp: [u8; 12] = [0u8; 12];
         buff_tmp.copy_from_slice(&buffer[4..16]);
@@ -142,8 +142,8 @@ impl Encoding<MessagePayload> for MessagePayload {
         }
     }
 
-    fn decode(cmd: &String, buffer: &[u8]) -> Result<Self, String> {
-        match cmd.as_str() {
+    fn decode(cmd: &str, buffer: &[u8]) -> Result<Self, String> {
+        match cmd {
             "version" => decode_version(buffer),
             "headers" => decode_headers(buffer),
             "inv" => decode_inv(buffer),

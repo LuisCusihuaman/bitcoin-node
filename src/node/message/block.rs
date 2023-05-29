@@ -25,7 +25,7 @@ pub struct Block {
     pub n_bits: u32,
     pub nonce: u32,
     pub txn_count: usize, // variable size
-    pub txns: Vec<Tx>, // variable size
+    pub txns: Vec<Tx>,    // variable size
 }
 
 impl Block {

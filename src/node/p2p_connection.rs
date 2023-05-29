@@ -37,7 +37,7 @@ impl P2PConnection {
         })
     }
     pub fn send(&mut self, payload: &MessagePayload) -> Result<(), String> {
-        let command_name_bytes = payload.command_name()?.as_bytes();
+        let command_name_bytes = payload.command_name().as_bytes();
         let mut command_name = [0; 12];
         command_name[..command_name_bytes.len()].copy_from_slice(command_name_bytes);
         let payload_size = payload.size_of();
@@ -60,7 +60,7 @@ impl P2PConnection {
         thread::sleep(Duration::from_millis(350)); // Strategy to not overload server limit rate
         println!(
             "Sending message: {:?} for peer: {}",
-            payload.command_name()?,
+            payload.command_name(),
             self.peer_address.as_str()
         );
         self.tcp_stream
@@ -196,7 +196,7 @@ mod tests {
         let (_, messages) = conn.receive();
 
         for message in messages.iter() {
-            println!("Received message: {:?}", message.command_name()?);
+            println!("Received message: {:?}", message.command_name());
         }
 
         assert_ne!(messages.len(), 0);
@@ -215,7 +215,7 @@ mod tests {
 
         let (_, first_messages) = conn.receive();
         for message in first_messages.iter() {
-            println!("Received message: {:?}", message.command_name()?);
+            println!("Received message: {:?}", message.command_name());
         }
 
         // Create getheaders message

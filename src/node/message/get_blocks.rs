@@ -7,7 +7,7 @@ use std::mem;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PayloadGetBlocks {
     pub version: u32,
-    pub hash_count: usize, // variable size
+    pub hash_count: usize,            // variable size
     pub block_header_hashes: Vec<u8>, // variable size
     pub stop_hash: Vec<u8>,
 }

@@ -62,8 +62,8 @@ impl MessageHeader {
 pub trait Encoding<T> {
     fn size_of(&self) -> usize;
     fn encode(&self, buffer: &mut [u8]) -> Result<(), String>;
-    fn command_name(&self) -> Result<&str, String>;
-    fn decode(cmd: &String, buffer: &[u8]) -> Result<T, String>;
+    fn command_name(&self) -> &str;
+    fn decode(cmd: &str, buffer: &[u8]) -> Result<T, String>;
 }
 
 impl Encoding<MessageHeader> for MessageHeader {
@@ -82,11 +82,11 @@ impl Encoding<MessageHeader> for MessageHeader {
         self.encode(buffer)
     }
 
-    fn command_name(&self) -> Result<&str, String> {
-        Ok("")
+    fn command_name(&self) -> &str {
+        ""
     }
 
-    fn decode(_cmd: &String, buffer: &[u8]) -> Result<Self, String> {
+    fn decode(_cmd: &str, buffer: &[u8]) -> Result<Self, String> {
         let magic_number = read_le(&buffer[0..4]) as u32;
         let mut buff_tmp: [u8; 12] = [0u8; 12];
         buff_tmp.copy_from_slice(&buffer[4..16]);
@@ -132,21 +132,22 @@ impl Encoding<MessagePayload> for MessagePayload {
         Ok(())
     }
 
-    fn command_name(&self) -> Result<&str, String> {
+    fn command_name(&self) -> &str {
         match self {
-            MessagePayload::Version(_) => Ok("version"),
-            MessagePayload::Verack => Ok("verack"),
-            MessagePayload::GetHeaders(_) => Ok("getheaders"),
-            MessagePayload::GetBlocks(_) => Ok("getblocks"),
-            MessagePayload::BlockHeader(_) => Ok("headers"),
-            MessagePayload::Inv(_) => Ok("inv"),
-            MessagePayload::GetData(_) => Ok("getdata"),
-            MessagePayload::Block(_) => Ok("block"),
+            MessagePayload::Version(_) => "version",
+            MessagePayload::Verack => "verack",
+            MessagePayload::GetHeaders(_) => "getheaders",
+            MessagePayload::GetBlocks(_) => "getblocks",
+            MessagePayload::BlockHeader(_) => "headers",
+            MessagePayload::Inv(_) => "inv",
+            MessagePayload::GetData(_) => "getdata",
+            MessagePayload::Block(_) => "block",
+            _ => "unknown command name",
         }
     }
 
-    fn decode(cmd: &String, buffer: &[u8]) -> Result<Self, String> {
-        match cmd.as_str() {
+    fn decode(cmd: &str, buffer: &[u8]) -> Result<Self, String> {
+        match cmd {
             "version" => decode_version(buffer),
             "headers" => decode_headers(buffer),
             "inv" => decode_inv(buffer),

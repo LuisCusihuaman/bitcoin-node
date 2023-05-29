@@ -42,6 +42,28 @@ impl NodeNetwork {
             peer_connection.handshaked();
         }
     }
+    pub fn send_messages(&self, payloads: Vec<&MessagePayload>) {
+        let mut threads = Vec::new();
+
+        // TODO: connection must be at least one if not enter to infinite loop
+        for (payload, connection) in payloads.iter().cloned().zip(
+            self.peer_connections
+                .iter()
+                .cycle()
+                .filter(|connection| connection.handshaked),
+        ) {
+            let mut conn = connection.clone();
+            let payload = payload.clone();
+            threads.push(thread::spawn(move || {
+                conn.send(&payload).unwrap();
+            }));
+        }
+
+        for thread in threads {
+            thread.join().unwrap();
+        }
+    }
+
     pub fn send_to_all_peers(&self, payload: &MessagePayload) -> Result<(), String> {
         let mut threads = Vec::new();
 
@@ -64,7 +86,6 @@ impl NodeNetwork {
 
         Ok(())
     }
-
 
     pub fn send_to_peer(
         &mut self,
@@ -100,8 +121,6 @@ impl NodeNetwork {
 
         received_messages
     }
-
-
 
     fn get_one_peer_address(&self) -> String {
         let handshaked_connections: Vec<&P2PConnection> = self
@@ -292,6 +311,9 @@ impl NodeManager<'_> {
             self.logger
                 .log(format!("Error sending message to peer: {:?}", e));
         }
+    }
+    pub fn send(&self, messages: Vec<&MessagePayload>) {
+        self.node_network.send_messages(messages);
     }
 
     pub fn receive_all(&mut self) -> Vec<(String, Vec<MessagePayload>)> {
@@ -732,6 +754,23 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn test_sends_messages_to_different_peers() -> Result<(), String> {
+        let logger: Logger = Logger::stdout();
+        let config = Config::new();
+
+        let mut node_manager = NodeManager::new(config, &logger);
+        node_manager.connect(vec![
+            "5.9.149.16:18333".to_string(),
+            "18.218.30.118:18333".to_string(),
+        ])?;
+        let verack1 = MessagePayload::Verack;
+        let verack2 = MessagePayload::Verack;
+        let verack3 = MessagePayload::Verack;
+
+        node_manager.send(vec![&verack1, &verack2, &verack3]);
+        Ok(())
+    }
     // Helpers functions for manager tests
 
     fn get_first_hash_reversed() -> [u8; 32] {

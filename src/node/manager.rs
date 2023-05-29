@@ -147,7 +147,7 @@ pub struct NodeManager<'a> {
 impl NodeManager<'_> {
     pub fn block_broadcasting(&mut self) -> Result<(), String> {
         loop {
-            println!("helloooooo...")
+            self.wait_for(vec!["inv"]);
         }
     }
     pub fn new(config: Config, logger: &Logger) -> NodeManager {

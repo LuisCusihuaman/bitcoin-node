@@ -35,11 +35,6 @@ impl Router {
 mod tests {
     use super::*;
 
-    fn hand_balance(_req: Request) -> Response {
-        //let res = format!("Welcome Home: {}", req.get_query_value("name"));
-        Response::json(String::from("Luis"))
-    }
-
     #[test]
     fn test_new_router_must_be_empty() {
         let mut router = Router::new();
@@ -47,18 +42,5 @@ mod tests {
         let respuesta_esperado: usize = 0;
 
         assert_eq!(respuesta_esperado, router.get_cant_branch());
-    }
-
-    #[test]
-    fn test_new_router_pushes_three_brach() {
-        let mut router = Router::new();
-        let pattern = String::from("/home");
-        let respuesta_esperado: usize = 3;
-
-        // router.branch(&pattern, hand_balance);
-        // router.branch(&pattern, hand_balance);
-        // router.branch(&pattern, hand_balance);
-
-        //assert_eq!(respuesta_esperado, router.get_cant_branch());
     }
 }

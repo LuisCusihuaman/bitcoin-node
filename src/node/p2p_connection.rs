@@ -14,7 +14,6 @@ pub struct P2PConnection {
     tcp_stream: TcpStream,
 }
 
-
 impl Clone for P2PConnection {
     fn clone(&self) -> Self {
         P2PConnection {

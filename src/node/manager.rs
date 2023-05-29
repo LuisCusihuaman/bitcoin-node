@@ -8,9 +8,9 @@ use crate::node::p2p_connection::P2PConnection;
 use crate::utils::*;
 use crate::{logger::Logger, node::message::get_headers::PayloadGetHeaders};
 use rand::seq::SliceRandom;
-
 use std::fs;
 use std::net::{IpAddr, ToSocketAddrs};
+use std::thread;
 
 pub struct NodeNetwork {
     pub peer_connections: Vec<P2PConnection>,
@@ -744,10 +744,7 @@ mod tests {
         let config = Config::new();
 
         let mut node_manager = NodeManager::new(config, &logger);
-        node_manager.connect(vec![
-            &"5.9.149.16:18333",
-            &"18.218.30.118:18333",
-        ])?;
+        node_manager.connect(vec!["5.9.149.16:18333", "18.218.30.118:18333"])?;
         let verack1 = MessagePayload::Verack;
         let verack2 = MessagePayload::Verack;
         let verack3 = MessagePayload::Verack;
@@ -767,5 +764,4 @@ mod tests {
 
         hash_block_genesis
     }
-
 }

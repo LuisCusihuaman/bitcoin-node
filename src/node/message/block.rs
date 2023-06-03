@@ -24,7 +24,8 @@ pub struct Block {
     pub timestamp: u32,
     pub n_bits: u32,
     pub nonce: u32,
-    pub txn_count: usize, // variable size
+    pub txn_count: usize,
+    // variable size
     pub txns: Vec<Tx>,    // variable size
 }
 
@@ -57,25 +58,37 @@ impl Block {
     }
 
 
-    fn multiply_bytes(lhs: &[u8], rhs: &[u8]) -> Vec<u8> {
-        let lhs_len = lhs.len();
-        let rhs_len = rhs.len();
-        let result_len = lhs_len + rhs_len;
+    fn scalar_by(scalar: u32, bytes: &[u8]) -> Vec<u8> {
+        let mut carry = 0;
+        let mut result = Vec::with_capacity(bytes.len());
 
-        let mut result = vec![0; result_len];
-
-        for i in 0..lhs_len {
-            let mut carry = 0;
-            for j in 0..rhs_len {
-                let val = u16::from(lhs[i]) * u16::from(rhs[j]) + u16::from(result[i + j]) + u16::from(carry);
-                result[i + j] = (val & 0xFF) as u8;
-                carry = (val >> 8) as u8;
-            }
-            result[i + rhs_len] = carry;
+        for &byte in bytes {
+            let multiplied = (byte as u32).wrapping_mul(scalar).wrapping_add(carry);
+            let quotient = multiplied % 256;
+            let remainder = multiplied / 256;
+            carry = remainder;
+            result.push(quotient as u8);
         }
 
+        if carry > 0 {
+            result.push(carry as u8);
+        }
+
+        // Pad with zeroes to match the length of u8, u16, u32, u64, or u128
+        let target_len = match result.len() {
+            len if len <= 1 => 1,
+            len if len <= 2 => 2,
+            len if len <= 4 => 4,
+            len if len <= 8 => 8,
+            _ => 16,
+        };
+
+        while result.len() < target_len {
+            result.push(0);
+        }
         result
     }
+
 
     pub fn target(&self) -> Vec<u8> {
         let bits = self.n_bits.to_le_bytes();
@@ -83,9 +96,8 @@ impl Block {
         let pow = Self::pow_256(exponent - 3);
 
         let coefficient = u32::from_le_bytes([bits[0], bits[1], bits[2], 0]);
-        let coefficient_bytes = coefficient.to_le_bytes();
         // this is the same as coefficient (*) 256**(exponent - 3), that multiply???
-        let target = Self::multiply_bytes(&coefficient_bytes, &pow);
+        let target = Self::scalar_by(coefficient, &pow);
         target
     }
 
@@ -123,13 +135,23 @@ impl Block {
 
     fn validate_pow(&self) -> bool {
         let target = self.target();
-        let target_int = u32::from_le_bytes([target[0], target[1], target[2], target[3]]);
-        let sha = self.hash;
-        let sha_int = u32::from_le_bytes([sha[0], sha[1], sha[2], sha[3]]);
-        println!("sha_num: {}\n", sha_int);
+        let mut sha = self.hash.clone();
+        sha.reverse();
 
-        sha_int < target_int
+        let min_len = target.len().min(sha.len());
+
+        for i in (0..min_len).rev() {
+            if sha[i] < target[i] {
+                return true;
+            } else if sha[i] > target[i] {
+                return false;
+            }
+        }
+
+        sha.len() < target.len()
     }
+
+
 
     fn init_merkle_tree(&self) -> MerkleTree {
         let tx_ids: Vec<&[u8]> = self.txns.iter().map(|tx| &tx.id[..]).collect();
@@ -1114,30 +1136,52 @@ mod tests {
     }
 
     #[test]
-    fn test_multiply_bytes() {
-        // Test case 1
-        let lhs = [1, 0, 0];//1
-        let rhs = [0, 1, 0];//256
-        let expected_array = [0, 1, 0, 0, 0, 0];
-        let expected_number = 256;
-        assert_eq!(Block::multiply_bytes(&lhs, &rhs), expected_array);
-        assert_eq!(u32::from_le_bytes([expected_array[0], expected_array[1], expected_array[2], expected_array[3]]), expected_number);
+    fn scalar_bytes() {
+        // Test case with u8
+        let bytes_u8 = vec![20];
+        let result_bytes = Block::scalar_by(2, &bytes_u8);
+        let expected_bytes: Vec<u8> = vec![40];
+        let expected_u8 = u8::from_le_bytes(result_bytes[..].try_into().unwrap());
+        assert_eq!(result_bytes, expected_bytes);
+        assert_eq!(expected_u8, 40);
 
-        // Test case 2
-        let lhs = [2, 0, 0];//2
-        let rhs = [0, 3, 0]; //768
-        let expected_array = [0, 6, 0, 0, 0, 0];
-        let expected_number = 1536;
-        assert_eq!(Block::multiply_bytes(&lhs, &rhs), expected_array);
-        assert_eq!(u32::from_le_bytes([expected_array[0], expected_array[1], expected_array[2], expected_array[3]]), expected_number);
+        // Test case with u16
+        let bytes_u16 = vec![4, 2];
+        let result_bytes = Block::scalar_by(10, &bytes_u16);
+        let expected_bytes: Vec<u8> = vec![40, 20];
+        let expected_u16 = u16::from_le_bytes(result_bytes[..].try_into().unwrap());
+        assert_eq!(result_bytes, expected_bytes);
+        assert_eq!(expected_u16, 5160);
 
-// Test case 3 DOESN'T WORK
-//         let lhs = [254, 255, 0, 0];//65535 (little)
-//         let rhs = [254, 255, 0, 0];//65535 (little)
-//         let expected_array = [1, 0, 254, 255];// 4294836225 = 65535 * 65535
-//         let expected_number = 4294836225;
-//         assert_eq!(Block::multiply_bytes(&lhs, &rhs), expected_array);
-//         assert_eq!(u32::from_le_bytes([expected_array[0], expected_array[1], expected_array[2], expected_array[3]]), expected_number);
+        // Test case with u32
+        let bytes_u32 = vec![150, 10, 15, 2];
+        let result_bytes = Block::scalar_by(2, &bytes_u32);
+        let expected_bytes: Vec<u8> = vec![44, 21, 30, 4];
+        let expected_u32 = u32::from_le_bytes(result_bytes[..].try_into().unwrap());
+        assert_eq!(result_bytes, expected_bytes);
+        assert_eq!(expected_u32, 69080364);
+
+        // Test case with u64 that result in u128
+        let bytes_u64 = vec![50, 10, 15, 2, 8, 30, 7, 120]; //8648914629131438642
+        let expected_bytes: Vec<u8> = vec![150, 30, 45, 6, 24, 90, 21, 104, 1, 0, 0, 0, 0, 0, 0, 0];//25946743887394315926
+        let result_bytes = Block::scalar_by(3, &bytes_u64);
+        let expected_u128 = u128::from_le_bytes(result_bytes[..].try_into().unwrap());
+        assert_eq!(result_bytes, expected_bytes);
+        assert_eq!(expected_u128, 25946743887394315926);
+
+        // Test case with u128
+        let bytes_u128 = vec![
+            255, 200, 150, 100, 50, 10, 5, 1, 0, 0, 0, 0, 0, 0, 0, 1]; //1329227995784915872977283240754071807
+        let result_bytes = Block::scalar_by(3, &bytes_u128);
+        let expected_bytes: Vec<u8> = vec![253, 90, 196, 45, 151, 30, 15, 3, 0, 0, 0, 0, 0, 0, 0, 3];
+        let expected_u128 = u128::from_le_bytes(result_bytes[..].try_into().unwrap());
+        assert_eq!(result_bytes, expected_bytes);
+        assert_eq!(expected_u128, 3987683987354747618931849722262215421);
+
+        // Test case not fit in u128
+        let bytes = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128]; // 2596148429267413814265248164610048
+        let expected_bytes: Vec<u8> = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]; // (n*2) 5192296858534827628530496329220096
+        let result_bytes = Block::scalar_by(2, &bytes);
     }
 
     #[test]

@@ -363,7 +363,8 @@ impl NodeManager<'_> {
         let mut hash_reversed: [u8; 32] = *block_hash;
         hash_reversed.reverse();
 
-        let payload_get_headers = PayloadGetHeaders::new(70015, 1, hash_reversed, stop_hash);
+        let payload_get_headers =
+            PayloadGetHeaders::new(70015, 1, hash_reversed.to_vec(), stop_hash.to_vec());
         let get_headers_message = MessagePayload::GetHeaders(payload_get_headers);
 
         let address = self.get_random_peer_address();
@@ -549,8 +550,8 @@ mod tests {
         let get_headers_message = MessagePayload::GetHeaders(PayloadGetHeaders::new(
             70015,
             1,
-            hash_block_genesis,
-            stop_hash,
+            hash_block_genesis.to_vec(),
+            stop_hash.to_vec(),
         ));
         node_manager.broadcast(&get_headers_message);
         node_manager.wait_for(vec!["headers"]);
@@ -746,24 +747,15 @@ mod tests {
         let config = Config::new();
 
         let mut node_manager = NodeManager::new(config, &logger);
-        node_manager.connect(vec!["5.9.149.16:18333", "18.218.30.118:18333"])?;
+        node_manager.connect(vec![
+            "5.9.149.16:18333".to_string(),
+            "18.218.30.118:18333".to_string(),
+        ])?;
         let verack1 = MessagePayload::Verack;
         let verack2 = MessagePayload::Verack;
         let verack3 = MessagePayload::Verack;
 
         node_manager.send(vec![&verack1, &verack2, &verack3]);
         Ok(())
-    }
-    // Helpers functions for manager tests
-
-    fn get_first_hash_reversed() -> [u8; 32] {
-        let mut hash_block_genesis: [u8; 32] = [
-            0x00, 0x00, 0x00, 0x00, 0x09, 0x33, 0xea, 0x01, 0xad, 0x0e, 0xe9, 0x84, 0x20, 0x97,
-            0x79, 0xba, 0xae, 0xc3, 0xce, 0xd9, 0x0f, 0xa3, 0xf4, 0x08, 0x71, 0x95, 0x26, 0xf8,
-            0xd7, 0x7f, 0x49, 0x43,
-        ];
-        hash_block_genesis.reverse();
-
-        hash_block_genesis
     }
 }

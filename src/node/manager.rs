@@ -5,6 +5,9 @@ use crate::node::message::get_data::PayloadGetData;
 use crate::node::message::version::PayloadVersion;
 use crate::node::message::MessagePayload;
 use crate::node::p2p_connection::P2PConnection;
+use crate::node::utxo::generate_utxos;
+use crate::node::utxo::update_utxo_set;
+use crate::node::utxo::Utxo;
 use crate::utils::*;
 use crate::{logger::Logger, node::message::get_headers::PayloadGetHeaders};
 use rand::seq::SliceRandom;
@@ -141,6 +144,7 @@ pub struct NodeManager<'a> {
     config: Config,
     logger: &'a Logger,
     blocks: Vec<Block>,
+    utxo_set: Vec<Utxo>,
 }
 
 impl NodeManager<'_> {
@@ -155,6 +159,7 @@ impl NodeManager<'_> {
             node_network: NodeNetwork::new(),
             logger,
             blocks: vec![], // inicializar el block genesis (con el config)
+            utxo_set: vec![],
         }
     }
 
@@ -229,6 +234,8 @@ impl NodeManager<'_> {
                         }
 
                         if let Some(index) = self.get_block_index_by_hash(block.get_prev()) {
+                            self.update_utxo_set(block.clone());
+
                             if index == self.blocks.len() {
                                 self.blocks.push(block.clone());
                             } else {
@@ -252,6 +259,13 @@ impl NodeManager<'_> {
             matched_messages.push((peer_address.clone(), matched_peer_messages));
         }
         matched_messages
+    }
+
+    fn update_utxo_set(&mut self, block: Block) {
+        for tx in block.txns {
+            generate_utxos(&mut self.utxo_set, &tx);
+            update_utxo_set(&mut self.utxo_set, &tx);
+        }
     }
 
     pub fn get_blocks(&self) -> Vec<Block> {
@@ -755,3 +769,7 @@ mod tests {
         Ok(())
     }
 }
+
+#[test]
+
+fn test_create_tx_and_add_utxo_set() {}

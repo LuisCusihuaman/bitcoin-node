@@ -12,7 +12,6 @@ pub struct Utxo {
 
 pub fn update_utxo_set(utxo_set: &mut [Utxo], tx: &Tx) {
     for tx_in in &tx.tx_in {
-        let _previous_output = &tx_in.previous_output;
         for utxo in utxo_set.iter_mut() {
             if utxo.transaction_id == tx.id {
                 // Mark the UTXO as spent
@@ -20,9 +19,43 @@ pub fn update_utxo_set(utxo_set: &mut [Utxo], tx: &Tx) {
                 // For simplicity, let's assume setting a `spent` flag to true
                 utxo.spent = true;
                 break;
+
+                // Borrar de la tabla en un futuro
             }
         }
     }
+}
+
+pub fn generate_utxos(utxo_set: &mut Vec<Utxo>, tx: &Tx) {
+    for (index, tx_out) in tx.tx_out.iter().enumerate() {
+        let utxo = Utxo {
+            transaction_id: tx.id,
+            output_index: index as u32,
+            value: tx_out.value,
+            recipient_address: tx_out.pk_script.clone(),
+            spent: false,
+        };
+        utxo_set.push(utxo);
+    }
+}
+
+pub fn find_utxo(utxo_set: &[Utxo], transaction_id: &[u8; 32], output_index: u32) -> Option<Utxo> {
+    for utxo in utxo_set {
+        if utxo.transaction_id == *transaction_id && utxo.output_index == output_index {
+            return Some(utxo.clone());
+        }
+    }
+    None
+}
+
+pub fn find_utxo_by_address(utxo_set: &[Utxo], address: &[u8]) -> Vec<Utxo> {
+    let mut utxos: Vec<Utxo> = Vec::new();
+    for utxo in utxo_set {
+        if utxo.recipient_address == *address {
+            utxos.push(utxo.clone());
+        }
+    }
+    utxos
 }
 
 #[cfg(test)]

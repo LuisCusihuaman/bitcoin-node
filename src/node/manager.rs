@@ -10,6 +10,7 @@ use crate::{logger::Logger, node::message::get_headers::PayloadGetHeaders};
 use rand::seq::SliceRandom;
 use std::fs;
 use std::net::{IpAddr, ToSocketAddrs};
+use std::sync::mpsc;
 use std::thread;
 
 pub struct NodeNetwork {
@@ -106,15 +107,24 @@ impl NodeNetwork {
 
     pub fn receive_from_all_peers(&mut self) -> Vec<(String, Vec<MessagePayload>)> {
         let mut threads = Vec::new();
+        let (sender, receiver) = mpsc::channel();
 
         for connection in self.peer_connections.iter_mut() {
             let mut connection = connection.clone();
-            threads.push(thread::spawn(move || connection.receive()));
-        }
+            let sender = sender.clone();
 
-        let received_messages: Vec<_> = threads
-            .into_iter()
-            .map(|thread| thread.join().unwrap())
+            threads.push(thread::spawn(move || {
+                let messages = connection.receive();
+                sender.send(messages).unwrap();
+            }));
+        }
+        for thread in threads {
+            thread.join().unwrap();
+        }
+        drop(sender);
+
+        let received_messages: Vec<_> = receiver
+            .iter()
             .filter(|(_, messages)| !messages.is_empty())
             .collect();
 
@@ -643,7 +653,7 @@ mod tests {
                     node_manager.wait_for(vec!["block"]),
                     "18.191.253.246:18333".to_string(),
                 )
-                    .first()
+                .first()
                 {
                     let _hash: [u8; 32] = block_payload.get_prev();
 

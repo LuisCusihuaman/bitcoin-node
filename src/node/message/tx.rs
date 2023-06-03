@@ -1,6 +1,6 @@
 use bitcoin_hashes::Hash;
 
-use crate::utils::write_varint;
+use crate::utils::get_le_varint;
 
 use crate::utils::*;
 
@@ -9,9 +9,9 @@ pub struct Tx {
     pub id: [u8; 32],
     pub version: u32,
     pub flag: u16,
-    pub tx_in_count: u64, // varint
+    pub tx_in_count: usize, // varint
     pub tx_in: Vec<TxIn>,
-    pub tx_out_count: u64, // varint
+    pub tx_out_count: usize, // varint
     pub tx_out: Vec<TxOut>,
     pub tx_witness: Vec<u8>,
     pub lock_time: u32,
@@ -20,7 +20,7 @@ pub struct Tx {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TxIn {
     pub previous_output: [u8; 36],
-    pub script_length: u64, // varint
+    pub script_length: usize, // varint
     pub signature_script: Vec<u8>,
     pub sequence: u32,
 }
@@ -28,7 +28,7 @@ pub struct TxIn {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TxOut {
     pub value: u64,
-    pub pk_script_length: u64, // varint
+    pub pk_script_length: usize, // varint
     pub pk_script: Vec<u8>,
 }
 
@@ -42,20 +42,28 @@ impl Tx {
             encoded.extend(self.flag.to_le_bytes());
         }
 
-        write_varint(&mut encoded, self.tx_in_count as usize).unwrap();
+        let tx_in_count = get_le_varint(self.tx_in_count);
+        encoded.extend(tx_in_count);
 
         for tx_in in &self.tx_in {
             encoded.extend(tx_in.previous_output);
-            write_varint(&mut encoded, tx_in.script_length as usize).unwrap();
+
+            let script_length = get_le_varint(tx_in.script_length);
+            encoded.extend(script_length);
+
             encoded.extend(tx_in.signature_script.clone());
             encoded.extend(tx_in.sequence.to_le_bytes());
         }
 
-        write_varint(&mut encoded, self.tx_out_count as usize).unwrap();
+        let tx_out_count = get_le_varint(self.tx_out_count);
+        encoded.extend(tx_out_count);
 
         for tx_out in &self.tx_out {
             encoded.extend(tx_out.value.to_le_bytes());
-            write_varint(&mut encoded, tx_out.pk_script_length as usize).unwrap();
+
+            let pk_script_length = get_le_varint(tx_out.pk_script_length);
+            encoded.extend(pk_script_length);
+
             encoded.extend(tx_out.pk_script.clone());
         }
 
@@ -92,7 +100,7 @@ pub fn decode_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
         println!("flag: 1 LOL")
     }
 
-    let tx_in_count = read_varint(&mut &buffer[*offset..]).unwrap() as u64; // Never zero, TODO calcular bien offset arriba
+    let tx_in_count = read_varint(&mut &buffer[*offset..]); // Never zero, TODO calcular bien offset arriba
     *offset += get_offset(&buffer[*offset..]);
 
     let mut tx_in = Vec::new();
@@ -102,7 +110,7 @@ pub fn decode_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
         previous_output.copy_from_slice(&buffer[*offset..*offset + 36]);
         *offset += 36;
 
-        let script_length = read_varint(&mut &buffer[*offset..]).unwrap() as u64;
+        let script_length = read_varint(&mut &buffer[*offset..]);
         *offset += get_offset(&buffer[*offset..]);
 
         let mut signature_script = Vec::new();
@@ -122,7 +130,7 @@ pub fn decode_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
         tx_in.push(tx_input);
     }
 
-    let tx_out_count = read_varint(&mut &buffer[*offset..]).unwrap() as u64;
+    let tx_out_count = read_varint(&mut &buffer[*offset..]);
     *offset += get_offset(&buffer[*offset..]);
 
     let mut tx_out = Vec::new();
@@ -131,7 +139,7 @@ pub fn decode_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
         let value = read_u64_le(buffer, *offset);
         *offset += 8;
 
-        let pk_script_length = read_varint(&mut &buffer[*offset..]).unwrap() as u64;
+        let pk_script_length = read_varint(&mut &buffer[*offset..]);
         *offset += get_offset(&buffer[*offset..]);
 
         let mut pk_script = Vec::new();

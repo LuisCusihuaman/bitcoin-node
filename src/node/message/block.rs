@@ -304,7 +304,7 @@ pub fn decode_block(buffer: &[u8]) -> Result<MessagePayload, String> {
     let mut block = decode_internal_block(buffer).unwrap();
     let mut transactions = Vec::new();
 
-    let tnx_count = read_varint(&mut &buffer[80..]);
+    let tnx_count = read_varint(&buffer[80..]);
     let mut offset = 80 + get_offset(&buffer[80..]);
 
     for _ in 0..tnx_count {

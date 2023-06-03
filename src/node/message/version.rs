@@ -118,7 +118,7 @@ pub fn decode_version(buffer: &[u8]) -> Result<MessagePayload, String> {
     let addr_trans_services = read_u64_le(buffer, 46);
     let addr_trans_port = read_u16_be(buffer, 70);
     let nonce = read_u64_le(buffer, 72);
-    let user_agent_bytes = read_varint(&mut &buffer[80..]); // Read variable-length user_agent_bytes 😎
+    let user_agent_bytes = read_varint(&buffer[80..]); // Read variable-length user_agent_bytes 😎
     let user_agent = read_string(buffer, 81, user_agent_bytes); // WHY I USE 81!!! AND NOT 80 :CC DOCS SAY START AFTER 80 🤔
     let start_height = read_u32_le(buffer, payload_size - 5);
     let relay = buffer[payload_size - 1];

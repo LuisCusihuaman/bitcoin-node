@@ -100,7 +100,7 @@ pub fn decode_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
         println!("flag: 1 LOL")
     }
 
-    let tx_in_count = read_varint(&mut &buffer[*offset..]); // Never zero, TODO calcular bien offset arriba
+    let tx_in_count = read_varint(&buffer[*offset..]); // Never zero, TODO calcular bien offset arriba
     *offset += get_offset(&buffer[*offset..]);
 
     let mut tx_in = Vec::new();
@@ -110,12 +110,12 @@ pub fn decode_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
         previous_output.copy_from_slice(&buffer[*offset..*offset + 36]);
         *offset += 36;
 
-        let script_length = read_varint(&mut &buffer[*offset..]);
+        let script_length = read_varint(&buffer[*offset..]);
         *offset += get_offset(&buffer[*offset..]);
 
         let mut signature_script = Vec::new();
-        signature_script.extend(&buffer[*offset..*offset + script_length as usize]);
-        *offset += script_length as usize;
+        signature_script.extend(&buffer[*offset..*offset + script_length]);
+        *offset += script_length;
 
         let sequence = read_u32_le(buffer, *offset);
         *offset += 4;
@@ -130,7 +130,7 @@ pub fn decode_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
         tx_in.push(tx_input);
     }
 
-    let tx_out_count = read_varint(&mut &buffer[*offset..]);
+    let tx_out_count = read_varint(&buffer[*offset..]);
     *offset += get_offset(&buffer[*offset..]);
 
     let mut tx_out = Vec::new();
@@ -139,12 +139,12 @@ pub fn decode_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
         let value = read_u64_le(buffer, *offset);
         *offset += 8;
 
-        let pk_script_length = read_varint(&mut &buffer[*offset..]);
+        let pk_script_length = read_varint(&buffer[*offset..]);
         *offset += get_offset(&buffer[*offset..]);
 
         let mut pk_script = Vec::new();
-        pk_script.extend(&buffer[*offset..*offset + pk_script_length as usize]);
-        *offset += pk_script_length as usize;
+        pk_script.extend(&buffer[*offset..*offset + pk_script_length]);
+        *offset += pk_script_length;
 
         let tx_output = TxOut {
             value,

@@ -8,7 +8,6 @@ use crate::node::p2p_connection::P2PConnection;
 use crate::utils::*;
 use crate::{logger::Logger, node::message::get_headers::PayloadGetHeaders};
 use rand::seq::SliceRandom;
-use std::fmt::format;
 use std::fs;
 use std::net::{IpAddr, ToSocketAddrs};
 use std::thread;
@@ -496,7 +495,6 @@ mod tests {
     use crate::node::message::get_blocks::PayloadGetBlocks;
     use crate::node::message::get_data::PayloadGetData;
     use crate::node::message::get_headers::PayloadGetHeaders;
-    use crate::node::message::version::PayloadVersion;
     use std::thread;
     use std::time::Duration;
 

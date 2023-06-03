@@ -153,7 +153,7 @@ fn parse_messages_from(buf: &mut Vec<u8>) -> Vec<MessagePayload> {
     messages
 }
 
-fn decode_message<T: Encoding<T>>(cmd: &String, data: &[u8]) -> Result<T, String> {
+fn decode_message<T: Encoding<T>>(cmd: &str, data: &[u8]) -> Result<T, String> {
     T::decode(cmd, data)
 }
 

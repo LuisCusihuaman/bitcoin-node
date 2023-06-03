@@ -10,7 +10,7 @@ pub struct PayloadInv {
 }
 
 pub fn decode_inv(buffer: &[u8]) -> Result<MessagePayload, String> {
-    let count = read_varint(&mut &buffer[0..]);
+    let count = read_varint(&buffer[0..]);
     let offset = get_offset(buffer);
     let inv_type = read_u32_le(&buffer[offset..], 0); //TODO: are the same for blocks only, but refactor for tx
     let chunked = buffer[offset..].chunks(36);

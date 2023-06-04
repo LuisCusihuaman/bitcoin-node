@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use rand::seq::index;
+
 use crate::node::message::tx::Tx;
 use crate::node::message::tx::TxIn;
 
@@ -12,31 +14,32 @@ pub struct Utxo {
     pub spent: bool,
 }
 
-pub fn update_utxo_set(utxo_set: &mut HashMap<[u8; 32], Utxo>, tx: &Tx) {
+// Gasto el dinero
+pub fn update_utxo_set(utxo_set: &mut HashMap<[u8; 32], Vec<Utxo> >, tx: &Tx) {
     for tx_in in &tx.tx_in {
         let hash_tx = tx_in.previous_output.hash;
+        let index = tx_in.previous_output.index as usize;
 
         if let Some(utxo) = utxo_set.get_mut(&hash_tx) {
             // Mark the UTXO as spent
-            utxo.spent = true;
-
-            // TODO En un futuro eliminar UTXO de la tabla
+            utxo[index].spent = true;
         }
     }
 }
 
-pub fn is_tx_spent(utxo_set: &HashMap<[u8; 32], Utxo>, tx_in: &TxIn) -> bool {
+pub fn is_tx_spent(utxo_set: &HashMap<[u8; 32], Vec<Utxo> >, tx_in: &TxIn) -> bool {
     let hash_tx = tx_in.previous_output.hash;
+    let index = tx_in.previous_output.index as usize;
+
     if let Some(utxo) = utxo_set.get(&hash_tx) {
-        if utxo.spent {
-            return true;
-        }
+        return utxo[index].spent
     }
 
     false
 }
 
-pub fn generate_utxos(utxo_set: &mut HashMap<[u8; 32], Utxo>, tx: &Tx) {
+pub fn generate_utxos(utxo_set: &mut HashMap<[u8; 32], Vec<Utxo> >, tx: &Tx) {
+    let mut utxos = Vec::new();
     for (index, tx_out) in tx.tx_out.iter().enumerate() {
         let utxo = Utxo {
             transaction_id: tx.id,
@@ -45,8 +48,9 @@ pub fn generate_utxos(utxo_set: &mut HashMap<[u8; 32], Utxo>, tx: &Tx) {
             recipient_address: tx_out.pk_script.clone(),
             spent: false,
         };
-        utxo_set.insert(tx.id, utxo);
+        utxos.push(utxo);
     }
+    utxo_set.insert(tx.id, utxos);
 }
 
 #[cfg(test)]
@@ -101,11 +105,11 @@ mod tests {
         let utxo = utxo_set.get(&transaction.id).unwrap();
 
         // Ensure that the UTXOs are generated correctly
-        assert_eq!(utxo.transaction_id, transaction.id);
-        assert_eq!(utxo.output_index, 0);
-        assert_eq!(utxo.value, 5000020000);
+        assert_eq!(utxo.first().unwrap().transaction_id, transaction.id);
+        assert_eq!(utxo.first().unwrap().output_index, 0);
+        assert_eq!(utxo.first().unwrap().value, 5000020000);
         assert_eq!(
-            utxo.recipient_address,
+            utxo.first().unwrap().recipient_address,
             vec![
                 118, 169, 20, 195, 208, 147, 199, 86, 220, 79, 141, 216, 23, 181, 3, 198, 78, 203,
                 128, 39, 118, 33, 52, 136, 172,
@@ -356,7 +360,7 @@ mod tests {
         let utxo = utxo_set.get(&transaction.id).unwrap();
 
         // Ensure that the UTXO set is updated correctly
-        assert_eq!(utxo.spent, false);
+        assert_eq!(utxo.first().unwrap().spent, false);
     }
 
     #[test]
@@ -598,9 +602,10 @@ mod tests {
         };
 
         generate_utxos(&mut utxo_set, &new_transaction);
-        let utxo = utxo_set.get(&new_transaction.id).unwrap();
+        let utxo = utxo_set.get(&new_transaction.id).unwrap().first().unwrap();
 
         // Ensure that the UTXO set is updated correctly
+
         assert_eq!(utxo.spent, false);
     }
 
@@ -692,9 +697,106 @@ mod tests {
         generate_utxos(&mut utxo_set, &new_transaction);
         update_utxo_set(&mut utxo_set, &new_transaction);
 
-        let utxo = utxo_set.get(&new_transaction.id).unwrap();
+
+        let tx_in = TxIn {
+            previous_output: OutPoint {
+                hash: [
+                    230, 17, 204, 216, 152, 113, 52, 184, 70, 87, 1, 249, 234, 17, 39, 102, 77,
+                    17, 41, 48, 122, 17, 106, 157, 133, 63, 1, 153, 206, 101, 110, 234,
+                ],
+                index: 1,
+            },
+            script_length: 107,
+                signature_script: vec![
+                    72, 48, 69, 2, 32, 63, 84, 31, 24, 79, 144, 242, 87, 201, 64, 157, 230, 108,
+                    126, 186, 229, 5, 47, 242, 225, 171, 184, 51, 149, 222, 246, 79, 93, 65, 17,
+                    39, 172, 2, 33, 0, 218, 47, 194, 209, 134, 43, 227, 58, 108, 15, 234, 194, 96,
+                    163, 122, 140, 96, 42, 133, 56, 173, 205, 183, 242, 198, 29, 254, 85, 229, 71,
+                    188, 221, 1, 33, 3, 90, 249, 72, 176, 24, 177, 15, 244, 242, 166, 91, 179, 107,
+                    118, 10, 227, 196, 58, 243, 29, 62, 197, 90, 196, 208, 42, 212, 228, 208, 29,
+                    40, 68,
+                ],
+                sequence: 4294967295,
+            };
 
         // Ensure that the UTXO set is updated correctly
-        assert_eq!(utxo.spent, false);
+        assert!(is_tx_spent(&utxo_set, &tx_in)==false);
+
     }
+
+#[test]
+fn test_utxo_set_saves_all_tx_out_from_tx(){
+
+    let mut utxo_set = HashMap::new();
+        
+        let new_transaction = Tx {
+            id: [
+                72, 132, 120, 96, 171, 214, 128, 219, 33, 157, 16, 192, 174, 101, 128, 69, 181,
+                126, 185, 38, 161, 37, 17, 65, 92, 229, 106, 55, 131, 235, 133, 202,
+            ],
+            version: 2,
+            flag: 0,
+            tx_in_count: 1,
+            tx_in: vec![TxIn {
+                previous_output: OutPoint {
+                    hash: [
+                        230, 17, 204, 216, 152, 113, 52, 184, 70, 87, 1, 249, 234, 17, 39, 102, 77,
+                        17, 41, 48, 122, 17, 106, 157, 133, 63, 1, 153, 206, 101, 110, 234,
+                    ],
+                    index: 1,
+                },
+                script_length: 107,
+                signature_script: vec![
+                    72, 48, 69, 2, 32, 63, 84, 31, 24, 79, 144, 242, 87, 201, 64, 157, 230, 108,
+                    126, 186, 229, 5, 47, 242, 225, 171, 184, 51, 149, 222, 246, 79, 93, 65, 17,
+                    39, 172, 2, 33, 0, 218, 47, 194, 209, 134, 43, 227, 58, 108, 15, 234, 194, 96,
+                    163, 122, 140, 96, 42, 133, 56, 173, 205, 183, 242, 198, 29, 254, 85, 229, 71,
+                    188, 221, 1, 33, 3, 90, 249, 72, 176, 24, 177, 15, 244, 242, 166, 91, 179, 107,
+                    118, 10, 227, 196, 58, 243, 29, 62, 197, 90, 196, 208, 42, 212, 228, 208, 29,
+                    40, 68,
+                ],
+                sequence: 4294967295,
+            }],
+            tx_out_count: 1,
+            tx_out: vec![TxOut {
+                value: 669645,
+                pk_script_length: 25,
+                pk_script: vec![
+                    118, 169, 20, 122, 228, 120, 18, 59, 150, 13, 46, 233, 18, 104, 91, 129, 152,
+                    169, 8, 100, 187, 100, 137, 136, 172,
+                ],
+            },
+
+                TxOut {
+                    value: 645634,
+                    pk_script_length: 25,
+                    pk_script: vec![
+                        118, 169, 20, 10, 74, 129, 168, 231, 144, 184, 206, 179, 2, 189, 63, 34,
+                        252, 125, 202, 254, 161, 148, 12, 136, 172,
+                    ],
+                },
+                TxOut {
+                    value: 669645,
+                    pk_script_length: 25,
+                    pk_script: vec![
+                        118, 169, 20, 122, 228, 120, 18, 59, 150, 13, 46, 233, 18, 104, 91, 129,
+                        152, 169, 8, 100, 187, 100, 137, 136, 172,
+                    ],
+                },
+            ],
+            tx_witness: vec![],
+            lock_time: 0,
+        };
+
+
+        generate_utxos(&mut utxo_set, &new_transaction);
+
+        let utxo = utxo_set.get(&new_transaction.id).unwrap();
+
+        assert_eq!(utxo.len(), 3);
+
+
+
+}
+
 }

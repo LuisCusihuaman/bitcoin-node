@@ -146,7 +146,7 @@ pub struct NodeManager<'a> {
     config: Config,
     logger: &'a Logger,
     blocks: Vec<Block>,
-    utxo_set: HashMap<[u8; 32], Utxo>,
+    utxo_set: HashMap<[u8; 32], Vec<Utxo> >,
 }
 
 impl NodeManager<'_> {

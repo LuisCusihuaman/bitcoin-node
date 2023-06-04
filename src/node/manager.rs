@@ -150,7 +150,7 @@ pub struct NodeManager<'a> {
 impl NodeManager<'_> {
     pub fn block_broadcasting(&mut self) -> Result<(), String> {
         loop {
-            println!("helloooooo...")
+            self.wait_for(vec!["inv"]);
         }
     }
     pub fn new(config: Config, logger: &Logger) -> NodeManager {
@@ -244,10 +244,19 @@ impl NodeManager<'_> {
                         }
                     }
                     MessagePayload::Inv(inv) => {
+                        let inv = inv.clone();
+                        let inv2 = inv.clone();
+                        if inv.inv_type == 2 {
+                            // TODO: make type
+                            self.send_to(
+                                peer_address.clone(),
+                                &MessagePayload::GetData(PayloadGetData::new(inv.count, inv.invs)),
+                            );
+                            self.wait_for(vec!["blocks"]);
+                        }
                         message_name = String::from("inv");
-
                         if commands.contains(&"inv") {
-                            matched_peer_messages.push(MessagePayload::Inv(inv.clone()));
+                            matched_peer_messages.push(MessagePayload::Inv(inv2.clone()));
                         }
                     }
 
@@ -374,7 +383,8 @@ impl NodeManager<'_> {
         let mut hash_reversed: [u8; 32] = *block_hash;
         hash_reversed.reverse();
 
-        let payload_get_headers = PayloadGetHeaders::new(70015, 1, hash_reversed, stop_hash);
+        let payload_get_headers =
+            PayloadGetHeaders::new(70015, 1, hash_reversed.to_vec(), stop_hash.to_vec());
         let get_headers_message = MessagePayload::GetHeaders(payload_get_headers);
 
         let address = self.get_random_peer_address();
@@ -406,10 +416,11 @@ impl NodeManager<'_> {
                 let mut block_hash: [u8; 32] = block.get_prev();
                 block_hash.reverse();
                 self.block_download_since_block_hash(&block_hash);
-
+                self.logger.log(format!("{} blocks downloaded", index));
                 index += 500;
             }
         }
+        self.logger.log("Block download finished".to_string());
     }
 
     fn block_download_since_block_hash(&mut self, block_hash: &[u8; 32]) {
@@ -421,25 +432,25 @@ impl NodeManager<'_> {
             block_header_hashes: block_hash.to_vec(),
             stop_hash: stop_hash.to_vec(),
         });
-
         // Send get block messages
         let address = self.get_random_peer_address();
-        self.send_to(address.clone(), &get_blocks_message);
+        self.send_to(address, &get_blocks_message);
 
         // Receive inv messages
-        let response = self.wait_for(vec!["inv"]);
-        let messages = filter_by(response, address.clone());
+        self.wait_for(vec!["inv"]);
+        //let messages = filter_by(response, address.clone());
+        //TODO: check for fail send messages because is +500 always, refactor with concurrency 🧠
 
-        for message_inv in messages.iter() {
-            if let MessagePayload::Inv(payload_inv) = message_inv {
-                let get_data_message = MessagePayload::GetData(PayloadGetData::new(
-                    payload_inv.count,
-                    payload_inv.invs.clone(),
-                ));
-                self.send_to(address.clone(), &get_data_message);
-                self.wait_for(vec!["block"]);
-            }
-        }
+        // for message_inv in messages.iter() {
+        //     if let MessagePayload::Inv(payload_inv) = message_inv {
+        //         let get_data_message = MessagePayload::GetData(PayloadGetData::new(
+        //             payload_inv.count,
+        //             payload_inv.invs.clone(),
+        //         ));
+        //         self.send_to(address.clone(), &get_data_message);
+        //         self.wait_for(vec!["block"]);
+        //     }
+        // }
     }
 
     pub fn get_block_index_by_timestamp(&self, timestamp: u32) -> Option<usize> {
@@ -491,7 +502,6 @@ mod tests {
     use crate::node::message::get_blocks::PayloadGetBlocks;
     use crate::node::message::get_data::PayloadGetData;
     use crate::node::message::get_headers::PayloadGetHeaders;
-    use crate::node::message::version::PayloadVersion;
     use std::thread;
     use std::time::Duration;
 
@@ -530,14 +540,7 @@ mod tests {
 
         let mut node_manager = NodeManager::new(config, &logger);
         node_manager.connect(vec!["5.9.73.173:18333".to_string()])?;
-
-        let payload_version_message = MessagePayload::Version(PayloadVersion::default_version());
-        node_manager.broadcast(&payload_version_message);
-
-        let received_messages = node_manager.receive_all();
-
-        let (_, _received_payloads) = received_messages.first().unwrap(); // TODO add an assert
-
+        node_manager.handshake();
         Ok(())
     }
 
@@ -560,8 +563,8 @@ mod tests {
         let get_headers_message = MessagePayload::GetHeaders(PayloadGetHeaders::new(
             70015,
             1,
-            hash_block_genesis,
-            stop_hash,
+            hash_block_genesis.to_vec(),
+            stop_hash.to_vec(),
         ));
         node_manager.broadcast(&get_headers_message);
         node_manager.wait_for(vec!["headers"]);
@@ -628,7 +631,7 @@ mod tests {
 
         node_manager.broadcast(&get_blocks_message);
 
-        // Recibo inventario
+        // BLOCK BROADCASTING
         let response = node_manager.wait_for(vec!["inv"]);
         let messages = filter_by(response, "18.191.253.246:18333".to_string());
 
@@ -769,7 +772,3 @@ mod tests {
         Ok(())
     }
 }
-
-#[test]
-
-fn test_create_tx_and_add_utxo_set() {}

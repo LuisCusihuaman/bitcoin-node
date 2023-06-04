@@ -11,14 +11,14 @@ impl PayloadGetData {
         Self { count, inventory }
     }
 
-    pub fn size(&self) -> u64 {
+    pub fn size(&self) -> usize {
         let mut size = 0;
         let count = get_le_varint(self.count);
 
-        size += count.len(); // TODO Variable size
-        size += self.inventory.len(); // TODO Variable size
+        size += count.len(); // variable size
+        size += self.inventory.len(); // variable size
 
-        size as u64
+        size
     }
 
     pub fn encode(&self, buffer: &mut [u8]) {

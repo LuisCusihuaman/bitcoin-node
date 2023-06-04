@@ -5,10 +5,12 @@ use app::net::response::Response;
 use app::net::router::Router;
 use app::net::server::Server;
 use app::node::manager::NodeManager;
-use std::io::{BufRead, BufReader, Write};
-use std::net::TcpStream;
-use std::thread;
-use std::time::Duration;
+use std::{
+    io::{BufRead, BufReader, Write},
+    net::TcpStream,
+    thread::{self},
+    time::Duration,
+};
 
 #[test]
 #[ignore]

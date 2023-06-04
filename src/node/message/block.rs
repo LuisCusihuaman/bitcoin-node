@@ -26,7 +26,7 @@ pub struct Block {
     pub nonce: u32,
     pub txn_count: usize,
     // variable size
-    pub txns: Vec<Tx>,    // variable size
+    pub txns: Vec<Tx>, // variable size
 }
 
 impl Block {
@@ -56,7 +56,6 @@ impl Block {
 
         result
     }
-
 
     fn scalar_by(scalar: u32, bytes: &[u8]) -> Vec<u8> {
         let mut carry = 0;
@@ -89,7 +88,6 @@ impl Block {
         result
     }
 
-
     pub fn target(&self) -> Vec<u8> {
         let bits = self.n_bits.to_le_bytes();
         let exponent = bits[3] as u32;
@@ -100,7 +98,6 @@ impl Block {
         let target = Self::scalar_by(coefficient, &pow);
         target
     }
-
 
     // generates the target to validate proof of work
     // // target = coefficient * 256**(exponent - 3)
@@ -150,8 +147,6 @@ impl Block {
 
         sha.len() < target.len()
     }
-
-
 
     fn init_merkle_tree(&self) -> MerkleTree {
         let tx_ids: Vec<&[u8]> = self.txns.iter().map(|tx| &tx.id[..]).collect();
@@ -356,7 +351,7 @@ pub fn decode_internal_block(buffer: &[u8]) -> Option<Block> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::node::message::tx::{Tx, TxIn, TxOut};
+    use crate::node::message::tx::{OutPoint, Tx, TxIn, TxOut};
 
     #[test]
     fn test_proof_of_inclution_doesnt_have_invalid_tx() {
@@ -388,13 +383,19 @@ mod tests {
             tx_in_count: 2, // varint
             tx_in: vec![
                 TxIn {
-                    previous_output: [0; 36],
+                    previous_output: OutPoint {
+                        hash: [0; 32],
+                        index: 0,
+                    },
                     script_length: 0, // varint
                     signature_script: vec![],
                     sequence: 0,
                 },
                 TxIn {
-                    previous_output: [0; 36],
+                    previous_output: OutPoint {
+                        hash: [0; 32],
+                        index: 0,
+                    },
                     script_length: 0, // varint
                     signature_script: vec![],
                     sequence: 0,
@@ -417,13 +418,19 @@ mod tests {
             tx_in_count: 2, // varint
             tx_in: vec![
                 TxIn {
-                    previous_output: [0; 36],
+                    previous_output: OutPoint {
+                        hash: [0; 32],
+                        index: 0,
+                    },
                     script_length: 0, // varint
                     signature_script: vec![],
                     sequence: 0,
                 },
                 TxIn {
-                    previous_output: [0; 36],
+                    previous_output: OutPoint {
+                        hash: [0; 32],
+                        index: 0,
+                    },
                     script_length: 0, // varint
                     signature_script: vec![],
                     sequence: 0,
@@ -445,7 +452,10 @@ mod tests {
             flag: 0,
             tx_in_count: 1, // varint
             tx_in: vec![TxIn {
-                previous_output: [0; 36],
+                previous_output: OutPoint {
+                    hash: [0; 32],
+                    index: 0,
+                },
                 script_length: 0, // varint
                 signature_script: vec![],
                 sequence: 0,
@@ -497,10 +507,10 @@ mod tests {
             flag: 0,
             tx_in_count: 1,
             tx_in: vec![TxIn {
-                previous_output: [
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 255, 255, 255, 255,
-                ],
+                previous_output: OutPoint {
+                    hash: [0; 32],
+                    index: 255,
+                },
                 script_length: 18,
                 signature_script: vec![
                     3, 206, 247, 1, 5, 82, 126, 227, 169, 4, 0, 0, 0, 0, 14, 0, 0, 0,
@@ -530,11 +540,14 @@ mod tests {
             tx_in_count: 7,
             tx_in: vec![
                 TxIn {
-                    previous_output: [
-                        226, 186, 153, 202, 133, 201, 191, 217, 242, 20, 228, 81, 115, 195, 78,
-                        140, 34, 173, 40, 212, 252, 161, 254, 59, 118, 110, 113, 203, 95, 194, 15,
-                        31, 1, 0, 0, 0,
-                    ],
+                    previous_output: OutPoint {
+                        hash: [
+                            226, 186, 153, 202, 133, 201, 191, 217, 242, 20, 228, 81, 115, 195, 78,
+                            140, 34, 173, 40, 212, 252, 161, 254, 59, 118, 110, 113, 203, 95, 194,
+                            15, 31,
+                        ],
+                        index: 1,
+                    },
                     script_length: 108,
                     signature_script: vec![
                         73, 48, 70, 2, 33, 0, 186, 116, 152, 184, 8, 221, 93, 28, 177, 136, 228,
@@ -548,11 +561,14 @@ mod tests {
                     sequence: 4294967295,
                 },
                 TxIn {
-                    previous_output: [
-                        87, 11, 145, 133, 166, 10, 91, 198, 242, 120, 93, 28, 141, 156, 172, 229,
-                        167, 78, 2, 4, 36, 136, 23, 48, 7, 126, 253, 166, 170, 52, 117, 44, 0, 0,
-                        0, 0,
-                    ],
+                    previous_output: OutPoint {
+                        hash: [
+                            87, 11, 145, 133, 166, 10, 91, 198, 242, 120, 93, 28, 141, 156, 172,
+                            229, 167, 78, 2, 4, 36, 136, 23, 48, 7, 126, 253, 166, 170, 52, 117,
+                            44,
+                        ],
+                        index: 0,
+                    },
                     script_length: 106,
                     signature_script: vec![
                         71, 48, 68, 2, 32, 11, 179, 179, 252, 228, 62, 6, 213, 107, 68, 198, 255,
@@ -566,11 +582,14 @@ mod tests {
                     sequence: 4294967295,
                 },
                 TxIn {
-                    previous_output: [
-                        32, 147, 198, 194, 94, 20, 50, 221, 56, 255, 251, 30, 188, 120, 121, 159,
-                        94, 103, 113, 8, 92, 223, 73, 28, 93, 246, 131, 233, 78, 185, 135, 74, 1,
-                        0, 0, 0,
-                    ],
+                    previous_output: OutPoint {
+                        hash: [
+                            32, 147, 198, 194, 94, 20, 50, 221, 56, 255, 251, 30, 188, 120, 121,
+                            159, 94, 103, 113, 8, 92, 223, 73, 28, 93, 246, 131, 233, 78, 185, 135,
+                            74,
+                        ],
+                        index: 1,
+                    },
                     script_length: 108,
                     signature_script: vec![
                         73, 48, 70, 2, 33, 0, 240, 181, 236, 200, 22, 39, 131, 90, 11, 7, 31, 63,
@@ -584,11 +603,14 @@ mod tests {
                     sequence: 4294967295,
                 },
                 TxIn {
-                    previous_output: [
-                        199, 106, 135, 0, 185, 117, 124, 99, 211, 106, 15, 189, 198, 113, 214, 189,
-                        25, 221, 198, 45, 62, 102, 201, 221, 198, 180, 230, 119, 168, 63, 170, 134,
-                        1, 0, 0, 0,
-                    ],
+                    previous_output: OutPoint {
+                        hash: [
+                            199, 106, 135, 0, 185, 117, 124, 99, 211, 106, 15, 189, 198, 113, 214,
+                            189, 25, 221, 198, 45, 62, 102, 201, 221, 198, 180, 230, 119, 168, 63,
+                            170, 134,
+                        ],
+                        index: 1,
+                    },
                     script_length: 107,
                     signature_script: vec![
                         72, 48, 69, 2, 33, 0, 148, 183, 111, 75, 123, 151, 140, 112, 229, 245, 34,
@@ -602,11 +624,14 @@ mod tests {
                     sequence: 4294967295,
                 },
                 TxIn {
-                    previous_output: [
-                        113, 35, 225, 56, 130, 84, 0, 26, 180, 60, 21, 164, 153, 182, 156, 157, 52,
-                        43, 137, 67, 175, 115, 113, 220, 238, 17, 250, 26, 185, 120, 104, 194, 1,
-                        0, 0, 0,
-                    ],
+                    previous_output: OutPoint {
+                        hash: [
+                            113, 35, 225, 56, 130, 84, 0, 26, 180, 60, 21, 164, 153, 182, 156, 157,
+                            52, 43, 137, 67, 175, 115, 113, 220, 238, 17, 250, 26, 185, 120, 104,
+                            194,
+                        ],
+                        index: 1,
+                    },
                     script_length: 107,
                     signature_script: vec![
                         72, 48, 69, 2, 33, 0, 249, 75, 138, 74, 35, 71, 68, 234, 176, 124, 125,
@@ -620,11 +645,14 @@ mod tests {
                     sequence: 4294967295,
                 },
                 TxIn {
-                    previous_output: [
-                        211, 188, 83, 197, 125, 117, 74, 74, 184, 74, 214, 26, 114, 107, 75, 181,
-                        136, 146, 27, 10, 10, 3, 171, 202, 169, 123, 208, 250, 240, 241, 114, 231,
-                        1, 0, 0, 0,
-                    ],
+                    previous_output: OutPoint {
+                        hash: [
+                            211, 188, 83, 197, 125, 117, 74, 74, 184, 74, 214, 26, 114, 107, 75,
+                            181, 136, 146, 27, 10, 10, 3, 171, 202, 169, 123, 208, 250, 240, 241,
+                            114, 231,
+                        ],
+                        index: 1,
+                    },
                     script_length: 108,
                     signature_script: vec![
                         73, 48, 70, 2, 33, 0, 224, 53, 209, 40, 121, 66, 156, 139, 156, 123, 122,
@@ -638,11 +666,13 @@ mod tests {
                     sequence: 4294967295,
                 },
                 TxIn {
-                    previous_output: [
-                        230, 17, 204, 216, 152, 113, 52, 184, 70, 87, 1, 249, 234, 17, 39, 102, 77,
-                        17, 41, 48, 122, 17, 106, 157, 133, 63, 1, 153, 206, 101, 110, 234, 1, 0,
-                        0, 0,
-                    ],
+                    previous_output: OutPoint {
+                        hash: [
+                            230, 17, 204, 216, 152, 113, 52, 184, 70, 87, 1, 249, 234, 17, 39, 102,
+                            77, 17, 41, 48, 122, 17, 106, 157, 133, 63, 1, 153, 206, 101, 110, 234,
+                        ],
+                        index: 1,
+                    },
                     script_length: 107,
                     signature_script: vec![
                         72, 48, 69, 2, 32, 63, 84, 31, 24, 79, 144, 242, 87, 201, 64, 157, 230,
@@ -772,10 +802,10 @@ mod tests {
             flag: 0,
             tx_in_count: 1, // varint
             tx_in: vec![TxIn {
-                previous_output: [
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 255, 255, 255, 255,
-                ],
+                previous_output: OutPoint {
+                    hash: [0; 32],
+                    index: 255,
+                },
                 script_length: 14, // varint
                 signature_script: vec![4, 32, 231, 73, 77, 1, 127, 6, 47, 80, 50, 83, 72, 47],
                 sequence: 4294967295,
@@ -835,10 +865,10 @@ mod tests {
             flag: 0,
             tx_in_count: 1,
             tx_in: vec![TxIn {
-                previous_output: [
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 255, 255, 255, 255,
-                ],
+                previous_output: OutPoint {
+                    hash: [0; 32],
+                    index: 255,
+                },
                 script_length: 18,
                 signature_script: vec![
                     3, 206, 247, 1, 5, 82, 126, 227, 169, 4, 0, 0, 0, 0, 14, 0, 0, 0,
@@ -868,11 +898,14 @@ mod tests {
             tx_in_count: 7,
             tx_in: vec![
                 TxIn {
-                    previous_output: [
-                        226, 186, 153, 202, 133, 201, 191, 217, 242, 20, 228, 81, 115, 195, 78,
-                        140, 34, 173, 40, 212, 252, 161, 254, 59, 118, 110, 113, 203, 95, 194, 15,
-                        31, 1, 0, 0, 0,
-                    ],
+                    previous_output: OutPoint {
+                        hash: [
+                            226, 186, 153, 202, 133, 201, 191, 217, 242, 20, 228, 81, 115, 195, 78,
+                            140, 34, 173, 40, 212, 252, 161, 254, 59, 118, 110, 113, 203, 95, 194,
+                            15, 31,
+                        ],
+                        index: 1,
+                    },
                     script_length: 108,
                     signature_script: vec![
                         73, 48, 70, 2, 33, 0, 186, 116, 152, 184, 8, 221, 93, 28, 177, 136, 228,
@@ -886,11 +919,14 @@ mod tests {
                     sequence: 4294967295,
                 },
                 TxIn {
-                    previous_output: [
-                        87, 11, 145, 133, 166, 10, 91, 198, 242, 120, 93, 28, 141, 156, 172, 229,
-                        167, 78, 2, 4, 36, 136, 23, 48, 7, 126, 253, 166, 170, 52, 117, 44, 0, 0,
-                        0, 0,
-                    ],
+                    previous_output: OutPoint {
+                        hash: [
+                            87, 11, 145, 133, 166, 10, 91, 198, 242, 120, 93, 28, 141, 156, 172,
+                            229, 167, 78, 2, 4, 36, 136, 23, 48, 7, 126, 253, 166, 170, 52, 117,
+                            44,
+                        ],
+                        index: 0,
+                    },
                     script_length: 106,
                     signature_script: vec![
                         71, 48, 68, 2, 32, 11, 179, 179, 252, 228, 62, 6, 213, 107, 68, 198, 255,
@@ -904,11 +940,14 @@ mod tests {
                     sequence: 4294967295,
                 },
                 TxIn {
-                    previous_output: [
-                        32, 147, 198, 194, 94, 20, 50, 221, 56, 255, 251, 30, 188, 120, 121, 159,
-                        94, 103, 113, 8, 92, 223, 73, 28, 93, 246, 131, 233, 78, 185, 135, 74, 1,
-                        0, 0, 0,
-                    ],
+                    previous_output: OutPoint {
+                        hash: [
+                            32, 147, 198, 194, 94, 20, 50, 221, 56, 255, 251, 30, 188, 120, 121,
+                            159, 94, 103, 113, 8, 92, 223, 73, 28, 93, 246, 131, 233, 78, 185, 135,
+                            74,
+                        ],
+                        index: 1,
+                    },
                     script_length: 108,
                     signature_script: vec![
                         73, 48, 70, 2, 33, 0, 240, 181, 236, 200, 22, 39, 131, 90, 11, 7, 31, 63,
@@ -922,11 +961,14 @@ mod tests {
                     sequence: 4294967295,
                 },
                 TxIn {
-                    previous_output: [
-                        199, 106, 135, 0, 185, 117, 124, 99, 211, 106, 15, 189, 198, 113, 214, 189,
-                        25, 221, 198, 45, 62, 102, 201, 221, 198, 180, 230, 119, 168, 63, 170, 134,
-                        1, 0, 0, 0,
-                    ],
+                    previous_output: OutPoint {
+                        hash: [
+                            199, 106, 135, 0, 185, 117, 124, 99, 211, 106, 15, 189, 198, 113, 214,
+                            189, 25, 221, 198, 45, 62, 102, 201, 221, 198, 180, 230, 119, 168, 63,
+                            170, 134,
+                        ],
+                        index: 1,
+                    },
                     script_length: 107,
                     signature_script: vec![
                         72, 48, 69, 2, 33, 0, 148, 183, 111, 75, 123, 151, 140, 112, 229, 245, 34,
@@ -940,11 +982,14 @@ mod tests {
                     sequence: 4294967295,
                 },
                 TxIn {
-                    previous_output: [
-                        113, 35, 225, 56, 130, 84, 0, 26, 180, 60, 21, 164, 153, 182, 156, 157, 52,
-                        43, 137, 67, 175, 115, 113, 220, 238, 17, 250, 26, 185, 120, 104, 194, 1,
-                        0, 0, 0,
-                    ],
+                    previous_output: OutPoint {
+                        hash: [
+                            113, 35, 225, 56, 130, 84, 0, 26, 180, 60, 21, 164, 153, 182, 156, 157,
+                            52, 43, 137, 67, 175, 115, 113, 220, 238, 17, 250, 26, 185, 120, 104,
+                            194,
+                        ],
+                        index: 1,
+                    },
                     script_length: 107,
                     signature_script: vec![
                         72, 48, 69, 2, 33, 0, 249, 75, 138, 74, 35, 71, 68, 234, 176, 124, 125,
@@ -958,11 +1003,14 @@ mod tests {
                     sequence: 4294967295,
                 },
                 TxIn {
-                    previous_output: [
-                        211, 188, 83, 197, 125, 117, 74, 74, 184, 74, 214, 26, 114, 107, 75, 181,
-                        136, 146, 27, 10, 10, 3, 171, 202, 169, 123, 208, 250, 240, 241, 114, 231,
-                        1, 0, 0, 0,
-                    ],
+                    previous_output: OutPoint {
+                        hash: [
+                            211, 188, 83, 197, 125, 117, 74, 74, 184, 74, 214, 26, 114, 107, 75,
+                            181, 136, 146, 27, 10, 10, 3, 171, 202, 169, 123, 208, 250, 240, 241,
+                            114, 231,
+                        ],
+                        index: 1,
+                    },
                     script_length: 108,
                     signature_script: vec![
                         73, 48, 70, 2, 33, 0, 224, 53, 209, 40, 121, 66, 156, 139, 156, 123, 122,
@@ -976,11 +1024,13 @@ mod tests {
                     sequence: 4294967295,
                 },
                 TxIn {
-                    previous_output: [
-                        230, 17, 204, 216, 152, 113, 52, 184, 70, 87, 1, 249, 234, 17, 39, 102, 77,
-                        17, 41, 48, 122, 17, 106, 157, 133, 63, 1, 153, 206, 101, 110, 234, 1, 0,
-                        0, 0,
-                    ],
+                    previous_output: OutPoint {
+                        hash: [
+                            230, 17, 204, 216, 152, 113, 52, 184, 70, 87, 1, 249, 234, 17, 39, 102,
+                            77, 17, 41, 48, 122, 17, 106, 157, 133, 63, 1, 153, 206, 101, 110, 234,
+                        ],
+                        index: 1,
+                    },
                     script_length: 107,
                     signature_script: vec![
                         72, 48, 69, 2, 32, 63, 84, 31, 24, 79, 144, 242, 87, 201, 64, 157, 230,
@@ -1105,7 +1155,6 @@ mod tests {
             txns: vec![],
         };
 
-
         assert_eq!(block.validate_pow(), true);
     }
 
@@ -1126,13 +1175,16 @@ mod tests {
                 16, 92, 241, 228, 96, 167, 60, 7, 168, 155, 54, 29, 202, 64, 99,
             ],
             timestamp: 1384047529,
-            n_bits: 83886081,// has a 5 as last byte
+            n_bits: 83886081, // has a 5 as last byte
             nonce: 2442677017,
             txn_count: 2,
             txns: vec![],
         };
         let target = block.target();
-        assert_eq!(u32::from_le_bytes([target[0], target[1], target[2], target[3]]), 65536);
+        assert_eq!(
+            u32::from_le_bytes([target[0], target[1], target[2], target[3]]),
+            65536
+        );
     }
 
     #[test]
@@ -1163,17 +1215,17 @@ mod tests {
 
         // Test case with u64 that result in u128
         let bytes_u64 = vec![50, 10, 15, 2, 8, 30, 7, 120]; //8648914629131438642
-        let expected_bytes: Vec<u8> = vec![150, 30, 45, 6, 24, 90, 21, 104, 1, 0, 0, 0, 0, 0, 0, 0];//25946743887394315926
+        let expected_bytes: Vec<u8> = vec![150, 30, 45, 6, 24, 90, 21, 104, 1, 0, 0, 0, 0, 0, 0, 0]; //25946743887394315926
         let result_bytes = Block::scalar_by(3, &bytes_u64);
         let expected_u128 = u128::from_le_bytes(result_bytes[..].try_into().unwrap());
         assert_eq!(result_bytes, expected_bytes);
         assert_eq!(expected_u128, 25946743887394315926);
 
         // Test case with u128
-        let bytes_u128 = vec![
-            255, 200, 150, 100, 50, 10, 5, 1, 0, 0, 0, 0, 0, 0, 0, 1]; //1329227995784915872977283240754071807
+        let bytes_u128 = vec![255, 200, 150, 100, 50, 10, 5, 1, 0, 0, 0, 0, 0, 0, 0, 1]; //1329227995784915872977283240754071807
         let result_bytes = Block::scalar_by(3, &bytes_u128);
-        let expected_bytes: Vec<u8> = vec![253, 90, 196, 45, 151, 30, 15, 3, 0, 0, 0, 0, 0, 0, 0, 3];
+        let expected_bytes: Vec<u8> =
+            vec![253, 90, 196, 45, 151, 30, 15, 3, 0, 0, 0, 0, 0, 0, 0, 3];
         let expected_u128 = u128::from_le_bytes(result_bytes[..].try_into().unwrap());
         assert_eq!(result_bytes, expected_bytes);
         assert_eq!(expected_u128, 3987683987354747618931849722262215421);
@@ -1187,15 +1239,47 @@ mod tests {
     #[test]
     fn test_pow_256() {
         let result_with_0 = Block::pow_256(0);
-        assert_eq!(u32::from_le_bytes([result_with_0[0], result_with_0[1], result_with_0[2], result_with_0[3]]), 1);
+        assert_eq!(
+            u32::from_le_bytes([
+                result_with_0[0],
+                result_with_0[1],
+                result_with_0[2],
+                result_with_0[3]
+            ]),
+            1
+        );
 
         let result_with_1 = Block::pow_256(1); // 256^1 = 256
-        assert_eq!(u32::from_le_bytes([result_with_1[0], result_with_1[1], result_with_1[2], result_with_1[3]]), 256);
+        assert_eq!(
+            u32::from_le_bytes([
+                result_with_1[0],
+                result_with_1[1],
+                result_with_1[2],
+                result_with_1[3]
+            ]),
+            256
+        );
 
         let result_with_2 = Block::pow_256(2); // 256^2 = 65536
-        assert_eq!(u32::from_le_bytes([result_with_2[0], result_with_2[1], result_with_2[2], result_with_2[3]]), 65536);
+        assert_eq!(
+            u32::from_le_bytes([
+                result_with_2[0],
+                result_with_2[1],
+                result_with_2[2],
+                result_with_2[3]
+            ]),
+            65536
+        );
 
         let result_with_3 = Block::pow_256(3); // 256^3 = 16777216
-        assert_eq!(u32::from_le_bytes([result_with_3[0], result_with_3[1], result_with_3[2], result_with_3[3]]), 16777216);
+        assert_eq!(
+            u32::from_le_bytes([
+                result_with_3[0],
+                result_with_3[1],
+                result_with_3[2],
+                result_with_3[3]
+            ]),
+            16777216
+        );
     }
 }

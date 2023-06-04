@@ -1,4 +1,7 @@
+use std::collections::HashMap;
+
 use crate::node::message::tx::Tx;
+use crate::node::message::tx::TxIn;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Utxo {
@@ -9,23 +12,31 @@ pub struct Utxo {
     pub spent: bool,
 }
 
-pub fn update_utxo_set(utxo_set: &mut [Utxo], tx: &Tx) {
+pub fn update_utxo_set(utxo_set: &mut HashMap<[u8; 32], Utxo>, tx: &Tx) {
     for tx_in in &tx.tx_in {
-        for utxo in utxo_set.iter_mut() {
-            if utxo.transaction_id == tx.id {
-                // Mark the UTXO as spent
-                // For example, you can set a flag or remove the UTXO from the set
-                // For simplicity, let's assume setting a `spent` flag to true
-                utxo.spent = true;
-                break;
+        let hash_tx = tx_in.previous_output.hash;
 
-                // Borrar de la tabla en un futuro
-            }
+        if let Some(utxo) = utxo_set.get_mut(&hash_tx) {
+            // Mark the UTXO as spent
+            utxo.spent = true;
+
+            // TODO En un futuro eliminar UTXO de la tabla
         }
     }
 }
 
-pub fn generate_utxos(utxo_set: &mut Vec<Utxo>, tx: &Tx) {
+pub fn is_tx_spent(utxo_set: &HashMap<[u8; 32], Utxo>, tx_in: &TxIn) -> bool {
+    let hash_tx = tx_in.previous_output.hash;
+    if let Some(utxo) = utxo_set.get(&hash_tx) {
+        if utxo.spent {
+            return true;
+        }
+    }
+
+    false
+}
+
+pub fn generate_utxos(utxo_set: &mut HashMap<[u8; 32], Utxo>, tx: &Tx) {
     for (index, tx_out) in tx.tx_out.iter().enumerate() {
         let utxo = Utxo {
             transaction_id: tx.id,
@@ -34,27 +45,8 @@ pub fn generate_utxos(utxo_set: &mut Vec<Utxo>, tx: &Tx) {
             recipient_address: tx_out.pk_script.clone(),
             spent: false,
         };
-        utxo_set.push(utxo);
+        utxo_set.insert(tx.id, utxo);
     }
-}
-
-pub fn find_utxo(utxo_set: &[Utxo], transaction_id: &[u8; 32], output_index: u32) -> Option<Utxo> {
-    for utxo in utxo_set {
-        if utxo.transaction_id == *transaction_id && utxo.output_index == output_index {
-            return Some(utxo.clone());
-        }
-    }
-    None
-}
-
-pub fn find_utxo_by_address(utxo_set: &[Utxo], address: &[u8]) -> Vec<Utxo> {
-    let mut utxos: Vec<Utxo> = Vec::new();
-    for utxo in utxo_set {
-        if utxo.recipient_address == *address {
-            utxos.push(utxo.clone());
-        }
-    }
-    utxos
 }
 
 #[cfg(test)]
@@ -101,18 +93,19 @@ mod tests {
             lock_time: 0,
         };
 
-        let mut utxo_set = Vec::new();
+        let mut utxo_set = HashMap::new();
 
         // Generate UTXOs from the transaction
         generate_utxos(&mut utxo_set, &transaction);
 
+        let utxo = utxo_set.get(&transaction.id).unwrap();
+
         // Ensure that the UTXOs are generated correctly
-        assert_eq!(utxo_set.len(), 1);
-        assert_eq!(utxo_set[0].transaction_id, transaction.id);
-        assert_eq!(utxo_set[0].output_index, 0);
-        assert_eq!(utxo_set[0].value, 5000020000);
+        assert_eq!(utxo.transaction_id, transaction.id);
+        assert_eq!(utxo.output_index, 0);
+        assert_eq!(utxo.value, 5000020000);
         assert_eq!(
-            utxo_set[0].recipient_address,
+            utxo.recipient_address,
             vec![
                 118, 169, 20, 195, 208, 147, 199, 86, 220, 79, 141, 216, 23, 181, 3, 198, 78, 203,
                 128, 39, 118, 33, 52, 136, 172,
@@ -360,14 +353,15 @@ mod tests {
 
         update_utxo_set(&mut utxo_set, &new_transaction);
 
+        let utxo = utxo_set.get(&transaction.id).unwrap();
+
         // Ensure that the UTXO set is updated correctly
-        assert_eq!(utxo_set.len(), 1);
-        assert_eq!(utxo_set[0].spent, false);
+        assert_eq!(utxo.spent, false);
     }
 
     #[test]
     fn correctly_creates_unspent_utxo() {
-        let mut utxo_set = Vec::new();
+        let mut utxo_set = HashMap::new();
         let new_transaction = Tx {
             id: [
                 72, 132, 120, 96, 171, 214, 128, 219, 33, 157, 16, 192, 174, 101, 128, 69, 181,
@@ -604,15 +598,15 @@ mod tests {
         };
 
         generate_utxos(&mut utxo_set, &new_transaction);
+        let utxo = utxo_set.get(&new_transaction.id).unwrap();
 
         // Ensure that the UTXO set is updated correctly
-        assert_eq!(utxo_set.len(), 9);
-        assert_eq!(utxo_set[0].spent, false);
+        assert_eq!(utxo.spent, false);
     }
 
     #[test]
     fn correctly_updates_spent_utxo() {
-        let mut utxo_set = Vec::new();
+        let mut utxo_set = HashMap::new();
         let new_transaction = Tx {
             id: [
                 72, 132, 120, 96, 171, 214, 128, 219, 33, 157, 16, 192, 174, 101, 128, 69, 181,
@@ -698,8 +692,9 @@ mod tests {
         generate_utxos(&mut utxo_set, &new_transaction);
         update_utxo_set(&mut utxo_set, &new_transaction);
 
+        let utxo = utxo_set.get(&new_transaction.id).unwrap();
+
         // Ensure that the UTXO set is updated correctly
-        assert_eq!(utxo_set.len(), 9);
-        assert_eq!(utxo_set[0].spent, false);
+        assert_eq!(utxo.spent, false);
     }
 }

@@ -1,5 +1,4 @@
 use bitcoin_hashes::Hash;
-use rand::seq::index;
 
 use crate::utils::get_le_varint;
 
@@ -20,8 +19,8 @@ pub struct Tx {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TxIn {
-    pub previous_output: OutPoint,
-    pub script_length: usize, // varint
+    pub previous_output: OutPoint, // The previous output transaction reference, as an OutPoint structure
+    pub script_length: usize,      // varint
     pub signature_script: Vec<u8>,
     pub sequence: u32,
 }
@@ -33,10 +32,11 @@ pub struct TxOut {
     pub pk_script: Vec<u8>,
 }
 
+//The previous output transaction reference, as an OutPoint structure
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OutPoint {
-    pub hash: [u8; 32],
-    pub index: u32,
+    pub hash: [u8; 32], // The hash of the referenced transaction.
+    pub index: u32, // The index of the specific TxOut in the transaction. The first output is 0, etc.
 }
 
 impl Tx {

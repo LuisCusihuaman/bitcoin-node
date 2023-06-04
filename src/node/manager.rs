@@ -10,7 +10,9 @@ use crate::node::utxo::update_utxo_set;
 use crate::node::utxo::Utxo;
 use crate::utils::*;
 use crate::{logger::Logger, node::message::get_headers::PayloadGetHeaders};
+use bitcoin_hashes::Hash;
 use rand::seq::SliceRandom;
+use std::collections::HashMap;
 use std::fs;
 use std::net::{IpAddr, ToSocketAddrs};
 use std::thread;
@@ -144,7 +146,7 @@ pub struct NodeManager<'a> {
     config: Config,
     logger: &'a Logger,
     blocks: Vec<Block>,
-    utxo_set: Vec<Utxo>,
+    utxo_set: HashMap<[u8; 32], Utxo>,
 }
 
 impl NodeManager<'_> {
@@ -159,7 +161,7 @@ impl NodeManager<'_> {
             node_network: NodeNetwork::new(),
             logger,
             blocks: vec![], // inicializar el block genesis (con el config)
-            utxo_set: vec![],
+            utxo_set: HashMap::new(),
         }
     }
 

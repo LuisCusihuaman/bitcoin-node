@@ -234,8 +234,14 @@ impl NodeManager<'_> {
                         }
 
                         if let Some(index) = self.get_block_index_by_hash(block.get_prev()) {
-                            self.update_utxo_set(block.clone());
 
+                            if !block.is_valid() {
+                                self.logger.log(format!("Block {} is not valid", index));
+                                continue;
+                            }
+
+                            self.update_utxo_set(block.clone());
+                            
                             if index == self.blocks.len() {
                                 self.blocks.push(block.clone());
                             } else {
@@ -650,7 +656,7 @@ mod tests {
                     node_manager.wait_for(vec!["block"]),
                     "18.191.253.246:18333".to_string(),
                 )
-                .first()
+                    .first()
                 {
                     let _hash: [u8; 32] = block_payload.get_prev();
 

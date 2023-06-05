@@ -26,7 +26,7 @@ pub struct Block {
     pub nonce: u32,
     pub txn_count: usize,
     // variable size
-    pub txns: Vec<Tx>,    // variable size
+    pub txns: Vec<Tx>, // variable size
 }
 
 impl Block {
@@ -37,7 +37,7 @@ impl Block {
         let mut result = base.clone();
 
         if exponent < 1 {
-            return vec![0,0,0,1];
+            return vec![0, 0, 0, 1];
         }
 
         let cantidad_ceros = exponent as usize - 1;
@@ -46,7 +46,6 @@ impl Block {
         result.extend(vec_zeros);
         result
     }
-
 
     fn scalar_by(scalar: u32, bytes: &[u8]) -> Vec<u8> {
         let mut carry = 0;
@@ -65,9 +64,8 @@ impl Block {
             carry = partial / 256;
         }
 
-        result        
+        result
     }
-
 
     pub fn target(&self) -> Vec<u8> {
         let bits = self.n_bits.to_le_bytes();
@@ -77,14 +75,13 @@ impl Block {
         let zeros_to_add = 32 - pow.len();
         let mut result = vec![0; zeros_to_add];
         result.extend(pow);
-        
+
         // this is the same as coefficient (*) 256**(exponent - 3), that multiply???
         let coefficient = u32::from_le_bytes([bits[0], bits[1], bits[2], 0]);
         let target = Self::scalar_by(coefficient, &result);
 
         target
     }
-
 
     // generates the target to validate proof of work
     // // target = coefficient * 256**(exponent - 3)
@@ -130,8 +127,6 @@ impl Block {
 
         return false;
     }
-
-
 
     fn init_merkle_tree(&self) -> MerkleTree {
         let tx_ids: Vec<&[u8]> = self.txns.iter().map(|tx| &tx.id[..]).collect();
@@ -1085,7 +1080,6 @@ mod tests {
             txns: vec![],
         };
 
-
         assert_eq!(block.validate_pow(), true);
     }
 
@@ -1107,13 +1101,16 @@ mod tests {
                 16, 92, 241, 228, 96, 167, 60, 7, 168, 155, 54, 29, 202, 64, 99,
             ],
             timestamp: 1384047529,
-            n_bits: 83886081,// has a 5 as last byte
+            n_bits: 83886081, // has a 5 as last byte
             nonce: 2442677017,
             txn_count: 2,
             txns: vec![],
         };
         let target = block.target();
-        assert_eq!(u32::from_le_bytes([target[0], target[1], target[2], target[3]]), 65536);
+        assert_eq!(
+            u32::from_le_bytes([target[0], target[1], target[2], target[3]]),
+            65536
+        );
     }
 
     #[test]
@@ -1145,17 +1142,17 @@ mod tests {
 
         // Test case with u64 that result in u128
         let bytes_u64 = vec![50, 10, 15, 2, 8, 30, 7, 120]; //8648914629131438642
-        let expected_bytes: Vec<u8> = vec![150, 30, 45, 6, 24, 90, 21, 104, 1, 0, 0, 0, 0, 0, 0, 0];//25946743887394315926
+        let expected_bytes: Vec<u8> = vec![150, 30, 45, 6, 24, 90, 21, 104, 1, 0, 0, 0, 0, 0, 0, 0]; //25946743887394315926
         let result_bytes = Block::scalar_by(3, &bytes_u64);
         let expected_u128 = u128::from_le_bytes(result_bytes[..].try_into().unwrap());
         assert_eq!(result_bytes, expected_bytes);
         assert_eq!(expected_u128, 25946743887394315926);
 
         // Test case with u128
-        let bytes_u128 = vec![
-            255, 200, 150, 100, 50, 10, 5, 1, 0, 0, 0, 0, 0, 0, 0, 1]; //1329227995784915872977283240754071807
+        let bytes_u128 = vec![255, 200, 150, 100, 50, 10, 5, 1, 0, 0, 0, 0, 0, 0, 0, 1]; //1329227995784915872977283240754071807
         let result_bytes = Block::scalar_by(3, &bytes_u128);
-        let expected_bytes: Vec<u8> = vec![253, 90, 196, 45, 151, 30, 15, 3, 0, 0, 0, 0, 0, 0, 0, 3];
+        let expected_bytes: Vec<u8> =
+            vec![253, 90, 196, 45, 151, 30, 15, 3, 0, 0, 0, 0, 0, 0, 0, 3];
         let expected_u128 = u128::from_le_bytes(result_bytes[..].try_into().unwrap());
         assert_eq!(result_bytes, expected_bytes);
         assert_eq!(expected_u128, 3987683987354747618931849722262215421);
@@ -1170,15 +1167,47 @@ mod tests {
     #[ignore] // TODO fix this test
     fn test_pow_256() {
         let result_with_0 = Block::pow_256(0);
-        assert_eq!(u32::from_le_bytes([result_with_0[0], result_with_0[1], result_with_0[2], result_with_0[3]]), 1);
+        assert_eq!(
+            u32::from_le_bytes([
+                result_with_0[0],
+                result_with_0[1],
+                result_with_0[2],
+                result_with_0[3]
+            ]),
+            1
+        );
 
         let result_with_1 = Block::pow_256(1); // 256^1 = 256
-        assert_eq!(u32::from_le_bytes([result_with_1[0], result_with_1[1], result_with_1[2], result_with_1[3]]), 256);
+        assert_eq!(
+            u32::from_le_bytes([
+                result_with_1[0],
+                result_with_1[1],
+                result_with_1[2],
+                result_with_1[3]
+            ]),
+            256
+        );
 
         let result_with_2 = Block::pow_256(2); // 256^2 = 65536
-        assert_eq!(u32::from_le_bytes([result_with_2[0], result_with_2[1], result_with_2[2], result_with_2[3]]), 65536);
+        assert_eq!(
+            u32::from_le_bytes([
+                result_with_2[0],
+                result_with_2[1],
+                result_with_2[2],
+                result_with_2[3]
+            ]),
+            65536
+        );
 
         let result_with_3 = Block::pow_256(3); // 256^3 = 16777216
-        assert_eq!(u32::from_le_bytes([result_with_3[0], result_with_3[1], result_with_3[2], result_with_3[3]]), 16777216);
+        assert_eq!(
+            u32::from_le_bytes([
+                result_with_3[0],
+                result_with_3[1],
+                result_with_3[2],
+                result_with_3[3]
+            ]),
+            16777216
+        );
     }
 }

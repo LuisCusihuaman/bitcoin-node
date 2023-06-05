@@ -142,10 +142,7 @@ fn parse_messages_from(buf: &mut Vec<u8>) -> Vec<MessagePayload> {
             break; // the last message has more bytes than received
         }
 
-        match decode_message(
-            &command_name,
-            &buf[(cursor + 24)..end_index],
-        ) {
+        match decode_message(&command_name, &buf[(cursor + 24)..end_index]) {
             Ok(payload) => {
                 messages.push(payload);
             }
@@ -158,7 +155,6 @@ fn parse_messages_from(buf: &mut Vec<u8>) -> Vec<MessagePayload> {
 
     messages
 }
-
 
 fn decode_message<T: Encoding<T>>(cmd: &str, data: &[u8]) -> Result<T, String> {
     T::decode(cmd, data)

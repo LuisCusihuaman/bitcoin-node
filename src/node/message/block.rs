@@ -33,27 +33,13 @@ impl Block {
     // generates the target to validate proof of work using this formula
     // target = coefficient * 256**(exponent - 3)
     fn pow_256(exponent: u32) -> Vec<u8> {
-        let mut result = Vec::with_capacity((exponent as usize) + 1);
-        result.push(1);
+        let base = 256_i32.to_be_bytes().to_vec().clone(); // [0, 0, 1, 0]
+        let mut result = base.clone();
 
-        for _ in 0..exponent {
-            let mut carry = 0;
-            for byte in &mut result {
-                let val = (*byte as u16) * 256 + carry;
-                *byte = val as u8;
-                carry = val >> 8;
-            }
+        let cantidad_ceros = exponent as usize - 1;
+        let vec_zeros = vec![0; cantidad_ceros];
 
-            if carry > 0 {
-                result.push(carry as u8);
-            }
-        }
-
-        // Pad the result with zeros if the exponent is 0
-        while result.len() < 4 {
-            result.push(0);
-        }
-
+        result.extend(vec_zeros);
         result
     }
 
@@ -98,7 +84,13 @@ impl Block {
         let coefficient = u32::from_le_bytes([bits[0], bits[1], bits[2], 0]);
         // this is the same as coefficient (*) 256**(exponent - 3), that multiply???
         let target = Self::scalar_by(coefficient, &pow);
-        target
+
+        let zeros_to_add = 32 - target.len();
+        let mut result = vec![0; zeros_to_add];
+
+        result.extend(target);
+
+        result
     }
 
 
@@ -135,20 +127,16 @@ impl Block {
 
     fn validate_pow(&self) -> bool {
         let target = self.target();
-        let mut sha = self.hash.clone();
-        sha.reverse();
+        let sha = self.hash.clone();
 
-        let min_len = target.len().min(sha.len());
-
-        for i in (0..min_len).rev() {
-            if sha[i] < target[i] {
-                return true;
-            } else if sha[i] > target[i] {
-                return false;
+        for i in 0..32 {
+            if sha[i] == target[i] {
+                continue;
             }
+            return sha[i] < target[i];
         }
 
-        sha.len() < target.len()
+        return false;
     }
 
 

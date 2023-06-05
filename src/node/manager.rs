@@ -249,7 +249,7 @@ impl NodeManager<'_> {
                             //    self.logger.log(format!("Block {} is not valid", index));
                             //    continue;
                             //}
-                            if index == self.blocks.len() {
+                            if index +1 == self.blocks.len() {
                                 self.blocks.push(block.clone());
                             } else {
                                 self.blocks[index + 1] = block.clone();

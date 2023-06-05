@@ -136,9 +136,15 @@ fn parse_messages_from(buf: &mut Vec<u8>) -> Vec<MessagePayload> {
             payload_size
         };
 
+        let end_index = cursor + 24 + payload_size;
+        if end_index > buf.len() {
+            println!("Invalid end index: {}", end_index);
+            break; // the last message has more bytes than received
+        }
+
         match decode_message(
             &command_name,
-            &buf[(cursor + 24)..(cursor + 24 + payload_size)],
+            &buf[(cursor + 24)..end_index],
         ) {
             Ok(payload) => {
                 messages.push(payload);
@@ -152,6 +158,7 @@ fn parse_messages_from(buf: &mut Vec<u8>) -> Vec<MessagePayload> {
 
     messages
 }
+
 
 fn decode_message<T: Encoding<T>>(cmd: &str, data: &[u8]) -> Result<T, String> {
     T::decode(cmd, data)

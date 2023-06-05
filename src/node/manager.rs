@@ -55,7 +55,10 @@ impl NodeNetwork {
             let mut conn = connection.clone();
             let payload = payload.clone();
             threads.push(thread::spawn(move || {
-                conn.send(&payload).unwrap();
+                if let Err(err) = conn.send(&payload) {
+                    eprintln!("Error sending payload: {}", err);
+                    eprintln!("Address: {:?}", conn.peer_address.clone());
+                }
             }));
         }
 
@@ -631,7 +634,7 @@ mod tests {
                     node_manager.wait_for(vec!["block"]),
                     "18.191.253.246:18333".to_string(),
                 )
-                .first()
+                    .first()
                 {
                     let _hash: [u8; 32] = block_payload.get_prev();
 

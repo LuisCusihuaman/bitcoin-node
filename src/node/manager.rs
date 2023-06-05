@@ -42,7 +42,7 @@ impl NodeNetwork {
             peer_connection.handshaked();
         }
     }
-    pub fn send_messages(&self, payloads: Vec<&MessagePayload>) {
+    pub fn send_messages(&self, payloads: Vec<MessagePayload>) {
         let mut threads = Vec::new();
 
         // TODO: connection must be at least one if not enter to infinite loop
@@ -242,10 +242,10 @@ impl NodeManager<'_> {
                         }
 
                         if let Some(index) = self.get_block_index_by_hash(block.get_prev()) {
-                            if !block.is_valid() {
-                                self.logger.log(format!("Block {} is not valid", index));
-                                continue;
-                            }
+                            //if !block.is_valid() {
+                            //    self.logger.log(format!("Block {} is not valid", index));
+                            //    continue;
+                            //}
                             if index == self.blocks.len() {
                                 self.blocks.push(block.clone());
                             } else {
@@ -340,7 +340,7 @@ impl NodeManager<'_> {
                 .log(format!("Error sending message to peer: {:?}", e));
         }
     }
-    pub fn send(&self, messages: Vec<&MessagePayload>) {
+    pub fn send(&self, messages: Vec<MessagePayload>) {
         self.node_network.send_messages(messages);
     }
 
@@ -401,59 +401,37 @@ impl NodeManager<'_> {
         self.blocks_download();
         Ok(())
     }
-
     fn blocks_download(&mut self) {
         if let Some(timestamp) = date_to_timestamp("2023-04-11") {
-            // TODO integrar fecha del config &self.config.download_blocks_since_date) {
-
+            // TODO: Integrate date from self.config.download_blocks_since_date
             let blocks = self.get_blocks();
-
             let mut index = match self.get_block_index_by_timestamp(timestamp) {
                 Some(index) => index,
                 None => blocks.len(),
             };
-
+            let batch_size = 500;
+            let mut message_batches: Vec<MessagePayload> = Vec::new();
             while index < blocks.len() {
-                let block = blocks[index].clone();
-
-                let mut block_hash: [u8; 32] = block.get_prev();
-                block_hash.reverse();
-                self.block_download_since_block_hash(&block_hash);
-                self.logger.log(format!("{} blocks downloaded", index));
-                index += 500;
+                let end_index = std::cmp::min(index + batch_size, blocks.len());
+                let batch: Vec<MessagePayload> =
+                    take_elements_every(blocks[index..end_index].to_vec(), batch_size, |block| {
+                        let mut block_hash: [u8; 32] = block.get_prev();
+                        block_hash.reverse();
+                        return MessagePayload::GetBlocks(PayloadGetBlocks {
+                            version: 70015,
+                            hash_count: 1,
+                            block_header_hashes: block_hash.to_vec(),
+                            stop_hash: [0u8; 32].to_vec(),
+                        });
+                    });
+                message_batches.extend(batch);
+                index += batch_size;
             }
+            self.send(message_batches);
+            self.wait_for(vec!["inv"]);
+            self.logger
+                .log(format!("{} blocks downloaded finished", blocks.len()));
         }
-        self.logger.log("Block download finished".to_string());
-    }
-
-    fn block_download_since_block_hash(&mut self, block_hash: &[u8; 32]) {
-        let stop_hash = [0u8; 32];
-
-        let get_blocks_message = MessagePayload::GetBlocks(PayloadGetBlocks {
-            version: 70015,
-            hash_count: 1,
-            block_header_hashes: block_hash.to_vec(),
-            stop_hash: stop_hash.to_vec(),
-        });
-        // Send get block messages
-        let address = self.get_random_peer_address();
-        self.send_to(address, &get_blocks_message);
-
-        // Receive inv messages
-        self.wait_for(vec!["inv"]);
-        //let messages = filter_by(response, address.clone());
-        //TODO: check for fail send messages because is +500 always, refactor with concurrency 🧠
-
-        // for message_inv in messages.iter() {
-        //     if let MessagePayload::Inv(payload_inv) = message_inv {
-        //         let get_data_message = MessagePayload::GetData(PayloadGetData::new(
-        //             payload_inv.count,
-        //             payload_inv.invs.clone(),
-        //         ));
-        //         self.send_to(address.clone(), &get_data_message);
-        //         self.wait_for(vec!["block"]);
-        //     }
-        // }
     }
 
     pub fn get_block_index_by_timestamp(&self, timestamp: u32) -> Option<usize> {
@@ -771,7 +749,7 @@ mod tests {
         let verack2 = MessagePayload::Verack;
         let verack3 = MessagePayload::Verack;
 
-        node_manager.send(vec![&verack1, &verack2, &verack3]);
+        node_manager.send(vec![verack1, verack2, verack3]);
         Ok(())
     }
 }

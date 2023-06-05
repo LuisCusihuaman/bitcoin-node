@@ -245,10 +245,10 @@ impl NodeManager<'_> {
                         }
 
                         if let Some(index) = self.get_block_index_by_hash(block.get_prev()) {
-                            //if !block.is_valid() {
-                            //    self.logger.log(format!("Block {} is not valid", index));
-                            //    continue;
-                            //}
+                            if !block.is_valid() {
+                                self.logger.log(format!("Block {} is not valid", index));
+                                continue;
+                            }
                             if index + 1 == self.blocks.len() {
                                 self.blocks.push(block.clone());
                             } else {

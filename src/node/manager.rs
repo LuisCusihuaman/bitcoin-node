@@ -5,9 +5,14 @@ use crate::node::message::get_data::PayloadGetData;
 use crate::node::message::version::PayloadVersion;
 use crate::node::message::MessagePayload;
 use crate::node::p2p_connection::P2PConnection;
+use crate::node::utxo::generate_utxos;
+use crate::node::utxo::update_utxo_set;
+use crate::node::utxo::Utxo;
 use crate::utils::*;
 use crate::{logger::Logger, node::message::get_headers::PayloadGetHeaders};
+use bitcoin_hashes::Hash;
 use rand::seq::SliceRandom;
+use std::collections::HashMap;
 use std::fs;
 use std::net::{IpAddr, ToSocketAddrs};
 use std::sync::mpsc;
@@ -154,6 +159,7 @@ pub struct NodeManager<'a> {
     config: Config,
     logger: &'a Logger,
     blocks: Vec<Block>,
+    utxo_set: HashMap<[u8; 32], Vec<Utxo> >,
 }
 
 impl NodeManager<'_> {
@@ -168,6 +174,7 @@ impl NodeManager<'_> {
             node_network: NodeNetwork::new(),
             logger,
             blocks: vec![], // inicializar el block genesis (con el config)
+            utxo_set: HashMap::new(),
         }
     }
 
@@ -221,19 +228,16 @@ impl NodeManager<'_> {
 
                         // Continuidad de la blockchain
                         if let Some(actual_last_block) = self.blocks.last() {
-                            match blocks.first() {
-                                Some(first_block) => {
-                                    if actual_last_block.get_hash() == first_block.get_prev() {
-                                        if commands.contains(&"headers") {
-                                            // only i want to save msg on correct blockchain integrity
-                                            matched_peer_messages
-                                                .push(MessagePayload::BlockHeader(blocks.clone()));
-                                        }
-                                        self.blocks.extend(blocks.clone());
-                                        Block::encode_blocks_to_file(blocks, "block_headers.bin");
+                            if let Some(first_block) = blocks.first() {
+                                if actual_last_block.get_hash() == first_block.get_prev() {
+                                    if commands.contains(&"headers") {
+                                        // only i want to save msg on correct blockchain integrity
+                                        matched_peer_messages
+                                            .push(MessagePayload::BlockHeader(blocks.clone()));
                                     }
+                                    self.blocks.extend(blocks.clone());
+                                    Block::encode_blocks_to_file(blocks, "block_headers.bin");
                                 }
-                                None => {}
                             }
                         }
                     }
@@ -249,6 +253,9 @@ impl NodeManager<'_> {
                                 self.logger.log(format!("Block {} is not valid", index));
                                 continue;
                             }
+
+                            self.update_utxo_set(block.clone());
+
                             if index + 1 == self.blocks.len() {
                                 self.blocks.push(block.clone());
                             } else {
@@ -281,6 +288,13 @@ impl NodeManager<'_> {
             matched_messages.push((peer_address.clone(), matched_peer_messages));
         }
         matched_messages
+    }
+
+    fn update_utxo_set(&mut self, block: Block) {
+        for tx in block.txns {
+            generate_utxos(&mut self.utxo_set, &tx);
+            update_utxo_set(&mut self.utxo_set, &tx);
+        }
     }
 
     pub fn get_blocks(&self) -> Vec<Block> {

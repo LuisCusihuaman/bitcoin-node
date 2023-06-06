@@ -19,8 +19,8 @@ pub struct Tx {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TxIn {
-    pub previous_output: [u8; 36],
-    pub script_length: usize, // varint
+    pub previous_output: OutPoint, // The previous output transaction reference, as an OutPoint structure
+    pub script_length: usize,      // varint
     pub signature_script: Vec<u8>,
     pub sequence: u32,
 }
@@ -30,6 +30,13 @@ pub struct TxOut {
     pub value: u64,
     pub pk_script_length: usize, // varint
     pub pk_script: Vec<u8>,
+}
+
+//The previous output transaction reference, as an OutPoint structure
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OutPoint {
+    pub hash: [u8; 32], // The hash of the referenced transaction.
+    pub index: u32, // The index of the specific TxOut in the transaction. The first output is 0, etc.
 }
 
 impl Tx {
@@ -46,7 +53,8 @@ impl Tx {
         encoded.extend(tx_in_count);
 
         for tx_in in &self.tx_in {
-            encoded.extend(tx_in.previous_output);
+            encoded.extend(tx_in.previous_output.hash);
+            encoded.extend(tx_in.previous_output.index.to_le_bytes());
 
             let script_length = get_le_varint(tx_in.script_length);
             encoded.extend(script_length);
@@ -96,7 +104,6 @@ pub fn decode_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
     *offset += flag_bytes;
 
     if flag == 1 {
-        // AAAAAA
         println!("flag: 1 LOL")
     }
 
@@ -106,9 +113,19 @@ pub fn decode_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
     let mut tx_in = Vec::new();
 
     for _ in 0..tx_in_count {
-        let mut previous_output = [0u8; 36];
-        previous_output.copy_from_slice(&buffer[*offset..*offset + 36]);
-        *offset += 36;
+        let mut outpoint_hash = [0u8; 32];
+        let mut outpoint_index = [0u8; 4];
+
+        outpoint_hash.copy_from_slice(&buffer[0..32]);
+        *offset += 32;
+
+        outpoint_index.copy_from_slice(&buffer[32..36]);
+        *offset += 4;
+
+        let previous_output = OutPoint {
+            hash: outpoint_hash,
+            index: read_u32_le(&outpoint_index, 0),
+        };
 
         let script_length = read_varint(&buffer[*offset..]);
         *offset += get_offset(&buffer[*offset..]);
@@ -217,13 +234,19 @@ mod tests {
                 tx_in_count: 2, // varint
                 tx_in: vec![
                     TxIn {
-                        previous_output: [0; 36],
+                        previous_output: OutPoint {
+                            hash: [0; 32],
+                            index: 0,
+                        },
                         script_length: 0, // varint
                         signature_script: vec![],
                         sequence: 0,
                     },
                     TxIn {
-                        previous_output: [0; 36],
+                        previous_output: OutPoint {
+                            hash: [0; 32],
+                            index: 0,
+                        },
                         script_length: 0, // varint
                         signature_script: vec![],
                         sequence: 0,
@@ -272,13 +295,19 @@ mod tests {
             tx_in_count: 2, // varint
             tx_in: vec![
                 TxIn {
-                    previous_output: [0; 36],
+                    previous_output: OutPoint {
+                        hash: [0; 32],
+                        index: 0,
+                    },
                     script_length: 1, // varint
                     signature_script: vec![4],
                     sequence: 0,
                 },
                 TxIn {
-                    previous_output: [0; 36],
+                    previous_output: OutPoint {
+                        hash: [0; 32],
+                        index: 0,
+                    },
                     script_length: 1, // varint
                     signature_script: vec![4],
                     sequence: 0,

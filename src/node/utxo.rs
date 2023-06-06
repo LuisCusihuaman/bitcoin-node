@@ -1,331 +1,56 @@
-use super::merkle_tree::MerkleTree;
-use super::tx::Tx;
-use super::MessagePayload;
-use crate::error::Error;
-use crate::node::message::tx::decode_tx;
-use crate::utils::*;
-use bitcoin_hashes::Hash;
-use std::vec;
+use std::collections::HashMap;
 
-use std::{
-    fs::{File, OpenOptions},
-    io::Read,
-    io::Write,
-};
+use rand::seq::index;
 
-use super::get_headers::decode_header;
+use crate::node::message::tx::Tx;
+use crate::node::message::tx::TxIn;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Block {
-    pub version: u32,
-    pub hash: [u8; 32],
-    pub previous_block: [u8; 32],
-    pub merkle_root_hash: [u8; 32],
-    pub timestamp: u32,
-    pub n_bits: u32,
-    pub nonce: u32,
-    pub txn_count: usize,
-    // variable size
-    pub txns: Vec<Tx>, // variable size
+pub struct Utxo {
+    pub transaction_id: [u8; 32],
+    pub output_index: u32, // this is a transaction tx_in outpoint index?
+    pub value: u64,
+    pub recipient_address: Vec<u8>,
+    pub spent: bool,
 }
 
-impl Block {
-    // generates the target to validate proof of work using this formula
-    // target = coefficient * 256**(exponent - 3)
-    fn pow_256(exponent: u32) -> Vec<u8> {
-        let base = 256_i32.to_be_bytes().to_vec().clone(); // [0, 0, 1, 0]
-        let mut result = base.clone();
+// Gasto el dinero
+pub fn update_utxo_set(utxo_set: &mut HashMap<[u8; 32], Vec<Utxo>>, tx: &Tx) {
+    for tx_in in &tx.tx_in {
+        let hash_tx = tx_in.previous_output.hash;
+        let index = tx_in.previous_output.index as usize;
 
-        if exponent < 1 {
-            return vec![0, 0, 0, 1];
+        if let Some(utxo) = utxo_set.get_mut(&hash_tx) {
+            // Mark the UTXO as spent
+            utxo[index].spent = true;
         }
-
-        let cantidad_ceros = exponent as usize - 1;
-        let vec_zeros = vec![0; cantidad_ceros];
-
-        result.extend(vec_zeros);
-        result
-    }
-
-    fn scalar_by(scalar: u32, bytes: &[u8]) -> Vec<u8> {
-        let mut carry = 0;
-        let mut result = Vec::new();
-
-        for &byte in bytes.iter().rev() {
-            let partial = (byte as u32) * scalar + carry;
-
-            if partial < 256 {
-                result.insert(0, partial as u8);
-                carry = 0;
-                continue;
-            }
-
-            result.insert(0, (partial % 256) as u8);
-            carry = partial / 256;
-        }
-
-        result
-    }
-
-    pub fn target(&self) -> Vec<u8> {
-        let bits = self.n_bits.to_le_bytes();
-        let exponent = bits[3] as u32;
-        let pow = Self::pow_256(exponent - 3);
-
-        let zeros_to_add = 32 - pow.len();
-        let mut result = vec![0; zeros_to_add];
-        result.extend(pow);
-
-        // this is the same as coefficient (*) 256**(exponent - 3), that multiply???
-        let coefficient = u32::from_le_bytes([bits[0], bits[1], bits[2], 0]);
-        let target = Self::scalar_by(coefficient, &result);
-
-        target
-    }
-
-    // generates the target to validate proof of work
-    // // target = coefficient * 256**(exponent - 3)
-    // pub fn target(&self) -> u32 {
-
-    //     let bits = self.n_bits.to_le_bytes();
-    //     let exponent = bits[3] as u32;
-    //     let coefficient = read_le(&[bits[0], bits[1], bits[2]]) as u32;
-
-    //     coefficient * 256u32.pow((exponent - 3) as u32)
-    // }
-
-    /*
-       Otra opcion
-
-       pub fn target(&self) -> [u8,32] {
-
-           let bits = self.n_bits.to_le_bytes();
-           let exponent = (bits[3] >> 3) as usize;
-           let mantissa = u32::from_le_bytes([bits[0], bits[1], bits[2], 0]) >> exponent;
-
-           let mut target = [0u8; 32];
-           target[31] = (mantissa & 0xff) as u8;
-           target[30] = ((mantissa >> 8) & 0xff) as u8;
-           target[29] = ((mantissa >> 16) & 0xff) as u8;
-           target
-
-           // coefficient * 256**(exponent - 3)
-       }
-
-    */
-
-    fn validate_pow(&self) -> bool {
-        let target = self.target();
-        let sha = self.hash.clone();
-
-        for i in 0..32 {
-            if sha[i] == target[i] {
-                continue;
-            }
-            return sha[i] < target[i];
-        }
-
-        return false;
-    }
-
-    fn init_merkle_tree(&self) -> MerkleTree {
-        let tx_ids: Vec<&[u8]> = self.txns.iter().map(|tx| &tx.id[..]).collect();
-        let tx_ids_reverse: Vec<Vec<u8>> = tx_ids
-            .iter()
-            .map(|id| id.iter().rev().copied().collect())
-            .collect();
-        let tx_ids_reverse_refs: Vec<&[u8]> = tx_ids_reverse.iter().map(|id| id.as_ref()).collect();
-
-        let mut merkle_tree = MerkleTree::new();
-        merkle_tree.generate_merkle_tree(tx_ids_reverse_refs);
-
-        merkle_tree
-    }
-
-    fn validate_merkle_root(&self) -> bool {
-        let merkle_tree = self.init_merkle_tree();
-
-        let hash_root = merkle_tree.get_root().unwrap();
-        let mut hash_root_array = [0u8; 32];
-        hash_root_array.copy_from_slice(&hash_root[..]);
-        hash_root_array.reverse();
-
-        hash_root_array == self.merkle_root_hash
-    }
-
-    pub fn is_valid(&self) -> bool {
-        self.validate_pow() && self.validate_merkle_root()
-    }
-
-    pub fn get_merkle_tree_root(&self) -> Result<[u8; 32], Error> {
-        let merkle_tree = self.init_merkle_tree();
-
-        let hash_root = merkle_tree.get_root()?;
-        let mut hash_root_array = [0u8; 32];
-        hash_root_array.copy_from_slice(&hash_root[..]);
-        hash_root_array.reverse();
-        Ok(hash_root_array)
-    }
-
-    //let mut merkle_tree = MerkleTree::new();
-    //merkle_tree.generate_merkle_tree(raw_trxs);
-
-    pub fn proof_of_inclusion(&self, tx_req: Tx) -> bool {
-        let merkle_tree = self.init_merkle_tree();
-        let mut tx_id = tx_req.id;
-        tx_id.reverse();
-        merkle_tree.proof_of_inclusion(&tx_id)
-    }
-
-    pub fn encode(&self, buffer: &mut [u8]) {
-        let mut offset = 0;
-
-        // Encode version
-        buffer[offset..offset + 4].copy_from_slice(&self.version.to_le_bytes());
-        offset += 4;
-
-        // Encode previous_block_header_hash
-        let mut previous_block_header_hash = self.previous_block;
-        previous_block_header_hash.reverse();
-        buffer[offset..offset + 32].copy_from_slice(&previous_block_header_hash);
-        offset += 32;
-
-        // Encode merkle_root_hash
-        let mut merkle_root_hash = self.merkle_root_hash;
-        merkle_root_hash.reverse();
-        buffer[offset..offset + 32].copy_from_slice(&merkle_root_hash);
-        offset += 32;
-
-        // Encode timestamp
-        buffer[offset..offset + 4].copy_from_slice(&self.timestamp.to_le_bytes());
-        offset += 4;
-
-        // Encode n_bits
-        buffer[offset..offset + 4].copy_from_slice(&self.n_bits.to_le_bytes());
-        offset += 4;
-
-        // Encode nonce
-        buffer[offset..offset + 4].copy_from_slice(&self.nonce.to_le_bytes());
-        offset += 4;
-
-        // txn_count
-        let tx_count = get_le_varint(self.txn_count);
-        buffer[offset..offset + tx_count.len()].copy_from_slice(&tx_count);
-
-        // Encode txns, for complete initial download is zero.
-        // buffer[offset..offset + 1].copy_from_slice(&[0]);
-    }
-
-    pub fn get_prev(&self) -> [u8; 32] {
-        self.previous_block
-    }
-
-    pub fn get_hash(&self) -> [u8; 32] {
-        self.hash
-    }
-
-    pub fn decode_blocks_from_file(file_path: &str) -> Vec<Block> {
-        let mut file = File::open(file_path).expect("Failed to open file");
-
-        let mut buffer = Vec::new();
-        file.read_to_end(&mut buffer).expect("Failed to read file");
-
-        let mut blocks = Vec::new();
-        let mut offset = 0;
-        while offset < buffer.len() {
-            if let Some(block) = decode_header(&buffer[offset..offset + 81]) {
-                offset += 81;
-                blocks.push(block);
-            } else {
-                // Handle the case where decoding fails
-                break;
-            }
-        }
-
-        blocks
-    }
-
-    pub fn encode_blocks_to_file(blocks: &Vec<Block>, file_path: &str) {
-        // Get the total size of blocks
-        let total_size = blocks.len() * 81;
-
-        // Create a buffer to hold all the encoded blocks
-        let mut buffer = vec![0; total_size];
-
-        // Encode each block and append it to the buffer
-        let mut offset: usize = 0;
-        for block in blocks {
-            block.encode(&mut buffer[offset..]);
-            offset += 81;
-        }
-
-        // Open the file in append mode
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(file_path)
-            .expect("Failed to open file");
-
-        // Write the buffer to the file
-        file.write_all(&buffer).expect("Failed to write to file");
     }
 }
 
-pub fn decode_block(buffer: &[u8]) -> Result<MessagePayload, String> {
-    if buffer.is_empty() {
-        return Err("Empty buffer".to_string());
+pub fn is_tx_spent(utxo_set: &HashMap<[u8; 32], Vec<Utxo>>, tx_in: &TxIn) -> bool {
+    let hash_tx = tx_in.previous_output.hash;
+    let index = tx_in.previous_output.index as usize;
+
+    if let Some(utxo) = utxo_set.get(&hash_tx) {
+        return utxo[index].spent;
     }
 
-    let mut block = decode_internal_block(buffer).unwrap();
-    let mut transactions = Vec::new();
-
-    let tnx_count = read_varint(&buffer[80..]);
-    let mut offset = 80 + get_offset(&buffer[80..]);
-
-    for _ in 0..tnx_count {
-        if let Some(tx) = decode_tx(buffer, &mut offset) {
-            transactions.push(tx);
-        } else {
-            return Err("Failed to decode transaction".to_string());
-        }
-    }
-    block.txn_count = tnx_count;
-    block.txns = transactions;
-
-    Ok(MessagePayload::Block(block))
+    false
 }
 
-pub fn decode_internal_block(buffer: &[u8]) -> Option<Block> {
-    let version = read_u32_le(buffer, 0);
-
-    let mut previous_block: [u8; 32] = [0u8; 32];
-    copy_bytes_to_array(&buffer[4..36], &mut previous_block);
-    previous_block.reverse();
-
-    let mut merkle_root_hash: [u8; 32] = [0u8; 32];
-    copy_bytes_to_array(&buffer[36..68], &mut merkle_root_hash);
-    merkle_root_hash.reverse();
-
-    let timestamp = read_le(&buffer[68..72]) as u32;
-    let n_bits = read_le(&buffer[72..76]) as u32;
-    let nonce = read_le(&buffer[76..80]) as u32;
-
-    let raw_hash = double_sha256(&buffer[0..80]).to_byte_array();
-    let mut hash: [u8; 32] = [0u8; 32];
-    copy_bytes_to_array(&raw_hash, &mut hash);
-    hash.reverse();
-
-    Some(Block {
-        version,
-        hash,
-        previous_block,
-        merkle_root_hash,
-        timestamp,
-        n_bits,
-        nonce,
-        txn_count: 0,
-        txns: Vec::new(),
-    })
+pub fn generate_utxos(utxo_set: &mut HashMap<[u8; 32], Vec<Utxo>>, tx: &Tx) {
+    let mut utxos = Vec::new();
+    for (index, tx_out) in tx.tx_out.iter().enumerate() {
+        let utxo = Utxo {
+            transaction_id: tx.id,
+            output_index: index as u32,
+            value: tx_out.value,
+            recipient_address: tx_out.pk_script.clone(),
+            spent: false,
+        };
+        utxos.push(utxo);
+    }
+    utxo_set.insert(tx.id, utxos);
 }
 
 #[cfg(test)]
@@ -334,151 +59,9 @@ mod tests {
     use crate::node::message::tx::{OutPoint, Tx, TxIn, TxOut};
 
     #[test]
-    fn test_proof_of_inclution_doesnt_have_invalid_tx() {
-        let mut block = Block {
-            version: 1,
-            hash: [
-                0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
-                217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
-            ],
-            previous_block: [
-                0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
-                217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
-            ],
-            merkle_root_hash: [
-                240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53, 141, 211, 116,
-                95, 60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186,
-            ],
-            timestamp: 1296688928,
-            n_bits: 486604799,
-            nonce: 1924588547,
-            txn_count: 3,
-            txns: Vec::new(),
-        };
-
-        let tx_1 = Tx {
-            id: [0u8; 32],
-            version: 1,
-            flag: 0,
-            tx_in_count: 2, // varint
-            tx_in: vec![
-                TxIn {
-                    previous_output: OutPoint {
-                        hash: [0; 32],
-                        index: 0,
-                    },
-                    script_length: 0, // varint
-                    signature_script: vec![],
-                    sequence: 0,
-                },
-                TxIn {
-                    previous_output: OutPoint {
-                        hash: [0; 32],
-                        index: 0,
-                    },
-                    script_length: 0, // varint
-                    signature_script: vec![],
-                    sequence: 0,
-                },
-            ],
-            tx_out_count: 1, // varint
-            tx_out: vec![TxOut {
-                value: 100_000_000,
-                pk_script_length: 0, // varint
-                pk_script: vec![],
-            }],
-            tx_witness: vec![],
-            lock_time: 0,
-        };
-
-        let tx_2 = Tx {
-            id: [0u8; 32],
-            version: 1,
-            flag: 0,
-            tx_in_count: 2, // varint
-            tx_in: vec![
-                TxIn {
-                    previous_output: OutPoint {
-                        hash: [0; 32],
-                        index: 0,
-                    },
-                    script_length: 0, // varint
-                    signature_script: vec![],
-                    sequence: 0,
-                },
-                TxIn {
-                    previous_output: OutPoint {
-                        hash: [0; 32],
-                        index: 0,
-                    },
-                    script_length: 0, // varint
-                    signature_script: vec![],
-                    sequence: 0,
-                },
-            ],
-            tx_out_count: 1, // varint
-            tx_out: vec![TxOut {
-                value: 100_000_000,
-                pk_script_length: 0, // varint
-                pk_script: vec![],
-            }],
-            tx_witness: vec![],
-            lock_time: 0,
-        };
-
-        let not_expected_tnx = Tx {
-            id: [1u8; 32],
-            version: 1,
-            flag: 0,
-            tx_in_count: 1, // varint
-            tx_in: vec![TxIn {
-                previous_output: OutPoint {
-                    hash: [0; 32],
-                    index: 0,
-                },
-                script_length: 0, // varint
-                signature_script: vec![],
-                sequence: 0,
-            }],
-            tx_out_count: 1, // varint
-            tx_out: vec![TxOut {
-                value: 100_000_000,
-                pk_script_length: 0, // varint
-                pk_script: vec![],
-            }],
-            tx_witness: vec![],
-            lock_time: 0,
-        };
-
-        block.txns = vec![tx_1, tx_2];
-
-        assert_eq!(block.proof_of_inclusion(not_expected_tnx), false);
-    }
-
-    #[test]
-    fn test_proof_of_inclusion_is_included() {
-        let mut block = Block {
-            version: 2,
-            hash: [
-                0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
-                217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
-            ],
-            previous_block: [
-                0, 0, 0, 0, 0, 2, 60, 60, 152, 89, 35, 223, 255, 89, 74, 130, 64, 234, 30, 151, 40,
-                37, 10, 91, 84, 236, 23, 192, 158, 144, 91, 89,
-            ],
-            merkle_root_hash: [
-                136, 122, 27, 116, 246, 94, 78, 137, 248, 236, 162, 104, 55, 210, 207, 205, 139,
-                16, 92, 241, 228, 96, 167, 60, 7, 168, 155, 54, 29, 202, 64, 99,
-            ],
-            timestamp: 1384047529,
-            n_bits: 486604799,
-            nonce: 2442677017,
-            txn_count: 2,
-            txns: Vec::new(),
-        };
-
-        let tx1 = Tx {
+    fn test_generate_utxos_and_update_utxo_set() {
+        // Create a sample transaction
+        let transaction = Tx {
             id: [
                 163, 249, 79, 52, 224, 98, 202, 218, 50, 159, 58, 108, 242, 175, 222, 216, 208, 9,
                 229, 154, 123, 49, 21, 38, 108, 225, 75, 56, 80, 72, 169, 157,
@@ -488,8 +71,12 @@ mod tests {
             tx_in_count: 1,
             tx_in: vec![TxIn {
                 previous_output: OutPoint {
-                    hash: [0; 32],
-                    index: 255,
+                    hash: [
+                        226, 186, 153, 202, 133, 201, 191, 217, 242, 20, 228, 81, 115, 195, 78,
+                        140, 34, 173, 40, 212, 252, 161, 254, 59, 118, 110, 113, 203, 95, 194, 15,
+                        31,
+                    ],
+                    index: 1,
                 },
                 script_length: 18,
                 signature_script: vec![
@@ -510,7 +97,30 @@ mod tests {
             lock_time: 0,
         };
 
-        let tx2 = Tx {
+        let mut utxo_set = HashMap::new();
+
+        // Generate UTXOs from the transaction
+        generate_utxos(&mut utxo_set, &transaction);
+
+        let utxo = utxo_set.get(&transaction.id).unwrap();
+
+        // Ensure that the UTXOs are generated correctly
+        assert_eq!(utxo.first().unwrap().transaction_id, transaction.id);
+        assert_eq!(utxo.first().unwrap().output_index, 0);
+        assert_eq!(utxo.first().unwrap().value, 5000020000);
+        assert_eq!(
+            utxo.first().unwrap().recipient_address,
+            vec![
+                118, 169, 20, 195, 208, 147, 199, 86, 220, 79, 141, 216, 23, 181, 3, 198, 78, 203,
+                128, 39, 118, 33, 52, 136, 172,
+            ]
+        );
+
+        // Create a UTXO set
+        let mut utxo_set = utxo_set.clone();
+
+        // Update the UTXO set with a new transaction spending the previous UTXO
+        let new_transaction = Tx {
             id: [
                 72, 132, 120, 96, 171, 214, 128, 219, 33, 157, 16, 192, 174, 101, 128, 69, 181,
                 126, 185, 38, 161, 37, 17, 65, 92, 229, 106, 55, 131, 235, 133, 202,
@@ -745,130 +355,18 @@ mod tests {
             lock_time: 0,
         };
 
-        block.txns = vec![tx1.clone(), tx2];
+        update_utxo_set(&mut utxo_set, &new_transaction);
 
-        assert_eq!(block.proof_of_inclusion(tx1), true);
+        let utxo = utxo_set.get(&transaction.id).unwrap();
+
+        // Ensure that the UTXO set is updated correctly
+        assert_eq!(utxo.first().unwrap().spent, false);
     }
 
     #[test]
-    fn test_generates_origin_block_merkle() {
-        let mut block = Block {
-            version: 1,
-            hash: [
-                0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 33, 132, 32, 151, 121, 186, 174, 195, 206, 217,
-                15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
-            ],
-            previous_block: [
-                0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
-                217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
-            ],
-            merkle_root_hash: [
-                240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53, 141, 211, 116,
-                95, 60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186,
-            ],
-            timestamp: 1296688928,
-            n_bits: 486604799,
-            nonce: 1924588547,
-            txn_count: 1,
-            txns: vec![],
-        };
-
-        let tx = Tx {
-            id: [
-                240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53, 141, 211, 116,
-                95, 60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186,
-            ],
-            version: 1,
-            flag: 0,
-            tx_in_count: 1, // varint
-            tx_in: vec![TxIn {
-                previous_output: OutPoint {
-                    hash: [0; 32],
-                    index: 255,
-                },
-                script_length: 14, // varint
-                signature_script: vec![4, 32, 231, 73, 77, 1, 127, 6, 47, 80, 50, 83, 72, 47],
-                sequence: 4294967295,
-            }],
-            tx_out_count: 1, // varint
-            tx_out: vec![TxOut {
-                value: 5000000000,
-                pk_script_length: 35, // varint
-                pk_script: vec![
-                    33, 2, 26, 234, 242, 248, 99, 138, 18, 154, 49, 86, 251, 231, 229, 239, 99, 82,
-                    38, 176, 186, 253, 73, 95, 240, 58, 254, 44, 132, 61, 126, 58, 75, 81, 172,
-                ],
-            }],
-            tx_witness: vec![],
-            lock_time: 0,
-        };
-
-        block.txns = vec![tx];
-
-        let expected_merkle_root = [
-            240, 49, 95, 252, 56, 112, 157, 112, 173, 86, 71, 226, 32, 72, 53, 141, 211, 116, 95,
-            60, 227, 135, 66, 35, 200, 10, 124, 146, 250, 176, 200, 186,
-        ];
-
-        assert_eq!(block.get_merkle_tree_root().unwrap(), expected_merkle_root);
-    }
-
-    #[test]
-    fn test_block_valid_because_it_generates_same_merkle_root() {
-        let mut block = Block {
-            version: 2,
-            hash: [
-                0, 0, 0, 0, 0, 2, 60, 60, 152, 89, 35, 223, 255, 89, 74, 130, 64, 234, 30, 151, 40,
-                37, 10, 91, 84, 236, 23, 192, 158, 144, 91, 89,
-            ],
-            previous_block: [
-                0, 0, 0, 0, 0, 2, 60, 60, 152, 89, 35, 223, 255, 89, 74, 130, 64, 234, 30, 151, 40,
-                37, 10, 91, 84, 236, 23, 192, 158, 144, 91, 89,
-            ],
-            merkle_root_hash: [
-                136, 122, 27, 116, 246, 94, 78, 137, 248, 236, 162, 104, 55, 210, 207, 205, 139,
-                16, 92, 241, 228, 96, 167, 60, 7, 168, 155, 54, 29, 202, 64, 99,
-            ],
-            timestamp: 1384047529,
-            n_bits: 486604799,
-            nonce: 2442677017,
-            txn_count: 2,
-            txns: vec![],
-        };
-
-        let tx1 = Tx {
-            id: [
-                163, 249, 79, 52, 224, 98, 202, 218, 50, 159, 58, 108, 242, 175, 222, 216, 208, 9,
-                229, 154, 123, 49, 21, 38, 108, 225, 75, 56, 80, 72, 169, 157,
-            ],
-            version: 2,
-            flag: 0,
-            tx_in_count: 1,
-            tx_in: vec![TxIn {
-                previous_output: OutPoint {
-                    hash: [0; 32],
-                    index: 255,
-                },
-                script_length: 18,
-                signature_script: vec![
-                    3, 206, 247, 1, 5, 82, 126, 227, 169, 4, 0, 0, 0, 0, 14, 0, 0, 0,
-                ],
-                sequence: 4294967295,
-            }],
-            tx_out_count: 1,
-            tx_out: vec![TxOut {
-                value: 5000020000,
-                pk_script_length: 25,
-                pk_script: vec![
-                    118, 169, 20, 195, 208, 147, 199, 86, 220, 79, 141, 216, 23, 181, 3, 198, 78,
-                    203, 128, 39, 118, 33, 52, 136, 172,
-                ],
-            }],
-            tx_witness: vec![],
-            lock_time: 0,
-        };
-
-        let tx2 = Tx {
+    fn correctly_creates_unspent_utxo() {
+        let mut utxo_set = HashMap::new();
+        let new_transaction = Tx {
             id: [
                 72, 132, 120, 96, 171, 214, 128, 219, 33, 157, 16, 192, 174, 101, 128, 69, 181,
                 126, 185, 38, 161, 37, 17, 65, 92, 229, 106, 55, 131, 235, 133, 202,
@@ -1103,166 +601,193 @@ mod tests {
             lock_time: 0,
         };
 
-        block.txns = vec![tx1, tx2];
+        generate_utxos(&mut utxo_set, &new_transaction);
+        let utxo = utxo_set.get(&new_transaction.id).unwrap().first().unwrap();
 
-        let expected_merkle_root = [
-            136, 122, 27, 116, 246, 94, 78, 137, 248, 236, 162, 104, 55, 210, 207, 205, 139, 16,
-            92, 241, 228, 96, 167, 60, 7, 168, 155, 54, 29, 202, 64, 99,
-        ];
-        assert!(block.is_valid());
+        // Ensure that the UTXO set is updated correctly
+
+        assert_eq!(utxo.spent, false);
     }
 
     #[test]
-    fn test_validate_proof_of_work() {
-        let mut block = Block {
+    fn correctly_updates_spent_utxo() {
+        let mut utxo_set = HashMap::new();
+        let new_transaction = Tx {
+            id: [
+                72, 132, 120, 96, 171, 214, 128, 219, 33, 157, 16, 192, 174, 101, 128, 69, 181,
+                126, 185, 38, 161, 37, 17, 65, 92, 229, 106, 55, 131, 235, 133, 202,
+            ],
             version: 2,
-            hash: [
-                0, 0, 0, 0, 0, 2, 60, 60, 152, 89, 35, 223, 255, 89, 74, 130, 64, 234, 30, 151, 40,
-                37, 10, 91, 84, 236, 23, 192, 158, 144, 91, 89,
-            ],
-            previous_block: [
-                0, 0, 0, 0, 0, 2, 60, 60, 152, 89, 35, 223, 255, 89, 74, 130, 64, 234, 30, 151, 40,
-                37, 10, 91, 84, 236, 23, 192, 158, 144, 91, 89,
-            ],
-            merkle_root_hash: [
-                136, 122, 27, 116, 246, 94, 78, 137, 248, 236, 162, 104, 55, 210, 207, 205, 139,
-                16, 92, 241, 228, 96, 167, 60, 7, 168, 155, 54, 29, 202, 64, 99,
-            ],
-            timestamp: 1384047529,
-            n_bits: 486604799,
-            nonce: 2442677017,
-            txn_count: 2,
-            txns: vec![],
+            flag: 0,
+            tx_in_count: 7,
+            tx_in: vec![TxIn {
+                previous_output: OutPoint {
+                    hash: [
+                        230, 17, 204, 216, 152, 113, 52, 184, 70, 87, 1, 249, 234, 17, 39, 102, 77,
+                        17, 41, 48, 122, 17, 106, 157, 133, 63, 1, 153, 206, 101, 110, 234,
+                    ],
+                    index: 1,
+                },
+                script_length: 107,
+                signature_script: vec![
+                    72, 48, 69, 2, 32, 63, 84, 31, 24, 79, 144, 242, 87, 201, 64, 157, 230, 108,
+                    126, 186, 229, 5, 47, 242, 225, 171, 184, 51, 149, 222, 246, 79, 93, 65, 17,
+                    39, 172, 2, 33, 0, 218, 47, 194, 209, 134, 43, 227, 58, 108, 15, 234, 194, 96,
+                    163, 122, 140, 96, 42, 133, 56, 173, 205, 183, 242, 198, 29, 254, 85, 229, 71,
+                    188, 221, 1, 33, 3, 90, 249, 72, 176, 24, 177, 15, 244, 242, 166, 91, 179, 107,
+                    118, 10, 227, 196, 58, 243, 29, 62, 197, 90, 196, 208, 42, 212, 228, 208, 29,
+                    40, 68,
+                ],
+                sequence: 4294967295,
+            }],
+            tx_out_count: 9,
+            tx_out: vec![TxOut {
+                value: 669645,
+                pk_script_length: 25,
+                pk_script: vec![
+                    118, 169, 20, 122, 228, 120, 18, 59, 150, 13, 46, 233, 18, 104, 91, 129, 152,
+                    169, 8, 100, 187, 100, 137, 136, 172,
+                ],
+            }],
+            tx_witness: vec![],
+            lock_time: 0,
         };
 
-        assert_eq!(block.validate_pow(), true);
-    }
-
-    #[test]
-    #[ignore] // TODO fix this test
-    fn test_validate_target_expected() {
-        let mut block = Block {
+        let new_transaction = Tx {
+            id: [
+                72, 132, 120, 96, 171, 214, 128, 219, 33, 157, 16, 192, 174, 101, 128, 69, 181,
+                126, 185, 38, 161, 37, 17, 65, 92, 229, 106, 55, 131, 235, 133, 202,
+            ],
             version: 2,
-            hash: [
-                0, 0, 0, 0, 0, 2, 60, 60, 152, 89, 35, 223, 255, 89, 74, 130, 64, 234, 30, 151, 40,
-                37, 10, 91, 84, 236, 23, 192, 158, 144, 91, 89,
-            ],
-            previous_block: [
-                0, 0, 0, 0, 0, 2, 60, 60, 152, 89, 35, 223, 255, 89, 74, 130, 64, 234, 30, 151, 40,
-                37, 10, 91, 84, 236, 23, 192, 158, 144, 91, 89,
-            ],
-            merkle_root_hash: [
-                136, 122, 27, 116, 246, 94, 78, 137, 248, 236, 162, 104, 55, 210, 207, 205, 139,
-                16, 92, 241, 228, 96, 167, 60, 7, 168, 155, 54, 29, 202, 64, 99,
-            ],
-            timestamp: 1384047529,
-            n_bits: 83886081, // has a 5 as last byte
-            nonce: 2442677017,
-            txn_count: 2,
-            txns: vec![],
+            flag: 0,
+            tx_in_count: 7,
+            tx_in: vec![TxIn {
+                previous_output: OutPoint {
+                    hash: [
+                        230, 17, 204, 216, 152, 113, 52, 184, 70, 87, 1, 249, 234, 17, 39, 102, 77,
+                        17, 41, 48, 122, 17, 106, 157, 133, 63, 1, 153, 206, 101, 110, 234,
+                    ],
+                    index: 1,
+                },
+                script_length: 107,
+                signature_script: vec![
+                    72, 48, 69, 2, 32, 63, 84, 31, 24, 79, 144, 242, 87, 201, 64, 157, 230, 108,
+                    126, 186, 229, 5, 47, 242, 225, 171, 184, 51, 149, 222, 246, 79, 93, 65, 17,
+                    39, 172, 2, 33, 0, 218, 47, 194, 209, 134, 43, 227, 58, 108, 15, 234, 194, 96,
+                    163, 122, 140, 96, 42, 133, 56, 173, 205, 183, 242, 198, 29, 254, 85, 229, 71,
+                    188, 221, 1, 33, 3, 90, 249, 72, 176, 24, 177, 15, 244, 242, 166, 91, 179, 107,
+                    118, 10, 227, 196, 58, 243, 29, 62, 197, 90, 196, 208, 42, 212, 228, 208, 29,
+                    40, 68,
+                ],
+                sequence: 4294967295,
+            }],
+            tx_out_count: 9,
+            tx_out: vec![TxOut {
+                value: 645634,
+                pk_script_length: 25,
+                pk_script: vec![
+                    118, 169, 20, 10, 74, 129, 168, 231, 144, 184, 206, 179, 2, 189, 63, 34, 252,
+                    125, 202, 254, 161, 148, 12, 136, 172,
+                ],
+            }],
+            tx_witness: vec![],
+            lock_time: 0,
         };
-        let target = block.target();
-        assert_eq!(
-            u32::from_le_bytes([target[0], target[1], target[2], target[3]]),
-            65536
-        );
+
+        generate_utxos(&mut utxo_set, &new_transaction);
+        update_utxo_set(&mut utxo_set, &new_transaction);
+
+        let tx_in = TxIn {
+            previous_output: OutPoint {
+                hash: [
+                    230, 17, 204, 216, 152, 113, 52, 184, 70, 87, 1, 249, 234, 17, 39, 102, 77, 17,
+                    41, 48, 122, 17, 106, 157, 133, 63, 1, 153, 206, 101, 110, 234,
+                ],
+                index: 1,
+            },
+            script_length: 107,
+            signature_script: vec![
+                72, 48, 69, 2, 32, 63, 84, 31, 24, 79, 144, 242, 87, 201, 64, 157, 230, 108, 126,
+                186, 229, 5, 47, 242, 225, 171, 184, 51, 149, 222, 246, 79, 93, 65, 17, 39, 172, 2,
+                33, 0, 218, 47, 194, 209, 134, 43, 227, 58, 108, 15, 234, 194, 96, 163, 122, 140,
+                96, 42, 133, 56, 173, 205, 183, 242, 198, 29, 254, 85, 229, 71, 188, 221, 1, 33, 3,
+                90, 249, 72, 176, 24, 177, 15, 244, 242, 166, 91, 179, 107, 118, 10, 227, 196, 58,
+                243, 29, 62, 197, 90, 196, 208, 42, 212, 228, 208, 29, 40, 68,
+            ],
+            sequence: 4294967295,
+        };
+
+        // Ensure that the UTXO set is updated correctly
+        assert!(is_tx_spent(&utxo_set, &tx_in) == false);
     }
 
     #[test]
-    #[ignore] // TODO fix this test
-    fn scalar_bytes() {
-        // Test case with u8
-        let bytes_u8 = vec![20];
-        let result_bytes = Block::scalar_by(2, &bytes_u8);
-        let expected_bytes: Vec<u8> = vec![40];
-        let expected_u8 = u8::from_le_bytes(result_bytes[..].try_into().unwrap());
-        assert_eq!(result_bytes, expected_bytes);
-        assert_eq!(expected_u8, 40);
+    fn test_utxo_set_saves_all_tx_out_from_tx() {
+        let mut utxo_set = HashMap::new();
 
-        // Test case with u16
-        let bytes_u16 = vec![4, 2];
-        let result_bytes = Block::scalar_by(10, &bytes_u16);
-        let expected_bytes: Vec<u8> = vec![40, 20];
-        let expected_u16 = u16::from_le_bytes(result_bytes[..].try_into().unwrap());
-        assert_eq!(result_bytes, expected_bytes);
-        assert_eq!(expected_u16, 5160);
+        let new_transaction = Tx {
+            id: [
+                72, 132, 120, 96, 171, 214, 128, 219, 33, 157, 16, 192, 174, 101, 128, 69, 181,
+                126, 185, 38, 161, 37, 17, 65, 92, 229, 106, 55, 131, 235, 133, 202,
+            ],
+            version: 2,
+            flag: 0,
+            tx_in_count: 1,
+            tx_in: vec![TxIn {
+                previous_output: OutPoint {
+                    hash: [
+                        230, 17, 204, 216, 152, 113, 52, 184, 70, 87, 1, 249, 234, 17, 39, 102, 77,
+                        17, 41, 48, 122, 17, 106, 157, 133, 63, 1, 153, 206, 101, 110, 234,
+                    ],
+                    index: 1,
+                },
+                script_length: 107,
+                signature_script: vec![
+                    72, 48, 69, 2, 32, 63, 84, 31, 24, 79, 144, 242, 87, 201, 64, 157, 230, 108,
+                    126, 186, 229, 5, 47, 242, 225, 171, 184, 51, 149, 222, 246, 79, 93, 65, 17,
+                    39, 172, 2, 33, 0, 218, 47, 194, 209, 134, 43, 227, 58, 108, 15, 234, 194, 96,
+                    163, 122, 140, 96, 42, 133, 56, 173, 205, 183, 242, 198, 29, 254, 85, 229, 71,
+                    188, 221, 1, 33, 3, 90, 249, 72, 176, 24, 177, 15, 244, 242, 166, 91, 179, 107,
+                    118, 10, 227, 196, 58, 243, 29, 62, 197, 90, 196, 208, 42, 212, 228, 208, 29,
+                    40, 68,
+                ],
+                sequence: 4294967295,
+            }],
+            tx_out_count: 1,
+            tx_out: vec![
+                TxOut {
+                    value: 669645,
+                    pk_script_length: 25,
+                    pk_script: vec![
+                        118, 169, 20, 122, 228, 120, 18, 59, 150, 13, 46, 233, 18, 104, 91, 129,
+                        152, 169, 8, 100, 187, 100, 137, 136, 172,
+                    ],
+                },
+                TxOut {
+                    value: 645634,
+                    pk_script_length: 25,
+                    pk_script: vec![
+                        118, 169, 20, 10, 74, 129, 168, 231, 144, 184, 206, 179, 2, 189, 63, 34,
+                        252, 125, 202, 254, 161, 148, 12, 136, 172,
+                    ],
+                },
+                TxOut {
+                    value: 669645,
+                    pk_script_length: 25,
+                    pk_script: vec![
+                        118, 169, 20, 122, 228, 120, 18, 59, 150, 13, 46, 233, 18, 104, 91, 129,
+                        152, 169, 8, 100, 187, 100, 137, 136, 172,
+                    ],
+                },
+            ],
+            tx_witness: vec![],
+            lock_time: 0,
+        };
 
-        // Test case with u32
-        let bytes_u32 = vec![150, 10, 15, 2];
-        let result_bytes = Block::scalar_by(2, &bytes_u32);
-        let expected_bytes: Vec<u8> = vec![44, 21, 30, 4];
-        let expected_u32 = u32::from_le_bytes(result_bytes[..].try_into().unwrap());
-        assert_eq!(result_bytes, expected_bytes);
-        assert_eq!(expected_u32, 69080364);
+        generate_utxos(&mut utxo_set, &new_transaction);
 
-        // Test case with u64 that result in u128
-        let bytes_u64 = vec![50, 10, 15, 2, 8, 30, 7, 120]; //8648914629131438642
-        let expected_bytes: Vec<u8> = vec![150, 30, 45, 6, 24, 90, 21, 104, 1, 0, 0, 0, 0, 0, 0, 0]; //25946743887394315926
-        let result_bytes = Block::scalar_by(3, &bytes_u64);
-        let expected_u128 = u128::from_le_bytes(result_bytes[..].try_into().unwrap());
-        assert_eq!(result_bytes, expected_bytes);
-        assert_eq!(expected_u128, 25946743887394315926);
+        let utxo = utxo_set.get(&new_transaction.id).unwrap();
 
-        // Test case with u128
-        let bytes_u128 = vec![255, 200, 150, 100, 50, 10, 5, 1, 0, 0, 0, 0, 0, 0, 0, 1]; //1329227995784915872977283240754071807
-        let result_bytes = Block::scalar_by(3, &bytes_u128);
-        let expected_bytes: Vec<u8> =
-            vec![253, 90, 196, 45, 151, 30, 15, 3, 0, 0, 0, 0, 0, 0, 0, 3];
-        let expected_u128 = u128::from_le_bytes(result_bytes[..].try_into().unwrap());
-        assert_eq!(result_bytes, expected_bytes);
-        assert_eq!(expected_u128, 3987683987354747618931849722262215421);
-
-        // Test case not fit in u128
-        let bytes = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128]; // 2596148429267413814265248164610048
-        let expected_bytes: Vec<u8> = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]; // (n*2) 5192296858534827628530496329220096
-        let result_bytes = Block::scalar_by(2, &bytes);
-    }
-
-    #[test]
-    #[ignore] // TODO fix this test
-    fn test_pow_256() {
-        let result_with_0 = Block::pow_256(0);
-        assert_eq!(
-            u32::from_le_bytes([
-                result_with_0[0],
-                result_with_0[1],
-                result_with_0[2],
-                result_with_0[3]
-            ]),
-            1
-        );
-
-        let result_with_1 = Block::pow_256(1); // 256^1 = 256
-        assert_eq!(
-            u32::from_le_bytes([
-                result_with_1[0],
-                result_with_1[1],
-                result_with_1[2],
-                result_with_1[3]
-            ]),
-            256
-        );
-
-        let result_with_2 = Block::pow_256(2); // 256^2 = 65536
-        assert_eq!(
-            u32::from_le_bytes([
-                result_with_2[0],
-                result_with_2[1],
-                result_with_2[2],
-                result_with_2[3]
-            ]),
-            65536
-        );
-
-        let result_with_3 = Block::pow_256(3); // 256^3 = 16777216
-        assert_eq!(
-            u32::from_le_bytes([
-                result_with_3[0],
-                result_with_3[1],
-                result_with_3[2],
-                result_with_3[3]
-            ]),
-            16777216
-        );
+        assert_eq!(utxo.len(), 3);
     }
 }

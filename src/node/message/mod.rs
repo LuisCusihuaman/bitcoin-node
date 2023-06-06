@@ -29,6 +29,12 @@ pub enum MessagePayload {
     Block(Block),
 }
 
+impl MessagePayload {
+    fn collect<'a>(iter: impl Iterator<Item = &'a MessagePayload>) -> Vec<&'a MessagePayload> {
+        iter.collect()
+    }
+}
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct MessageHeader {
     pub magic_number: u32,

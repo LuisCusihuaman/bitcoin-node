@@ -2,14 +2,21 @@ use crate::config::Config;
 use crate::node::message::block::Block;
 use crate::node::message::get_blocks::PayloadGetBlocks;
 use crate::node::message::get_data::PayloadGetData;
+use crate::node::message::ping_pong::PayloadPingPong;
 use crate::node::message::version::PayloadVersion;
 use crate::node::message::MessagePayload;
 use crate::node::p2p_connection::P2PConnection;
+use crate::node::utxo::generate_utxos;
+use crate::node::utxo::update_utxo_set;
+use crate::node::utxo::Utxo;
 use crate::utils::*;
 use crate::{logger::Logger, node::message::get_headers::PayloadGetHeaders};
+use bitcoin_hashes::Hash;
 use rand::seq::SliceRandom;
+use std::collections::HashMap;
 use std::fs;
 use std::net::{IpAddr, ToSocketAddrs};
+use std::sync::mpsc;
 use std::thread;
 
 pub struct NodeNetwork {
@@ -41,7 +48,7 @@ impl NodeNetwork {
             peer_connection.handshaked();
         }
     }
-    pub fn send_messages(&self, payloads: Vec<&MessagePayload>) {
+    pub fn send_messages(&self, payloads: Vec<MessagePayload>) {
         let mut threads = Vec::new();
 
         // TODO: connection must be at least one if not enter to infinite loop
@@ -54,7 +61,10 @@ impl NodeNetwork {
             let mut conn = connection.clone();
             let payload = payload.clone();
             threads.push(thread::spawn(move || {
-                conn.send(&payload).unwrap();
+                if let Err(err) = conn.send(&payload) {
+                    eprintln!("Error sending payload: {}", err);
+                    eprintln!("Address: {:?}", conn.peer_address.clone());
+                }
             }));
         }
 
@@ -106,15 +116,24 @@ impl NodeNetwork {
 
     pub fn receive_from_all_peers(&mut self) -> Vec<(String, Vec<MessagePayload>)> {
         let mut threads = Vec::new();
+        let (sender, receiver) = mpsc::channel();
 
         for connection in self.peer_connections.iter_mut() {
             let mut connection = connection.clone();
-            threads.push(thread::spawn(move || connection.receive()));
-        }
+            let sender = sender.clone();
 
-        let received_messages: Vec<_> = threads
-            .into_iter()
-            .map(|thread| thread.join().unwrap())
+            threads.push(thread::spawn(move || {
+                let messages = connection.receive();
+                sender.send(messages).unwrap();
+            }));
+        }
+        for thread in threads {
+            thread.join().unwrap();
+        }
+        drop(sender);
+
+        let received_messages: Vec<_> = receiver
+            .iter()
             .filter(|(_, messages)| !messages.is_empty())
             .collect();
 
@@ -141,6 +160,7 @@ pub struct NodeManager<'a> {
     config: Config,
     logger: &'a Logger,
     blocks: Vec<Block>,
+    utxo_set: HashMap<[u8; 32], Vec<Utxo> >,
 }
 
 impl NodeManager<'_> {
@@ -155,6 +175,7 @@ impl NodeManager<'_> {
             node_network: NodeNetwork::new(),
             logger,
             blocks: vec![], // inicializar el block genesis (con el config)
+            utxo_set: HashMap::new(),
         }
     }
 
@@ -208,19 +229,16 @@ impl NodeManager<'_> {
 
                         // Continuidad de la blockchain
                         if let Some(actual_last_block) = self.blocks.last() {
-                            match blocks.first() {
-                                Some(first_block) => {
-                                    if actual_last_block.get_hash() == first_block.get_prev() {
-                                        if commands.contains(&"headers") {
-                                            // only i want to save msg on correct blockchain integrity
-                                            matched_peer_messages
-                                                .push(MessagePayload::BlockHeader(blocks.clone()));
-                                        }
-                                        self.blocks.extend(blocks.clone());
-                                        Block::encode_blocks_to_file(blocks, "block_headers.bin");
+                            if let Some(first_block) = blocks.first() {
+                                if actual_last_block.get_hash() == first_block.get_prev() {
+                                    if commands.contains(&"headers") {
+                                        // only i want to save msg on correct blockchain integrity
+                                        matched_peer_messages
+                                            .push(MessagePayload::BlockHeader(blocks.clone()));
                                     }
+                                    self.blocks.extend(blocks.clone());
+                                    Block::encode_blocks_to_file(blocks, "block_headers.bin");
                                 }
-                                None => {}
                             }
                         }
                     }
@@ -232,7 +250,14 @@ impl NodeManager<'_> {
                         }
 
                         if let Some(index) = self.get_block_index_by_hash(block.get_prev()) {
-                            if index == self.blocks.len() {
+                            if !block.is_valid() {
+                                self.logger.log(format!("Block {} is not valid", index));
+                                continue;
+                            }
+
+                            self.update_utxo_set(block.clone());
+
+                            if index + 1 == self.blocks.len() {
                                 self.blocks.push(block.clone());
                             } else {
                                 self.blocks[index + 1] = block.clone();
@@ -255,7 +280,25 @@ impl NodeManager<'_> {
                             matched_peer_messages.push(MessagePayload::Inv(inv2.clone()));
                         }
                     }
+                    MessagePayload::Ping(ping) => {
+                        let ping1 = ping.clone();
 
+                        self.send_to(
+                            peer_address.clone(),
+                            &MessagePayload::Pong(PayloadPingPong { nonce: ping1.nonce }),
+                        );
+
+                        message_name = String::from("ping");
+                        if commands.contains(&"ping") {
+                            matched_peer_messages.push(MessagePayload::Ping(ping.clone()));
+                        }
+                    }
+                    MessagePayload::Pong(pong) => {
+                        message_name = String::from("pong");
+                        if commands.contains(&"pong") {
+                            matched_peer_messages.push(MessagePayload::Pong(pong.clone()));
+                        }
+                    }
                     _ => {}
                 }
                 self.logger
@@ -264,6 +307,13 @@ impl NodeManager<'_> {
             matched_messages.push((peer_address.clone(), matched_peer_messages));
         }
         matched_messages
+    }
+
+    fn update_utxo_set(&mut self, block: Block) {
+        for tx in block.txns {
+            generate_utxos(&mut self.utxo_set, &tx);
+            update_utxo_set(&mut self.utxo_set, &tx);
+        }
     }
 
     pub fn get_blocks(&self) -> Vec<Block> {
@@ -326,7 +376,7 @@ impl NodeManager<'_> {
                 .log(format!("Error sending message to peer: {:?}", e));
         }
     }
-    pub fn send(&self, messages: Vec<&MessagePayload>) {
+    pub fn send(&self, messages: Vec<MessagePayload>) {
         self.node_network.send_messages(messages);
     }
 
@@ -387,59 +437,37 @@ impl NodeManager<'_> {
         self.blocks_download();
         Ok(())
     }
-
     fn blocks_download(&mut self) {
         if let Some(timestamp) = date_to_timestamp("2023-04-11") {
-            // TODO integrar fecha del config &self.config.download_blocks_since_date) {
-
+            // TODO: Integrate date from self.config.download_blocks_since_date
             let blocks = self.get_blocks();
-
             let mut index = match self.get_block_index_by_timestamp(timestamp) {
                 Some(index) => index,
                 None => blocks.len(),
             };
-
+            let batch_size = 500;
+            let mut message_batches: Vec<MessagePayload> = Vec::new();
             while index < blocks.len() {
-                let block = blocks[index].clone();
-
-                let mut block_hash: [u8; 32] = block.get_prev();
-                block_hash.reverse();
-                self.block_download_since_block_hash(&block_hash);
-                self.logger.log(format!("{} blocks downloaded", index));
-                index += 500;
+                let end_index = std::cmp::min(index + batch_size, blocks.len());
+                let batch: Vec<MessagePayload> =
+                    take_elements_every(blocks[index..end_index].to_vec(), batch_size, |block| {
+                        let mut block_hash: [u8; 32] = block.get_prev();
+                        block_hash.reverse();
+                        return MessagePayload::GetBlocks(PayloadGetBlocks {
+                            version: 70015,
+                            hash_count: 1,
+                            block_header_hashes: block_hash.to_vec(),
+                            stop_hash: [0u8; 32].to_vec(),
+                        });
+                    });
+                message_batches.extend(batch);
+                index += batch_size;
             }
+            self.send(message_batches);
+            self.wait_for(vec!["inv"]);
+            self.logger
+                .log(format!("{} blocks downloaded finished", blocks.len()));
         }
-        self.logger.log("Block download finished".to_string());
-    }
-
-    fn block_download_since_block_hash(&mut self, block_hash: &[u8; 32]) {
-        let stop_hash = [0u8; 32];
-
-        let get_blocks_message = MessagePayload::GetBlocks(PayloadGetBlocks {
-            version: 70015,
-            hash_count: 1,
-            block_header_hashes: block_hash.to_vec(),
-            stop_hash: stop_hash.to_vec(),
-        });
-        // Send get block messages
-        let address = self.get_random_peer_address();
-        self.send_to(address, &get_blocks_message);
-
-        // Receive inv messages
-        self.wait_for(vec!["inv"]);
-        //let messages = filter_by(response, address.clone());
-        //TODO: check for fail send messages because is +500 always, refactor with concurrency 🧠
-
-        // for message_inv in messages.iter() {
-        //     if let MessagePayload::Inv(payload_inv) = message_inv {
-        //         let get_data_message = MessagePayload::GetData(PayloadGetData::new(
-        //             payload_inv.count,
-        //             payload_inv.invs.clone(),
-        //         ));
-        //         self.send_to(address.clone(), &get_data_message);
-        //         self.wait_for(vec!["block"]);
-        //     }
-        // }
     }
 
     pub fn get_block_index_by_timestamp(&self, timestamp: u32) -> Option<usize> {
@@ -757,7 +785,27 @@ mod tests {
         let verack2 = MessagePayload::Verack;
         let verack3 = MessagePayload::Verack;
 
-        node_manager.send(vec![&verack1, &verack2, &verack3]);
+        node_manager.send(vec![verack1, verack2, verack3]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_send_ping_and_reply_pong() -> Result<(), String> {
+        let logger: Logger = Logger::stdout();
+        let config = Config::new();
+
+        let mut node_manager = NodeManager::new(config, &logger);
+        node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
+        node_manager.handshake();
+
+        let ping_message: MessagePayload = MessagePayload::Ping(PayloadPingPong::new());
+
+        // Send ping messages
+        node_manager.send_to("5.9.149.16:18333".to_string(), &ping_message);
+
+        // Receive pong messages
+        node_manager.wait_for(vec!["pong"]);
+
         Ok(())
     }
 }

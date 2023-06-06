@@ -3,6 +3,7 @@ use crate::node::message::get_blocks::PayloadGetBlocks;
 use crate::node::message::get_data::PayloadGetData;
 use crate::node::message::get_headers::{decode_headers, PayloadGetHeaders};
 use crate::node::message::inv::{decode_inv, PayloadInv};
+use crate::node::message::ping_pong::{decode_ping, decode_pong, PayloadPingPong};
 use crate::node::message::version::{decode_version, PayloadVersion};
 
 use crate::utils::read_le;
@@ -14,6 +15,7 @@ pub mod get_data;
 pub mod get_headers;
 pub mod inv;
 pub mod merkle_tree;
+pub mod ping_pong;
 pub mod tx;
 pub mod version;
 
@@ -27,6 +29,14 @@ pub enum MessagePayload {
     Inv(PayloadInv),
     GetData(PayloadGetData),
     Block(Block),
+    Ping(PayloadPingPong),
+    Pong(PayloadPingPong),
+}
+
+impl MessagePayload {
+    fn collect<'a>(iter: impl Iterator<Item = &'a MessagePayload>) -> Vec<&'a MessagePayload> {
+        iter.collect()
+    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -109,6 +119,8 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::GetHeaders(get_headers) => get_headers.size(),
             MessagePayload::GetBlocks(get_blocks) => get_blocks.size(),
             MessagePayload::GetData(get_data) => get_data.size(),
+            MessagePayload::Ping(ping) => ping.size(),
+            MessagePayload::Pong(pong) => pong.size(),
             _ => no_payload,
         }
     }
@@ -127,6 +139,12 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::GetData(get_data) => {
                 get_data.encode(buffer);
             }
+            MessagePayload::Ping(ping) => {
+                ping.encode(buffer);
+            }
+            MessagePayload::Pong(pong) => {
+                pong.encode(buffer);
+            }
             _ => {}
         }
         Ok(())
@@ -142,6 +160,8 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::Inv(_) => "inv",
             MessagePayload::GetData(_) => "getdata",
             MessagePayload::Block(_) => "block",
+            MessagePayload::Ping(_) => "ping",
+            MessagePayload::Pong(_) => "pong",
         }
     }
 
@@ -152,6 +172,8 @@ impl Encoding<MessagePayload> for MessagePayload {
             "inv" => decode_inv(buffer),
             "verack" => Ok(MessagePayload::Verack),
             "block" => decode_block(buffer),
+            "ping" => decode_ping(buffer),
+            "pong" => decode_pong(buffer),
             _ => Err("Unknown command: ".to_owned() + cmd),
         }
     }

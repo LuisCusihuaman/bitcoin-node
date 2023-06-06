@@ -144,11 +144,28 @@ pub fn date_to_timestamp(date_str: &str) -> Option<u32> {
     }
     None
 }
+
 pub fn little_endian_to_int(bytes: &[u8; 32]) -> u128 {
     let mut result: u128 = 0;
 
     for i in 0..16 {
         result |= u128::from(bytes[i]) << (8 * i);
+    }
+    result
+}
+
+pub fn take_elements_every<T: Clone, G, F>(items: Vec<T>, step: usize, mut apply_fn: F) -> Vec<G>
+where
+    G: Clone,
+    F: FnMut(&mut T) -> G,
+{
+    let mut result = Vec::new();
+    for (index, item) in items.into_iter().enumerate() {
+        if (index + 1) % step == 0 {
+            let mut cloned_item = item.clone();
+            let transformed_item = apply_fn(&mut cloned_item);
+            result.push(transformed_item);
+        }
     }
     result
 }
@@ -216,5 +233,13 @@ mod tests {
             get_le_varint(10000000000),
             vec![255, 0, 228, 11, 84, 2, 0, 0, 0]
         );
+    }
+
+    #[test]
+    fn test_take_elements_every() {
+        let items = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        let step = 3;
+        let result = take_elements_every(items, step, |item| *item * 2);
+        assert_eq!(result, vec![6, 12, 18]);
     }
 }

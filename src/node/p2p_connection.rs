@@ -136,10 +136,13 @@ fn parse_messages_from(buf: &mut Vec<u8>) -> Vec<MessagePayload> {
             payload_size
         };
 
-        match decode_message(
-            &command_name,
-            &buf[(cursor + 24)..(cursor + 24 + payload_size)],
-        ) {
+        let end_index = cursor + 24 + payload_size;
+        if end_index > buf.len() {
+            println!("Invalid end index: {}", end_index);
+            break; // the last message has more bytes than received
+        }
+
+        match decode_message(&command_name, &buf[(cursor + 24)..end_index]) {
             Ok(payload) => {
                 messages.push(payload);
             }

@@ -2,6 +2,7 @@ use crate::config::Config;
 use crate::node::message::block::Block;
 use crate::node::message::get_blocks::PayloadGetBlocks;
 use crate::node::message::get_data::PayloadGetData;
+use crate::node::message::ping_pong::PayloadPingPong;
 use crate::node::message::version::PayloadVersion;
 use crate::node::message::MessagePayload;
 use crate::node::p2p_connection::P2PConnection;
@@ -272,7 +273,25 @@ impl NodeManager<'_> {
                             matched_peer_messages.push(MessagePayload::Inv(inv2.clone()));
                         }
                     }
+                    MessagePayload::Ping(ping) => {
+                        let ping1 = ping.clone();
 
+                        self.send_to(
+                            peer_address.clone(),
+                            &MessagePayload::Pong(PayloadPingPong { nonce: ping1.nonce }),
+                        );
+
+                        message_name = String::from("ping");
+                        if commands.contains(&"ping") {
+                            matched_peer_messages.push(MessagePayload::Ping(ping.clone()));
+                        }
+                    }
+                    MessagePayload::Pong(pong) => {
+                        message_name = String::from("pong");
+                        if commands.contains(&"pong") {
+                            matched_peer_messages.push(MessagePayload::Pong(pong.clone()));
+                        }
+                    }
                     _ => {}
                 }
                 self.logger
@@ -753,6 +772,26 @@ mod tests {
         let verack3 = MessagePayload::Verack;
 
         node_manager.send(vec![verack1, verack2, verack3]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_send_ping_and_reply_pong() -> Result<(), String> {
+        let logger: Logger = Logger::stdout();
+        let config = Config::new();
+
+        let mut node_manager = NodeManager::new(config, &logger);
+        node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
+        node_manager.handshake();
+
+        let ping_message: MessagePayload = MessagePayload::Ping(PayloadPingPong::new());
+
+        // Send ping messages
+        node_manager.send_to("5.9.149.16:18333".to_string(), &ping_message);
+
+        // Receive pong messages
+        node_manager.wait_for(vec!["pong"]);
+
         Ok(())
     }
 }

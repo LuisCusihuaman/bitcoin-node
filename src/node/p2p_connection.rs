@@ -2,6 +2,7 @@ use crate::node::message::{Encoding, MessageHeader, MessagePayload};
 use crate::utils::double_sha256;
 use std::io::{Read, Write};
 use std::net::TcpStream;
+use std::sync::{mpsc::Sender, Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use std::vec;
@@ -10,6 +11,7 @@ pub struct P2PConnection {
     pub handshaked: bool,
     pub peer_address: String,
     tcp_stream: TcpStream,
+    logger_tx: Arc<Mutex<Sender<String>>>,
 }
 
 impl Clone for P2PConnection {
@@ -18,12 +20,13 @@ impl Clone for P2PConnection {
             handshaked: self.handshaked,
             peer_address: self.peer_address.clone(),
             tcp_stream: self.tcp_stream.try_clone().unwrap(),
+            logger_tx: self.logger_tx.clone(),
         }
     }
 }
 
 impl P2PConnection {
-    pub fn connect(addr: &str) -> Result<Self, String> {
+    pub fn connect(addr: &str, logger_tx: Arc<Mutex<Sender<String>>>) -> Result<Self, String> {
         // TODO: save the peers that not pass the timeout
         let tcp_stream = TcpStream::connect_timeout(&addr.parse().unwrap(), Duration::from_secs(5))
             .map_err(|e| e.to_string())?;
@@ -31,6 +34,7 @@ impl P2PConnection {
         tcp_stream.set_nonblocking(true).unwrap();
 
         Ok(Self {
+            logger_tx: logger_tx.clone(),
             handshaked: true,
             peer_address: addr.to_owned(),
             tcp_stream,
@@ -58,15 +62,20 @@ impl P2PConnection {
         buffer_total[24..].copy_from_slice(&buffer_payload[..]);
 
         thread::sleep(Duration::from_millis(350)); // Strategy to not overload server limit rate
-        println!(
-            "Sending message: {:?} for peer: {}",
+        self.log(format!(
+            "Sending {} to {}",
             payload.command_name(),
             self.peer_address.as_str()
-        );
+        ));
+
         self.tcp_stream
             .write(&buffer_total[..])
             .map_err(|e| e.to_string())?;
         Ok(())
+    }
+
+    fn log(&self, message: String) {
+        self.logger_tx.lock().unwrap().send(message).unwrap();
     }
 
     pub fn receive(&mut self) -> (String, Vec<MessagePayload>) {
@@ -92,8 +101,7 @@ impl P2PConnection {
                     break;
                 }
                 Err(err) => {
-                    eprintln!("Error reading from TCP stream: {}", err);
-                    //self.handshaked = false;
+                    self.log(format!("Error reading from TCP stream: {}", err));
                     break;
                 }
             }
@@ -163,6 +171,7 @@ fn decode_message<T: Encoding<T>>(cmd: &str, data: &[u8]) -> Result<T, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::logger::Logger;
     use crate::node::message::get_headers::PayloadGetHeaders;
     use crate::node::message::version::PayloadVersion;
     use crate::utils::MockTcpStream;
@@ -189,7 +198,9 @@ mod tests {
 
     #[test]
     fn send_and_read() -> Result<(), String> {
-        let mut conn = P2PConnection::connect(&"5.9.73.173:18333".to_string()).unwrap();
+        let logger = Logger::mock_logger();
+
+        let mut conn = P2PConnection::connect(&"5.9.73.173:18333".to_string(), logger.tx).unwrap();
         let payload_version_message = MessagePayload::Version(PayloadVersion::default_version());
         conn.send(&payload_version_message).unwrap();
         conn.send(&MessagePayload::Verack).unwrap();
@@ -209,7 +220,8 @@ mod tests {
     #[test]
     fn send_first_get_headers_and_response() -> Result<(), String> {
         // Handshake
-        let mut conn = P2PConnection::connect(&"5.9.73.173:18333".to_string()).unwrap();
+        let logger = Logger::mock_logger();
+        let mut conn = P2PConnection::connect(&"5.9.73.173:18333".to_string(), logger.tx).unwrap();
         let payload_version_message = MessagePayload::Version(PayloadVersion::default_version());
         conn.send(&payload_version_message).unwrap();
         conn.send(&MessagePayload::Verack).unwrap();

@@ -1,22 +1,24 @@
 use crate::config::Config;
-use crate::logger::Logger;
 use crate::net::request::Request;
 use crate::net::router::{Handler, Router};
 use crate::node::manager::NodeManager;
 use std::net::{TcpListener, TcpStream};
+use std::sync::{mpsc::Sender, Arc, Mutex};
 
-pub struct Server<'a> {
+pub struct Server {
     router: Router,
-    node_manager: NodeManager<'a>,
-    logger: &'a Logger,
+    node_manager: NodeManager,
+    logger_tx: Arc<Mutex<Sender<String>>>,
 }
 
-impl Server<'_> {
-    pub fn new(router: Router, logger: &Logger, config: Config) -> Server {
+impl Server {
+    pub fn new(router: Router, logger_tx: Arc<Mutex<Sender<String>>>, config: Config) -> Server {
+        let aux = logger_tx.clone();
+
         Server {
             router,
-            logger,
-            node_manager: NodeManager::new(config, logger),
+            logger_tx,
+            node_manager: NodeManager::new(config, aux),
         }
     }
 
@@ -32,7 +34,6 @@ impl Server<'_> {
         )?;
         self.node_manager.handshake();
         self.node_manager.initial_block_download()?;
-        self.logger.log(format!("Server listening on {}", addr));
         //here can trigger another thread with a loop to receive all messages for keep connection alive with other nodes
         let connection = listener.accept().map_err(|e| e.to_string())?;
         let mut client_stream: TcpStream = connection.0;

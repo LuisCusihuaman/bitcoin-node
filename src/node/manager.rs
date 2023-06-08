@@ -11,7 +11,7 @@ use crate::node::utxo::Utxo;
 use crate::utils::*;
 use crate::{logger::Logger, node::message::get_headers::PayloadGetHeaders};
 use rand::seq::SliceRandom;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::net::{IpAddr, ToSocketAddrs};
 use std::sync::mpsc;
@@ -162,6 +162,7 @@ pub struct NodeManager<'a> {
     logger: &'a Logger,
     blocks: Vec<Block>,
     utxo_set: HashMap<[u8; 32], Vec<Utxo>>,
+    blocks_btreemap: BTreeMap<[u8; 32], usize>,
 }
 
 impl NodeManager<'_> {
@@ -177,6 +178,7 @@ impl NodeManager<'_> {
             logger,
             blocks: vec![], // inicializar el block genesis (con el config)
             utxo_set: HashMap::new(),
+            blocks_btreemap: BTreeMap::new(),
         }
     }
 
@@ -253,13 +255,16 @@ impl NodeManager<'_> {
                             continue;
                         }
 
-                        let prev_index = match self.get_block_index_by_hash(block.get_prev()) {
-                            Some(index) => index,
-                            None => {
-                                self.logger
-                                    .log(format!("Previous block not found in the blockchain"));
-                                continue;
-                            }
+                        let prev_index = match self.blocks_btreemap.get(&block.get_prev()) {
+                            Some(index) => index.clone(),
+                            None => match self.get_block_index_by_hash(block.get_prev()) {
+                                Some(index) => index,
+                                None => {
+                                    self.logger
+                                        .log(format!("Previous block not found in the blockchain"));
+                                    continue;
+                                }
+                            },
                         };
 
                         self.update_utxo_set(block.clone());
@@ -411,10 +416,12 @@ impl NodeManager<'_> {
 
         if fs::metadata(file_path).is_ok() {
             // Blocks file already exists, no need to perform initial block download
-            self.logger.log("loading block headers from file".to_string());
+            self.logger
+                .log("loading block headers from file".to_string());
             self.blocks = Block::decode_blocks_from_file(file_path);
         }
-        self.logger.log(format!("{:?} blocks loaded by file", self.blocks.len()));
+        self.logger
+            .log(format!("{:?} blocks loaded from file", self.blocks.len()));
         self.initial_block_headers_download();
     }
 
@@ -436,6 +443,21 @@ impl NodeManager<'_> {
             }
 
             is_finished = messages.is_empty();
+        }
+
+        self.init_block_btreemap();
+    }
+
+    fn init_block_btreemap(&mut self) {
+        let blocks = self.get_blocks();
+
+        self.logger.log(format!(
+            "Generating block btreemap with {} blocks",
+            blocks.len()
+        ));
+
+        for (index, block) in blocks.iter().enumerate() {
+            self.blocks_btreemap.insert(block.get_hash(), index);
         }
     }
 
@@ -476,7 +498,7 @@ impl NodeManager<'_> {
         };
 
         let get_data_messages: &Vec<MessagePayload> = &blocks[index..]
-            .chunks(10)
+            .chunks(50)
             .map(|chunk| {
                 let inventories: Vec<Inventory> = chunk
                     .iter()

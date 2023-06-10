@@ -1,8 +1,7 @@
 use crate::node::message::block::{decode_block, Block};
 use crate::node::message::get_blocks::PayloadGetBlocks;
-use crate::node::message::get_data::PayloadGetData;
+use crate::node::message::get_data_inv::{decode_data_inv, PayloadGetDataInv};
 use crate::node::message::get_headers::{decode_headers, PayloadGetHeaders};
-use crate::node::message::inv::{decode_inv, PayloadInv};
 use crate::node::message::ping_pong::{decode_ping, decode_pong, PayloadPingPong};
 use crate::node::message::version::{decode_version, PayloadVersion};
 
@@ -11,9 +10,8 @@ use std::mem;
 
 pub mod block;
 pub mod get_blocks;
-pub mod get_data;
+pub mod get_data_inv;
 pub mod get_headers;
-pub mod inv;
 pub mod merkle_tree;
 pub mod ping_pong;
 pub mod tx;
@@ -26,8 +24,8 @@ pub enum MessagePayload {
     GetHeaders(PayloadGetHeaders),
     BlockHeader(Vec<Block>),
     GetBlocks(PayloadGetBlocks),
-    Inv(PayloadInv),
-    GetData(PayloadGetData),
+    Inv(PayloadGetDataInv),
+    GetData(PayloadGetDataInv),
     Block(Block),
     Ping(PayloadPingPong),
     Pong(PayloadPingPong),
@@ -169,7 +167,7 @@ impl Encoding<MessagePayload> for MessagePayload {
         match cmd {
             "version" => decode_version(buffer),
             "headers" => decode_headers(buffer),
-            "inv" => decode_inv(buffer),
+            "inv" => decode_data_inv(buffer),
             "verack" => Ok(MessagePayload::Verack),
             "block" => decode_block(buffer),
             "ping" => decode_ping(buffer),

@@ -25,7 +25,7 @@ use super::message::get_data_inv::Inventory;
 use super::message::get_data_inv::PayloadGetDataInv;
 
 pub struct NodeNetwork {
-    pub logger_tx: Arc<Mutex<Sender<String>>>,
+    pub logger_tx: Sender<String>,
     pub peer_connections: Vec<P2PConnection>,
 }
 
@@ -36,7 +36,7 @@ impl NodeNetwork {
             .filter(|connection| connection.handshaked)
             .count()
     }
-    pub fn new(logger_tx: Arc<Mutex<Sender<String>>>) -> NodeNetwork {
+    pub fn new(logger_tx: Sender<String>) -> NodeNetwork {
         NodeNetwork {
             logger_tx,
             peer_connections: vec![],
@@ -164,14 +164,14 @@ impl NodeNetwork {
     }
 
     fn log(&self, message: String) {
-        self.logger_tx.lock().unwrap().send(message).unwrap();
+        self.logger_tx.send(message).unwrap();
     }
 }
 
 pub struct NodeManager {
     node_network: NodeNetwork,
     config: Config,
-    logger_tx: Arc<Mutex<Sender<String>>>,
+    logger_tx: Sender<String>,
     blocks: Vec<Block>,
     utxo_set: HashMap<[u8; 32], Vec<Utxo>>,
     blocks_btreemap: BTreeMap<[u8; 32], usize>,
@@ -184,7 +184,7 @@ impl NodeManager {
         }
     }
 
-    pub fn new(config: Config, logger_tx: Arc<Mutex<Sender<String>>>) -> NodeManager {
+    pub fn new(config: Config, logger_tx: Sender<String>) -> NodeManager {
         let asd = logger_tx.clone();
         NodeManager {
             config,
@@ -359,7 +359,7 @@ impl NodeManager {
     }
 
     fn log(&self, message: String) {
-        self.logger_tx.lock().unwrap().send(message).unwrap();
+        self.logger_tx.send(message).unwrap();
     }
 
     fn resolve_hostname(&self, hostname: &str, port: u16) -> Result<Vec<IpAddr>, std::io::Error> {

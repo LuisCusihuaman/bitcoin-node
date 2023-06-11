@@ -9,31 +9,29 @@ use std::sync::{Arc, Mutex};
 
 pub struct Logger {
     rx: Receiver<String>,
-    pub tx: Arc<Mutex<Sender<String>>>,
+    pub tx: Sender<String>,
     file: RefCell<File>,
 }
 
 impl Logger {
     pub fn mock_logger() -> Self {
         let (sender, rx) = channel();
-        let tx = Arc::new(Mutex::new(sender));
         let file = File::create("/dev/null").unwrap();
 
         Self {
             rx,
-            tx,
+            tx: sender,
             file: RefCell::new(file),
         }
     }
 
     pub fn new(config: &Config) -> Result<Self, Box<dyn Error>> {
         let (sender, receiver) = channel();
-        let tx = Arc::new(Mutex::new(sender));
 
         let file = File::create(&config.log_file)?;
         Ok(Self {
             rx: receiver,
-            tx,
+            tx: sender,
             file: RefCell::new(file),
         })
     }

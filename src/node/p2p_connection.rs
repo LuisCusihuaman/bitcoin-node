@@ -11,7 +11,7 @@ pub struct P2PConnection {
     pub handshaked: bool,
     pub peer_address: String,
     tcp_stream: TcpStream,
-    logger_tx: Arc<Mutex<Sender<String>>>,
+    logger_tx: Sender<String>,
 }
 
 impl Clone for P2PConnection {
@@ -26,7 +26,7 @@ impl Clone for P2PConnection {
 }
 
 impl P2PConnection {
-    pub fn connect(addr: &str, logger_tx: Arc<Mutex<Sender<String>>>) -> Result<Self, String> {
+    pub fn connect(addr: &str, logger_tx: Sender<String>) -> Result<Self, String> {
         // TODO: save the peers that not pass the timeout
         let tcp_stream = TcpStream::connect_timeout(&addr.parse().unwrap(), Duration::from_secs(5))
             .map_err(|e| e.to_string())?;
@@ -75,7 +75,7 @@ impl P2PConnection {
     }
 
     fn log(&self, message: String) {
-        self.logger_tx.lock().unwrap().send(message).unwrap();
+        self.logger_tx.send(message).unwrap();
     }
 
     pub fn receive(&mut self) -> (String, Vec<MessagePayload>) {

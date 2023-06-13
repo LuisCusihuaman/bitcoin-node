@@ -1,7 +1,13 @@
 use crate::config::Config;
 use crate::logger::Logger;
-use crate::node::message::tx::{Tx, TxIn, TxOut};
+use crate::node::message::tx::{Tx, TxIn, TxOut, self};
+use bitcoin_hashes::Hash;
+use rand::rngs::OsRng;
+use rand::Rng;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
+use bs58;
+use bitcoin_hashes::{hash160};
+
 
 pub struct Wallet<'a> {
     config: Config,
@@ -24,26 +30,52 @@ impl Wallet<'_> {
         self.users.push(user);
     }
 
-    pub fn get_balance(&self, user: User) -> u64 {
+    // pub fn get_balance(&self, user: User) -> u64 {
 
-        let mut balance = 0;
+    //     let mut balance = 0;
 
-        for tx in &user.txns {
-           //balance += tx.amount; 
-        }
+            // TODO Conectar con el nodo y pedirle las UTXO asociadas al address de user
 
-        balance
-    }
+    //     for tx in &user.txns {
+    //        //balance += tx.amount; 
+    //     }
+
+    //     balance
+    // }
 
     fn create_tx(&self, from:User , to_address:String, amount:u64) -> Tx{
 
-        let mut tx_out = vec!();
+        // Sacar este campo cuando encodeemos
+        let id = [0; 32];
+        let version = 1;
+        let flag = 0;
 
-        // aca creo la transaccion real
-        // Pedirsela al nodo?
-        
-        let mut tx = Tx::new(1,  0, vec!(), tx_out ,  0);
-    }
+
+        let tx_in = vec!();
+
+        // TODO Conectar con el nodo y pedirle las UTXO asociadas al address de user
+        // tx_in_count = len(utxos)
+        let tx_in_count = tx_in.len();
+
+        let tx_out = vec!();
+        let tx_out_count = tx_out.len();
+
+        // Omitimos el tx_witness porque el flag es 0
+        let tx_witness = vec!();
+
+        let lock_time = 0; // 0 significa que se procesa instantaneamente
+
+        Tx{
+            id,
+            version,
+            flag,
+            tx_in_count,
+            tx_in,
+            tx_out_count,
+            tx_out,
+            tx_witness,
+            lock_time,}
+        }
 
 
     pub fn send_tx(&self, from:User , to_address:String, amount:u64, tx_in: Vec<TxIn>){
@@ -77,30 +109,79 @@ impl Wallet<'_> {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct User {
     pub name: String,
-    pub address: String,
+    pub bitcoin_address: String,
     pub secret_key: SecretKey,
     pub public_key: PublicKey,
-    pub txns: Vec<Tx>,
+    pub txns_hist: Vec<Tx>,
 }
 
 impl User {
-    pub fn new(name: String, secret_key: SecretKey, address: String) -> User {
+
+    pub fn new(name:String, secret_key:SecretKey) -> User{
 
         let secp = Secp256k1::new();
 
-        let (secret_key, public_key) = generate_keypair(&mut rand::thread_rng());
-        let public_key = PublicKey::from_secret_key(&secp, &secret_key);
-        let sig = secp.sign_ecdsa(&message, &secret_key);
+         // Public key
+         let public_key = PublicKey::from_secret_key(&secp, &secret_key);
+
+         // Generate address
+
+         // Version de testNet
+         let version = "0x6f"; // 111
+ 
+         // Key hash = Version concatenated with RIPEMD-160(SHA-256(public key))
+         let key_hash =  format!("{}{}", version, hash160::Hash::hash(&public_key.to_string().as_bytes()).to_string());
+ 
+         let bitcoin_address = bs58::encode(key_hash.as_bytes())
+                                         .with_check()
+                                         .into_string();
+ 
+         User {
+             name,
+             bitcoin_address,
+             secret_key,
+             public_key,
+             txns_hist: Vec::new(),
+         }
+    }
+
+
+    pub fn new_anonimous(name: String) -> User {
+
+        let mut rng = OsRng::default();
+        let secp = Secp256k1::new();
+
+        // Secret key
+        let mut private_key_bytes: [u8; 32] = [0; 32];
+        rng.fill(&mut private_key_bytes);
+        let secret_key = SecretKey::from_slice(&private_key_bytes).unwrap();
 
         // Public key
         let public_key = PublicKey::from_secret_key(&secp, &secret_key);
 
+        // Generate address
+
+        // Version = 1 byte of 0 (zero); on the test network, this is 1 byte of 111
+        // Key hash = Version concatenated with RIPEMD-160(SHA-256(public key))
+        // Checksum = 1st 4 bytes of SHA-256(SHA-256(Key hash))
+        // Bitcoin Address = Base58Encode(Key hash concatenated with Checksum)
+
+        // Version de testNet
+        let version = "0x6f"; // 111
+
+        // Key hash = Version concatenated with RIPEMD-160(SHA-256(public key))
+        let key_hash =  format!("{}{}", version, hash160::Hash::hash(&public_key.to_string().as_bytes()).to_string());
+
+        let bitcoin_address = bs58::encode(key_hash.as_bytes())
+                                        .with_check()
+                                        .into_string();
+
         User {
             name,
-            address,
+            bitcoin_address,
             secret_key,
             public_key,
-            txns: Vec::new(),
+            txns_hist: Vec::new(),
         }
     }
 }
@@ -114,7 +195,7 @@ mod tests {
     #[test]
     fn test_create_tx_from_bob_to_alice(){
 
-        let user = User::new("Alice".to_string(), "address".to_string());
+        let user = User::new("Alice".to_string());
 
     }
 

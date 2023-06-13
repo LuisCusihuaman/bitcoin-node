@@ -1,6 +1,8 @@
 use crate::config::Config;
+use crate::logger::Logger;
 use crate::node::message::block::Block;
-use crate::node::message::get_data_inv::{Inventory, PayloadGetDataInv};
+use crate::node::message::get_blocks::PayloadGetBlocks;
+use crate::node::message::get_headers::PayloadGetHeaders;
 use crate::node::message::ping_pong::PayloadPingPong;
 use crate::node::message::version::PayloadVersion;
 use crate::node::message::MessagePayload;
@@ -9,17 +11,21 @@ use crate::node::utxo::generate_utxos;
 use crate::node::utxo::update_utxo_set;
 use crate::node::utxo::Utxo;
 use crate::utils::*;
-use crate::{logger::Logger, node::message::get_headers::PayloadGetHeaders};
 use rand::seq::SliceRandom;
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::net::{IpAddr, ToSocketAddrs};
 use std::sync::mpsc;
+use std::sync::mpsc::Sender;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::thread;
-
 use super::message::tx::OutPoint;
+use super::message::get_data_inv::Inventory;
+use super::message::get_data_inv::PayloadGetDataInv;
 
 pub struct NodeNetwork {
+    pub logger_tx: Sender<String>,
     pub peer_connections: Vec<P2PConnection>,
 }
 
@@ -30,15 +36,15 @@ impl NodeNetwork {
             .filter(|connection| connection.handshaked)
             .count()
     }
-    pub fn new() -> NodeNetwork {
+    pub fn new(logger_tx: Sender<String>) -> NodeNetwork {
         NodeNetwork {
+            logger_tx,
             peer_connections: vec![],
         }
     }
     pub fn handshake_complete(&mut self, peer_address: &String) {
-        //self.logger
-        //    .log(format!("Handshake complete with peer: {}", peer_address));
-        println!("Handshake complete with peer: {}", peer_address);
+        self.log(format!("Handshake complete with peer: {}", peer_address));
+
         // added handshaked attribute of P2PConnection turned into true, filter first by peer_address
         if let Some(peer_connection) = self
             .peer_connections
@@ -156,28 +162,34 @@ impl NodeNetwork {
             String::from("")
         }
     }
+
+    fn log(&self, message: String) {
+        self.logger_tx.send(message).unwrap();
+    }
 }
 
-pub struct NodeManager<'a> {
+pub struct NodeManager {
     node_network: NodeNetwork,
     config: Config,
-    logger: &'a Logger,
+    logger_tx: Sender<String>,
     blocks: Vec<Block>,
     utxo_set: HashMap<String, Vec<Utxo>>, // utxo_set is a Hash with key <address> and value <OutPoint>
     blocks_btreemap: BTreeMap<[u8; 32], usize>,
 }
 
-impl NodeManager<'_> {
+impl NodeManager {
     pub fn block_broadcasting(&mut self) -> Result<(), String> {
         loop {
             self.wait_for(vec!["inv"]);
         }
     }
-    pub fn new(config: Config, logger: &Logger) -> NodeManager {
+
+    pub fn new(config: Config, logger_tx: Sender<String>) -> NodeManager {
+        let asd = logger_tx.clone();
         NodeManager {
             config,
-            node_network: NodeNetwork::new(),
-            logger,
+            node_network: NodeNetwork::new(logger_tx),
+            logger_tx: asd,
             blocks: vec![], // inicializar el block genesis (con el config)
             utxo_set: HashMap::new(),
             blocks_btreemap: BTreeMap::new(),
@@ -199,20 +211,16 @@ impl NodeManager<'_> {
             let mut matched_peer_messages = Vec::new();
 
             for message in messages {
-                let mut message_name = String::from("unknown message");
-
                 match message {
                     MessagePayload::Verack => {
-                        message_name = String::from("verack");
-
+                        self.log(format!("Received verack from {}", peer_address));
                         self.node_network.handshake_complete(peer_address);
                         if commands.contains(&"verack") {
                             matched_peer_messages.push(MessagePayload::Verack);
                         }
                     }
                     MessagePayload::Version(version) => {
-                        message_name = String::from("version");
-
+                        self.log(format!("Received version from {}", peer_address));
                         self.send_to(peer_address.clone(), &MessagePayload::Verack);
 
                         if commands.contains(&"version") {
@@ -220,8 +228,6 @@ impl NodeManager<'_> {
                         }
                     }
                     MessagePayload::BlockHeader(blocks) => {
-                        message_name = String::from("headers");
-
                         // Primeros headers
                         if self.get_blocks().is_empty() {
                             if commands.contains(&"headers") {
@@ -246,6 +252,7 @@ impl NodeManager<'_> {
                                 }
                             }
                         }
+                        self.log(format!("{} headers received", blocks.len()));
                     }
                     MessagePayload::Block(block) => {
                         if commands.contains(&"block") {
@@ -253,7 +260,7 @@ impl NodeManager<'_> {
                         }
 
                         if !block.is_valid() {
-                            self.logger.log(format!("Block is not valid"));
+                            self.log(format!("Block is not valid"));
                             continue;
                         }
 
@@ -262,8 +269,7 @@ impl NodeManager<'_> {
                             None => match self.get_block_index_by_hash(block.get_prev()) {
                                 Some(index) => index,
                                 None => {
-                                    self.logger
-                                        .log(format!("Previous block not found in the blockchain"));
+                                    self.log(format!("Previous block not found in the blockchain"));
                                     continue;
                                 }
                             },
@@ -280,16 +286,18 @@ impl NodeManager<'_> {
                             ]
                         {
                             self.blocks[0] = block.clone();
-                            message_name = format!("updated block with index 0");
+                            self.log(format!("updated block with index 0"));
                         } else if prev_index + 1 == self.blocks.len() {
                             self.blocks.push(block.clone());
-                            message_name = format!("new block with index {}", prev_index + 1);
+                            self.log(format!("new block with index {}", prev_index + 1));
                         } else {
                             self.blocks[prev_index + 1] = block.clone();
-                            message_name = format!("updated block with index {}", prev_index + 1);
+                            self.log(format!("updated block with index {}", prev_index + 1));
                         }
                     }
                     MessagePayload::Inv(inv) => {
+                        self.log(format!("Received inv from {}", peer_address));
+
                         let inv = inv.clone();
                         let inv2 = inv.clone();
                         if inv.inv_type == 2 {
@@ -304,12 +312,14 @@ impl NodeManager<'_> {
                             );
                             self.wait_for(vec!["blocks"]);
                         }
-                        message_name = String::from("inv");
+
                         if commands.contains(&"inv") {
                             matched_peer_messages.push(MessagePayload::Inv(inv2.clone()));
                         }
                     }
                     MessagePayload::Ping(ping) => {
+                        self.log(format!("Received ping from {}", peer_address));
+
                         let ping1 = ping.clone();
 
                         self.send_to(
@@ -317,21 +327,20 @@ impl NodeManager<'_> {
                             &MessagePayload::Pong(PayloadPingPong { nonce: ping1.nonce }),
                         );
 
-                        message_name = String::from("ping");
                         if commands.contains(&"ping") {
                             matched_peer_messages.push(MessagePayload::Ping(ping.clone()));
                         }
                     }
                     MessagePayload::Pong(pong) => {
-                        message_name = String::from("pong");
+                        self.log(format!("Received pong from {}", peer_address));
                         if commands.contains(&"pong") {
                             matched_peer_messages.push(MessagePayload::Pong(pong.clone()));
                         }
                     }
-                    _ => {}
+                    _ => {
+                        self.log(format!("Received unknown message from {}", peer_address));
+                    }
                 }
-                self.logger
-                    .log(format!("Received {} from {}", message_name, peer_address));
             }
             matched_messages.push((peer_address.clone(), matched_peer_messages));
         }
@@ -347,6 +356,10 @@ impl NodeManager<'_> {
 
     pub fn get_blocks(&self) -> Vec<Block> {
         self.blocks.clone()
+    }
+
+    fn log(&self, message: String) {
+        self.logger_tx.send(message).unwrap();
     }
 
     fn resolve_hostname(&self, hostname: &str, port: u16) -> Result<Vec<IpAddr>, std::io::Error> {
@@ -385,13 +398,13 @@ impl NodeManager<'_> {
 
     pub fn connect(&mut self, node_network_addresses: Vec<String>) -> Result<(), String> {
         for addr in node_network_addresses.iter() {
-            match P2PConnection::connect(addr) {
+            match P2PConnection::connect(addr, self.logger_tx.clone()) {
                 Ok(peer_connection) => {
                     self.node_network.peer_connections.push(peer_connection);
                 }
                 Err(_) => {
                     //TODO: only continue on timeout error
-                    //self.logger.log(format!("Error connecting to peer {}: {}", addr, e));
+                    self.log(format!("Error connecting to peer {}", addr));
                     continue;
                 }
             }
@@ -401,8 +414,7 @@ impl NodeManager<'_> {
 
     pub fn broadcast(&mut self, payload: &MessagePayload) {
         if let Err(e) = self.node_network.send_to_all_peers(payload) {
-            self.logger
-                .log(format!("Error sending message to peer: {:?}", e));
+            self.log(format!("Error broadcasting message to peers: {:?}", e));
         }
     }
     pub fn send(&self, messages: Vec<MessagePayload>) {
@@ -418,12 +430,11 @@ impl NodeManager<'_> {
 
         if fs::metadata(file_path).is_ok() {
             // Blocks file already exists, no need to perform initial block download
-            self.logger
-                .log("loading block headers from file".to_string());
+            self.log(format!("Loading header blocks from file"));
             self.blocks = Block::decode_blocks_from_file(file_path);
         }
-        self.logger
-            .log(format!("{:?} blocks loaded from file", self.blocks.len()));
+
+        self.log(format!("{:?} blocks loaded by file", self.blocks.len()));
         self.initial_block_headers_download();
     }
 
@@ -453,7 +464,7 @@ impl NodeManager<'_> {
     fn init_block_btreemap(&mut self) {
         let blocks = self.get_blocks();
 
-        self.logger.log(format!(
+        self.log(format!(
             "Generating block btreemap with {} blocks",
             blocks.len()
         ));
@@ -558,8 +569,7 @@ impl NodeManager<'_> {
 
     fn send_to(&mut self, peer_address: String, payload: &MessagePayload) {
         if let Err(e) = self.node_network.send_to_peer(payload, &peer_address) {
-            self.logger
-                .log(format!("Error sending message to peer: {:?}", e));
+            self.log(format!("Error sending message to peer: {:?}", e));
         }
     }
 
@@ -584,28 +594,30 @@ pub fn filter_by(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::logger::Logger;
     use crate::node::message::get_blocks::PayloadGetBlocks;
-    use crate::node::message::get_data_inv::PayloadGetDataInv;
     use crate::node::message::get_headers::PayloadGetHeaders;
 
     #[test]
     fn test_get_all_ips_from_dns() {
-        let logger = Logger::stdout();
+        let logger = Logger::mock_logger();
+
         let config = Config::from_file("nodo.config")
             .map_err(|err| err.to_string())
             .unwrap();
 
-        let mut node_manager = NodeManager::new(config, &logger);
+        let mut node_manager = NodeManager::new(config, logger.tx);
         let node_network_ips = node_manager.get_initial_nodes().unwrap();
         assert_ne!(node_network_ips.len(), 0);
     }
 
     #[test]
     fn test_connect_node_with_external_nodes_not_refuse_connection() -> Result<(), String> {
-        let logger = Logger::stdout();
+        let logger = Logger::mock_logger();
+
         let config = Config::from_file("nodo.config").map_err(|err| err.to_string())?;
 
-        let mut node_manager = NodeManager::new(config, &logger);
+        let mut node_manager = NodeManager::new(config, logger.tx);
         let node_network_ips = node_manager.get_initial_nodes().unwrap();
         node_manager.connect(
             node_network_ips
@@ -618,10 +630,11 @@ mod tests {
 
     #[test]
     fn test_node_handshake() -> Result<(), String> {
-        let logger = Logger::stdout();
+        let logger = Logger::mock_logger();
+
         let config = Config::new();
 
-        let mut node_manager = NodeManager::new(config, &logger);
+        let mut node_manager = NodeManager::new(config, logger.tx);
         node_manager.connect(vec!["5.9.73.173:18333".to_string()])?;
         node_manager.handshake();
         Ok(())
@@ -629,12 +642,12 @@ mod tests {
 
     #[test]
     fn test_node_send_get_headers_receives_headers() -> Result<(), String> {
-        let logger: Logger = Logger::stdout();
+        let logger = Logger::mock_logger();
         let config = Config::from_file("nodo.config")
             .map_err(|err| err.to_string())
             .unwrap();
 
-        let mut node_manager = NodeManager::new(config, &logger);
+        let mut node_manager = NodeManager::new(config, logger.tx);
         node_manager.connect(vec!["93.157.187.23:18333".to_string()])?;
         node_manager.handshake();
 
@@ -660,12 +673,12 @@ mod tests {
 
     #[test]
     fn test_node_send_get_blocks_receives_inv() -> Result<(), String> {
-        let logger: Logger = Logger::stdout();
+        let logger = Logger::mock_logger();
         let config = Config::from_file("nodo.config")
             .map_err(|err| err.to_string())
             .unwrap();
 
-        let mut node_manager = NodeManager::new(config, &logger);
+        let mut node_manager = NodeManager::new(config, logger.tx);
         node_manager.connect(vec!["93.157.187.23:18333".to_string()])?;
         node_manager.handshake();
 
@@ -690,10 +703,10 @@ mod tests {
 
     #[test]
     fn test_send_get_data() -> Result<(), String> {
-        let logger: Logger = Logger::stdout();
+        let logger = Logger::mock_logger();
         let config = Config::new();
 
-        let mut node_manager = NodeManager::new(config, &logger);
+        let mut node_manager = NodeManager::new(config, logger.tx);
         node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
         node_manager.handshake();
 
@@ -742,12 +755,12 @@ mod tests {
     #[test]
     #[ignore]
     fn test_complete_initial_block_download() -> Result<(), String> {
-        let logger: Logger = Logger::stdout();
+        let logger = Logger::mock_logger();
         let config = Config::from_file("nodo.config")
             .map_err(|err| err.to_string())
             .unwrap();
 
-        let mut node_manager = NodeManager::new(config, &logger);
+        let mut node_manager = NodeManager::new(config, logger.tx);
         node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
         node_manager.handshake();
 
@@ -760,12 +773,12 @@ mod tests {
     #[test]
     #[ignore]
     fn test_check_blockchain_integrity() -> Result<(), String> {
-        let logger: Logger = Logger::stdout();
+        let logger = Logger::mock_logger();
         let config = Config::from_file("nodo.config")
             .map_err(|err| err.to_string())
             .unwrap();
 
-        let mut node_manager = NodeManager::new(config, &logger);
+        let mut node_manager = NodeManager::new(config, logger.tx);
         node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
         node_manager.handshake();
 
@@ -777,10 +790,10 @@ mod tests {
 
     #[test]
     fn test_sends_messages_to_different_peers() -> Result<(), String> {
-        let logger: Logger = Logger::stdout();
+        let logger = Logger::mock_logger();
         let config = Config::new();
 
-        let mut node_manager = NodeManager::new(config, &logger);
+        let mut node_manager = NodeManager::new(config, logger.tx);
         node_manager.connect(vec![
             "5.9.149.16:18333".to_string(),
             "18.218.30.118:18333".to_string(),
@@ -795,10 +808,10 @@ mod tests {
 
     #[test]
     fn test_send_ping_and_reply_pong() -> Result<(), String> {
-        let logger: Logger = Logger::stdout();
+        let logger = Logger::mock_logger();
         let config = Config::new();
 
-        let mut node_manager = NodeManager::new(config, &logger);
+        let mut node_manager = NodeManager::new(config, logger.tx);
         node_manager.connect(vec!["5.9.149.16:18333".to_string()])?;
         node_manager.handshake();
 

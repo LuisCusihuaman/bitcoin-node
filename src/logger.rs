@@ -4,22 +4,43 @@ use std::cell::RefCell;
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::{Arc, Mutex};
 
 pub struct Logger {
+    rx: Receiver<String>,
+    pub tx: Sender<String>,
     file: RefCell<File>,
 }
 
 impl Logger {
-    pub fn stdout() -> Self {
+    pub fn mock_logger() -> Self {
+        let (sender, rx) = channel();
+        let file = File::create("/dev/null").unwrap();
+
         Self {
-            file: RefCell::new(File::create("/dev/null").unwrap()),
+            rx,
+            tx: sender,
+            file: RefCell::new(file),
         }
     }
+
     pub fn new(config: &Config) -> Result<Self, Box<dyn Error>> {
+        let (sender, receiver) = channel();
+
         let file = File::create(&config.log_file)?;
         Ok(Self {
+            rx: receiver,
+            tx: sender,
             file: RefCell::new(file),
         })
+    }
+
+    pub fn run(&self) {
+        loop {
+            let msg = self.rx.recv().unwrap();
+            self.log(msg);
+        }
     }
 
     pub fn log(&self, msg: String) {
@@ -49,6 +70,7 @@ mod tests {
             dns: "".to_string(),
             download_blocks_since_date: "".to_string(),
         };
+
         let logger = Logger::new(&config).unwrap();
 
         logger.log("test message".to_owned());

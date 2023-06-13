@@ -1,10 +1,10 @@
-use std::env;
-use std::error::Error;
-use std::io;
-
 use app::config::Config;
 use app::logger::Logger;
 use app::node::manager::NodeManager;
+use std::env;
+use std::error::Error;
+use std::io;
+use std::thread;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let filepath = env::args().nth(1).ok_or_else(|| {
@@ -13,10 +13,17 @@ fn main() -> Result<(), Box<dyn Error>> {
             "Se debe pasar el nombre del archivo como parametro",
         )
     })?;
-    let config = Config::from_file(&filepath)?;
-    let logger = Logger::new(&config)?;
 
-    let mut node_manager = NodeManager::new(config, &logger);
+    let config = Config::from_file(&filepath)?;
+
+    let logger = Logger::new(&config)?;
+    let logger_tx = logger.tx.clone();
+
+    let logger_thread = thread::spawn(move || {
+        logger.run();
+    });
+
+    let mut node_manager = NodeManager::new(config, logger_tx);
     let node_network_ips = node_manager.get_initial_nodes()?;
     node_manager.connect(
         node_network_ips
@@ -27,12 +34,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     node_manager.handshake();
     node_manager.initial_block_download()?;
     node_manager.block_broadcasting()?;
-    // Spawn a new thread for the block_broadcasting function
-    // thread::spawn(move || {
-    //     let mut router = Router::new();
-    //     router.branch("/test", handler_handshake);
-    //     let mut server = Server::new(router, &logger, config);
-    //     server.run(&"127.0.0.1:8090").unwrap();
-    // });
+
+    logger_thread.join().unwrap();
+
     Ok(())
 }

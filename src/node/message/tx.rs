@@ -40,6 +40,25 @@ pub struct OutPoint {
 }
 
 impl Tx {
+
+    pub fn new(version: u32, flag: u16, tx_in: Vec<TxIn>, tx_out: Vec<TxOut>, lock_time: u32) -> Tx {
+        let mut tx = Tx {
+            id: [0; 32],
+            version,
+            flag,
+            tx_in_count: tx_in.len(),
+            tx_in,
+            tx_out_count: tx_out.len(),
+            tx_out,
+            tx_witness: Vec::new(),
+            lock_time,
+        };
+
+        tx.id = [0u8; 32];
+
+        tx
+    }
+
     pub fn encode(&self) -> Vec<u8> {
         let mut encoded: Vec<u8> = Vec::new();
 

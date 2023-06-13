@@ -17,6 +17,8 @@ use std::net::{IpAddr, ToSocketAddrs};
 use std::sync::mpsc;
 use std::thread;
 
+use super::message::tx::OutPoint;
+
 pub struct NodeNetwork {
     pub peer_connections: Vec<P2PConnection>,
 }
@@ -161,7 +163,7 @@ pub struct NodeManager<'a> {
     config: Config,
     logger: &'a Logger,
     blocks: Vec<Block>,
-    utxo_set: HashMap<[u8; 32], Vec<Utxo>>,
+    utxo_set: HashMap<String, Vec<Utxo>>, // utxo_set is a Hash with key <address> and value <OutPoint>
     blocks_btreemap: BTreeMap<[u8; 32], usize>,
 }
 

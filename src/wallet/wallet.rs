@@ -146,7 +146,7 @@ impl User {
     }
 
 
-    pub fn new_anonimous(name: String) -> User {
+    pub fn new_anonymous(name: String) -> User {
 
         let mut rng = OsRng::default();
         let secp = Secp256k1::new();
@@ -192,42 +192,87 @@ mod tests {
 
     use super::*;
 
+
+
     #[test]
-    fn test_create_tx_from_bob_to_alice(){
+    fn test_create_user_correctly() {
 
-        let user = User::new("Alice".to_string());
+        let user = User::new_anonymous("Alice".to_string());
 
+        assert_eq!(user.name, "Alice");
+        assert!(!user.bitcoin_address.is_empty());
+        assert!(!user.secret_key.secret_bytes().is_empty());
+        assert!(!user.public_key.serialize().is_empty());
+        assert!(user.txns_hist.is_empty());
     }
 
+    #[test]
+    fn test_wallet_save_multiple_users() {
+        let logger = Logger::stdout();
+        let config = Config::from_file("nodo.config")
+            .map_err(|err| err.to_string())
+            .unwrap();
 
-    // #[test]
-    // fn test_create_user_with_keypair() {
-    //     let user = User::new("Alice".to_string(), "address".to_string());
+        let mut wallet = Wallet::new(config, &logger);
 
-    //     let sk_bytes = user.secret_key.secret_bytes();
-    //     let pk_bytes = user.public_key.serialize();
+        let user1 = User::new_anonymous("user1".to_string());
+        let user2 = User::new_anonymous("user2".to_string());
 
-    //     assert!(!sk_bytes.is_empty());
-    //     assert!(!pk_bytes.is_empty());
-    // }
+        wallet.add_user(user1);
+        wallet.add_user(user2);
 
-    // #[test]
-    // fn test_wallet_save_multiple_users() {
-    //     let logger = Logger::stdout();
-    //     let config = Config::from_file("nodo.config")
-    //         .map_err(|err| err.to_string())
-    //         .unwrap();
+        assert_eq!(wallet.users.len(), 2);
+    }
 
-    //     let mut wallet = Wallet::new(config, &logger);
+    #[test]
+    fn test_creates_user_from_priv_key_correctly(){
+        
+        //TODO  Intentar que sea algo asi
 
-    //     let user1 = User::new("user1".to_string(), "address1".to_string());
-    //     let user2 = User::new("user2".to_string(), "address2".to_string());
+        
+        //let priv_key = SecretKey::from("000000000000cVK6pF1sfsvvmF9vGyq4wFeMywy1SMFHNpXa3d4Hi2evKHRQyTbn");
+        // let address = "mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb";
+        
+        // let user = User::new("bob".to_string(),priv_key);
 
-    //     wallet.add_user(user1);
-    //     wallet.add_user(user2);
+        // assert!(user.bitcoin_address == address);
 
-    //     assert_eq!(wallet.users.len(), 2);
-    // }
+ /////////////////////77////////////////
+ 
+    //     let base58_alphabet: &[u8] = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+    //     let priv_key_str = "cVK6pF1sfsvvmF9vGyq4wFeMywy1SMFHNpXa3d4Hi2evKHRQyTbn";
+    
+    //     // Decodifica la clave privada de Base58 a bytes
+    //     let mut priv_key_bytes: Vec<u8> = Vec::new();
+    //     let mut leading_zeros: usize = 0;
+    //     for c in priv_key_str.chars() {
+    //         match base58_alphabet.iter().position(|&x| x == c as u8) {
+    //             Some(index) => {
+    //                 for _ in 0..leading_zeros {
+    //                     priv_key_bytes.push(0);
+    //                 }
+    //                 priv_key_bytes.push(index as u8);
+    //                 leading_zeros = 0;
+    //             },
+    //             None => {
+    //                 leading_zeros += 1;
+    //             }
+    //         }
+    //     }
+
+    // // Crea la SecretKey a partir de los bytes de la clave privada
+    // let secret_key = SecretKey::from_slice(&priv_key_bytes);
+        
+        
+
+        //let priv_key = SecretKey::from("000000000000cVK6pF1sfsvvmF9vGyq4wFeMywy1SMFHNpXa3d4Hi2evKHRQyTbn");
+        // let address = "mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb";
+        
+        // let user = User::new("bob".to_string(),priv_key);
+
+        // assert!(user.bitcoin_address == address);
+
+    }
 
     // #[test]
     // fn test_wallet_creates_tx(){
@@ -242,7 +287,7 @@ mod tests {
     //     let priv_key = SecretKey::from_str("cVK6pF1sfsvvmF9vGyq4wFeMywy1SMFHNpXa3d4Hi2evKHRQyTbn").unwrap();
     //     let address = "mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb";
         
-    //     let user = User::new("bob".to_string(),priv_key, address.to_string());
+    //     let user = User::new("bob".to_string(),priv_key);
 
     //     wallet.add_user(user);
 

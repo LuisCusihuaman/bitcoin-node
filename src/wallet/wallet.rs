@@ -1,22 +1,23 @@
 use crate::config::Config;
-use crate::logger::Logger;
-use crate::node::message::tx::Tx;
+use crate::net::message::tx::Tx;
 use rand::rngs::OsRng;
 use rand::Rng;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
+use std::sync::mpsc::Sender;
 
-pub struct Wallet<'a> {
+pub struct Wallet {
     config: Config,
-    logger: &'a Logger,
+    logger_tx: Sender<String>,
     node_address: String,
     users: Vec<User>,
 }
 
-impl Wallet<'_> {
-    pub fn new(config: Config, logger: &Logger) -> Wallet {
+impl Wallet {
+    pub fn new(config: Config, logger_tx: Sender<String>) -> Wallet {
+        let logger_tx_cloned = logger_tx.clone();
         Wallet {
             config,
-            logger,
+            logger_tx: logger_tx_cloned,
             node_address: "127.0.0.1".to_string(),
             users: Vec::new(),
         }
@@ -64,6 +65,7 @@ impl User {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::logger::Logger;
 
     #[test]
     fn test_create_user_with_keypair() {
@@ -78,12 +80,12 @@ mod tests {
 
     #[test]
     fn test_wallet_save_multiple_users() {
-        let logger = Logger::stdout();
+        let logger = Logger::mock_logger();
         let config = Config::from_file("nodo.config")
             .map_err(|err| err.to_string())
             .unwrap();
 
-        let mut wallet = Wallet::new(config, &logger);
+        let mut wallet = Wallet::new(config, logger.tx);
 
         let user1 = User::new("user1".to_string(), "address1".to_string());
         let user2 = User::new("user2".to_string(), "address2".to_string());

@@ -5,7 +5,6 @@ use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, Mutex};
 
 pub struct Logger {
     rx: Receiver<String>,

@@ -1,12 +1,12 @@
 use crate::config::Config;
-use crate::logger::Logger;
-use crate::node::message::block::Block;
-use crate::node::message::get_blocks::PayloadGetBlocks;
-use crate::node::message::get_headers::PayloadGetHeaders;
-use crate::node::message::ping_pong::PayloadPingPong;
-use crate::node::message::version::PayloadVersion;
-use crate::node::message::MessagePayload;
-use crate::node::p2p_connection::P2PConnection;
+use crate::net::message::block::Block;
+use crate::net::message::get_data_inv::Inventory;
+use crate::net::message::get_data_inv::PayloadGetDataInv;
+use crate::net::message::get_headers::PayloadGetHeaders;
+use crate::net::message::ping_pong::PayloadPingPong;
+use crate::net::message::version::PayloadVersion;
+use crate::net::message::MessagePayload;
+use crate::net::p2p_connection::P2PConnection;
 use crate::node::utxo::generate_utxos;
 use crate::node::utxo::update_utxo_set;
 use crate::node::utxo::Utxo;
@@ -17,12 +17,7 @@ use std::fs;
 use std::net::{IpAddr, ToSocketAddrs};
 use std::sync::mpsc;
 use std::sync::mpsc::Sender;
-use std::sync::Arc;
-use std::sync::Mutex;
 use std::thread;
-
-use super::message::get_data_inv::Inventory;
-use super::message::get_data_inv::PayloadGetDataInv;
 
 pub struct NodeNetwork {
     pub logger_tx: Sender<String>,
@@ -185,11 +180,11 @@ impl NodeManager {
     }
 
     pub fn new(config: Config, logger_tx: Sender<String>) -> NodeManager {
-        let asd = logger_tx.clone();
+        let logger_tx_cloned = logger_tx.clone();
         NodeManager {
             config,
             node_network: NodeNetwork::new(logger_tx),
-            logger_tx: asd,
+            logger_tx: logger_tx_cloned,
             blocks: vec![], // inicializar el block genesis (con el config)
             utxo_set: HashMap::new(),
             blocks_btreemap: BTreeMap::new(),
@@ -595,8 +590,8 @@ pub fn filter_by(
 mod tests {
     use super::*;
     use crate::logger::Logger;
-    use crate::node::message::get_blocks::PayloadGetBlocks;
-    use crate::node::message::get_headers::PayloadGetHeaders;
+    use crate::net::message::get_blocks::PayloadGetBlocks;
+    use crate::net::message::get_headers::PayloadGetHeaders;
 
     #[test]
     fn test_get_all_ips_from_dns() {

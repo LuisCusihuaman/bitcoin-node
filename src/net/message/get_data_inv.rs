@@ -1,4 +1,4 @@
-use crate::node::message::MessagePayload;
+use crate::net::message::MessagePayload;
 use crate::utils::*;
 
 #[derive(Clone, Debug, Eq, PartialEq)]

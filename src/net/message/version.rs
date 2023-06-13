@@ -1,4 +1,4 @@
-use crate::node::message::MessagePayload;
+use crate::net::message::MessagePayload;
 use crate::utils::{
     copy_bytes_to_array, get_le_varint, read_string, read_u16_be, read_u32_le, read_u64_le,
     read_varint,

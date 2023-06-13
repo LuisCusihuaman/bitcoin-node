@@ -1,4 +1,4 @@
-use crate::node::message::block::Block;
+use crate::net::message::block::Block;
 use bitcoin_hashes::{sha256, Hash};
 use chrono::prelude::*;
 use chrono::NaiveDate;

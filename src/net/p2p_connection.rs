@@ -1,8 +1,8 @@
-use crate::node::message::{Encoding, MessageHeader, MessagePayload};
+use crate::net::message::{Encoding, MessageHeader, MessagePayload};
 use crate::utils::double_sha256;
 use std::io::{Read, Write};
 use std::net::TcpStream;
-use std::sync::{mpsc::Sender, Arc, Mutex};
+use std::sync::mpsc::Sender;
 use std::thread;
 use std::time::Duration;
 use std::vec;
@@ -172,8 +172,8 @@ fn decode_message<T: Encoding<T>>(cmd: &str, data: &[u8]) -> Result<T, String> {
 mod tests {
     use super::*;
     use crate::logger::Logger;
-    use crate::node::message::get_headers::PayloadGetHeaders;
-    use crate::node::message::version::PayloadVersion;
+    use crate::net::message::get_headers::PayloadGetHeaders;
+    use crate::net::message::version::PayloadVersion;
     use crate::utils::MockTcpStream;
     use std::thread;
 

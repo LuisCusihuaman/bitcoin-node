@@ -4,6 +4,8 @@ use crate::utils::get_le_varint;
 
 use crate::utils::*;
 
+use super::MessagePayload;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Tx {
     pub id: [u8; 32],
@@ -85,16 +87,15 @@ impl Tx {
     }
 }
 
-// pub struct OutPoint {
-//     hash: [u8; 32],
-//     index: u32,
-// }
+pub fn decode_tx(buffer: &[u8]) -> Result<MessagePayload, String> {
+    let mut offset: usize = 0;
+    match decode_internal_tx(buffer, &mut offset) {
+        Some(tx) => Ok(MessagePayload::WalletTx(tx)),
+        None => Err("Error decoding tx".to_string()),
+    }
+}
 
-// pub struct TxInWitness {
-//     witness: Vec<u8>,
-// }
-
-pub fn decode_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
+pub fn decode_internal_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
     let old_offset = *offset;
     let version = read_u32_le(buffer, 0);
     *offset += 4;

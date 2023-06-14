@@ -32,9 +32,12 @@ impl NodeNetwork {
             .count()
     }
     pub fn new(logger_tx: Sender<String>) -> NodeNetwork {
+        let p2p_coso = P2PConnection::connect("127.0.0.1:631", logger_tx.clone()).unwrap();
+        let vec_host = vec![p2p_coso];
+
         NodeNetwork {
             logger_tx,
-            peer_connections: vec![],
+            peer_connections: vec_host,
         }
     }
     pub fn handshake_complete(&mut self, peer_address: &String) {
@@ -173,9 +176,9 @@ pub struct NodeManager {
 }
 
 impl NodeManager {
-    pub fn block_broadcasting(&mut self) -> Result<(), String> {
+    pub fn run(&mut self) -> Result<(), String> {
         loop {
-            self.wait_for(vec!["inv"]);
+            self.wait_for(vec!["ping", "inv"]);
         }
     }
 
@@ -332,6 +335,10 @@ impl NodeManager {
                             matched_peer_messages.push(MessagePayload::Pong(pong.clone()));
                         }
                     }
+                    // MessagePayload::WalletTx(tx) => {
+                    //     self.log(format!("Received tx from wallet"));
+
+                    // }
                     _ => {
                         self.log(format!("Received unknown message from {}", peer_address));
                     }
@@ -506,7 +513,7 @@ impl NodeManager {
         };
 
         let get_data_messages: &Vec<MessagePayload> = &blocks[index..]
-            .chunks(50)
+            .chunks(500)
             .map(|chunk| {
                 let inventories: Vec<Inventory> = chunk
                     .iter()

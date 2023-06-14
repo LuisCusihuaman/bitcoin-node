@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::net::message::tx::{decode_tx, Tx};
+use crate::net::message::tx::{decode_internal_tx, Tx};
 use crate::net::message::MessagePayload;
 use crate::node::merkle_tree::MerkleTree;
 use crate::utils::*;
@@ -282,7 +282,7 @@ pub fn decode_block(buffer: &[u8]) -> Result<MessagePayload, String> {
     let mut offset = 80 + get_offset(&buffer[80..]);
 
     for _ in 0..tnx_count {
-        if let Some(tx) = decode_tx(buffer, &mut offset) {
+        if let Some(tx) = decode_internal_tx(buffer, &mut offset) {
             transactions.push(tx);
         } else {
             return Err("Failed to decode transaction".to_string());

@@ -3,6 +3,7 @@ use crate::net::message::get_blocks::PayloadGetBlocks;
 use crate::net::message::get_data_inv::{decode_data_inv, PayloadGetDataInv};
 use crate::net::message::get_headers::{decode_headers, PayloadGetHeaders};
 use crate::net::message::ping_pong::{decode_ping, decode_pong, PayloadPingPong};
+use crate::net::message::tx::{decode_tx, Tx};
 use crate::net::message::version::{decode_version, PayloadVersion};
 
 use crate::utils::read_le;
@@ -28,6 +29,7 @@ pub enum MessagePayload {
     Block(Block),
     Ping(PayloadPingPong),
     Pong(PayloadPingPong),
+    WalletTx(Tx),
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -153,6 +155,7 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::Block(_) => "block",
             MessagePayload::Ping(_) => "ping",
             MessagePayload::Pong(_) => "pong",
+            MessagePayload::WalletTx(_) => "wallettx",
         }
     }
 
@@ -165,6 +168,7 @@ impl Encoding<MessagePayload> for MessagePayload {
             "block" => decode_block(buffer),
             "ping" => decode_ping(buffer),
             "pong" => decode_pong(buffer),
+            "wallettx" => decode_tx(buffer),
             _ => Err("Unknown command: ".to_owned() + cmd),
         }
     }

@@ -1,3 +1,4 @@
+use crate::logger::log;
 use crate::net::message::{Encoding, MessageHeader, MessagePayload};
 use crate::utils::double_sha256;
 use std::io::{Read, Write};
@@ -7,6 +8,7 @@ use std::thread;
 use std::time::Duration;
 use std::vec;
 
+#[derive(Debug)]
 pub struct P2PConnection {
     pub handshaked: bool,
     pub peer_address: String,
@@ -62,20 +64,19 @@ impl P2PConnection {
         buffer_total[24..].copy_from_slice(&buffer_payload[..]);
 
         thread::sleep(Duration::from_millis(350)); // Strategy to not overload server limit rate
-        self.log(format!(
-            "Sending {} to {}",
-            payload.command_name(),
-            self.peer_address.as_str()
-        ));
+        log(
+            self.logger_tx.clone(),
+            format!(
+                "Sending {} to {}",
+                payload.command_name(),
+                self.peer_address.as_str()
+            ),
+        );
 
         self.tcp_stream
             .write(&buffer_total[..])
             .map_err(|e| e.to_string())?;
         Ok(())
-    }
-
-    fn log(&self, message: String) {
-        self.logger_tx.send(message).unwrap();
     }
 
     pub fn receive(&mut self) -> (String, Vec<MessagePayload>) {
@@ -101,13 +102,17 @@ impl P2PConnection {
                     break;
                 }
                 Err(err) => {
-                    self.log(format!("Error reading from TCP stream: {}", err));
+                    log(
+                        self.logger_tx.clone(),
+                        format!("Error reading from TCP stream: {}", err),
+                    );
                     break;
                 }
             }
         }
 
-        let messages: Vec<MessagePayload> = parse_messages_from(&mut received_bytes);
+        let messages: Vec<MessagePayload> =
+            parse_messages_from(&mut received_bytes, self.logger_tx.clone());
         (self.peer_address.clone(), messages)
     }
 
@@ -116,7 +121,7 @@ impl P2PConnection {
     }
 }
 
-fn parse_messages_from(buf: &mut Vec<u8>) -> Vec<MessagePayload> {
+fn parse_messages_from(buf: &mut Vec<u8>, logger_tx: Sender<String>) -> Vec<MessagePayload> {
     let mut messages = Vec::new();
     let mut cursor = 0;
     while cursor < buf.len() {
@@ -132,7 +137,10 @@ fn parse_messages_from(buf: &mut Vec<u8>) -> Vec<MessagePayload> {
             .to_owned();
 
         if header.magic_number != 118034699 {
-            println!("Invalid magic number: 0x{:08x}", header.magic_number);
+            log(
+                logger_tx.clone(),
+                format!("Invalid magic number: 0x{:08x}", header.magic_number),
+            );
             break;
         }
 
@@ -146,7 +154,10 @@ fn parse_messages_from(buf: &mut Vec<u8>) -> Vec<MessagePayload> {
 
         let end_index = cursor + 24 + payload_size;
         if end_index > buf.len() {
-            println!("Invalid end index: {}", end_index);
+            log(
+                logger_tx.clone(),
+                format!("Invalid end index: {}", end_index),
+            );
             break; // the last message has more bytes than received
         }
 
@@ -155,7 +166,10 @@ fn parse_messages_from(buf: &mut Vec<u8>) -> Vec<MessagePayload> {
                 messages.push(payload);
             }
             Err(err) => {
-                println!("Error decoding message: {}", err);
+                log(
+                    logger_tx.clone(),
+                    format!("Error decoding message: {}", err),
+                );
             }
         }
         cursor += 24 + payload_size;

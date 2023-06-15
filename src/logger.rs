@@ -54,6 +54,12 @@ impl Logger {
     }
 }
 
+pub fn log(logger_tx: Sender<String>, msg: String) {
+    match logger_tx.send(msg) {
+        _ => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

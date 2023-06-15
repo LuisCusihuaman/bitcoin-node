@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::logger::log;
 use crate::net::message::tx::Tx;
 use crate::net::message::MessagePayload;
 use crate::net::p2p_connection::P2PConnection;
@@ -32,19 +33,21 @@ impl Wallet {
     }
 
     pub fn send(&mut self, message: MessagePayload) {
-        self.log(format!("Wallet sending message: {:?}", message));
+        log(
+            self.logger_tx.clone(),
+            format!("Wallet sending message: {:?}", message),
+        );
         self.node_manager.send(&message).unwrap();
     }
 
     pub fn receive(&mut self) {
         let (_addrs, messages) = self.node_manager.receive();
         for message in messages {
-            self.log(format!("Wallet received {:?} from nodo-rustico", message));
+            log(
+                self.logger_tx.clone(),
+                format!("Wallet received {:?} from nodo-rustico", message),
+            );
         }
-    }
-
-    fn log(&self, message: String) {
-        self.logger_tx.send(message).unwrap();
     }
 }
 

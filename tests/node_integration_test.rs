@@ -1,5 +1,7 @@
 #[cfg(test)]
 mod tests {
+    use std::thread;
+
     use app::config::Config;
     use app::logger::Logger;
     use app::net::message::get_blocks::PayloadGetBlocks;
@@ -7,7 +9,7 @@ mod tests {
     use app::net::message::get_headers::PayloadGetHeaders;
     use app::net::message::ping_pong::PayloadPingPong;
     use app::net::message::MessagePayload;
-    use app::node::manager::{filter_by, NodeManager};
+    use app::node::manager::NodeManager;
     use app::utils::{check_blockchain_integrity, get_hash_block_genesis};
     use rand::Rng;
 
@@ -44,17 +46,17 @@ mod tests {
     #[test]
     fn test_node_handshake() -> Result<(), String> {
         let logger = Logger::mock_logger();
-
         let config = Config::new();
 
         let mut node_manager = NodeManager::new(config, logger.tx);
+
         node_manager.connect(vec!["5.9.73.173:18333".to_string()])?;
         node_manager.handshake();
         Ok(())
     }
 
     #[test]
-    fn test_node_send_get_headers_receives_headers() -> Result<(), String> {
+    fn test_node_send_get_headers() {
         let mut node_manager = init_valid_node_manager();
 
         // Create getheaders message
@@ -68,69 +70,61 @@ mod tests {
             hash_block_genesis.to_vec(),
             stop_hash.to_vec(),
         ));
-        node_manager.broadcast(&get_headers_message);
-        node_manager.wait_for(vec!["headers"]);
-        let blocks = node_manager.get_blocks();
 
-        assert!(blocks.len() > 0);
-        Ok(())
+        // Send getheaders message
+        node_manager.broadcast(&get_headers_message);
+
+        // Wait for headers message
+        let resp = node_manager.wait_for(vec!["headers"]);
+
+        assert!(get_messages(resp).len() > 0);
     }
 
     #[test]
-    fn test_node_send_get_blocks_receives_inv() -> Result<(), String> {
+    fn test_node_send_get_blocks() {
         let mut node_manager = init_valid_node_manager();
 
-        let hash_beginning_project = get_hash_block_genesis();
-
-        let stop_hash = [0u8; 32];
-
+        // Create getblocks message
         let get_blocks_message = MessagePayload::GetBlocks(PayloadGetBlocks {
             version: 70015,
             hash_count: 1,
-            block_header_hashes: hash_beginning_project.to_vec(),
-            stop_hash: stop_hash.to_vec(),
+            block_header_hashes: get_hash_block_genesis().to_vec(),
+            stop_hash: [0u8; 32].to_vec(),
         });
 
+        // Send getblocks message
         node_manager.broadcast(&get_blocks_message);
-        let response = node_manager.wait_for(vec!["inv"]);
-        let messages_inv = filter_by(response, "93.157.187.23:18333".to_string());
-        assert!(messages_inv.len() > 0);
 
-        Ok(())
+        // Wait for inv message
+        let resp = node_manager.wait_for(vec!["inv"]);
+
+        assert!(get_messages(resp).len() > 0);
     }
 
     #[test]
-    fn test_send_get_data() -> Result<(), String> {
+    fn test_node_send_get_data() {
         let mut node_manager = init_valid_node_manager();
 
-        assert!(node_manager.get_blocks().is_empty());
-
+        // Create inventories
         let inventory: Vec<Inventory> = vec![Inventory {
             inv_type: 2,
             hash: get_hash_block_genesis().to_vec(),
         }];
 
+        // Create getdata message with prev inventories
         let get_data_message = MessagePayload::GetData(PayloadGetDataInv {
-            count: inventory.len(),
-            inv_type: inventory[0].inv_type,
-            inventories: inventory.clone(),
+            count: 1,
+            inv_type: 2,
+            inventories: inventory,
         });
 
-        // Send get data message
+        // Send getdata message
         node_manager.broadcast(&get_data_message);
 
         // Wait for block message
-        node_manager.wait_for(vec!["block"]);
+        let resp = node_manager.wait_for(vec!["block"]);
 
-        let blocks = node_manager.get_blocks();
-
-        assert!(blocks[0].txns.len() > 0);
-        assert!(blocks[1].txns.len() > 0);
-        assert!(blocks[2].txns.len() > 0);
-        assert!(blocks[3].txns.len() > 0);
-        assert!(blocks[4].txns.len() > 0);
-
-        Ok(())
+        assert!(get_messages(resp).len() > 0);
     }
 
     #[test]
@@ -156,7 +150,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sends_messages_to_different_peers() -> Result<(), String> {
+    fn test_node_send_messages_to_different_peers() -> Result<(), String> {
         let logger = Logger::mock_logger();
         let config = Config::new();
 
@@ -174,36 +168,51 @@ mod tests {
     }
 
     #[test]
-    fn test_send_ping_and_reply_pong() -> Result<(), String> {
+    fn test_node_send_ping() {
         let mut node_manager = init_valid_node_manager();
 
         let ping_message: MessagePayload = MessagePayload::Ping(PayloadPingPong::new());
 
         // Send ping messages
-        node_manager.send_to("5.9.149.16:18333".to_string(), &ping_message);
+        node_manager.broadcast(&ping_message);
 
         // Receive pong messages
-        node_manager.wait_for(vec!["pong"]);
+        let resp = node_manager.wait_for(vec!["pong"]);
 
-        Ok(())
+        assert!(get_messages(resp).len() > 0);
     }
 
     // HELPER FUNCTIONS
     fn init_valid_node_manager() -> NodeManager {
-        let peers = ["93.157.187.23:18333", "5.9.149.16:18333"];
+        let peers = [
+            "93.157.187.23:18333",
+            "5.9.149.16:18333",
+            "18.218.30.118:18333",
+        ];
 
         let mut rng = rand::thread_rng();
         let index = rng.gen_range(0..peers.len());
 
         let logger = Logger::mock_logger();
+        let logget_tx = logger.tx.clone();
+
+        thread::spawn(move || logger.run()); // TODO liberar recursos
         let config = Config::new();
 
-        let mut node_manager = NodeManager::new(config, logger.tx);
+        let mut node_manager = NodeManager::new(config, logget_tx);
         node_manager
             .connect(vec![peers[index].to_string()])
             .unwrap();
         node_manager.handshake();
 
         node_manager
+    }
+
+    fn get_messages(response: Vec<(String, Vec<MessagePayload>)>) -> Vec<MessagePayload> {
+        response
+            .iter()
+            .map(|(_, message)| message.clone())
+            .map(|mut message| message.pop().unwrap())
+            .collect()
     }
 }

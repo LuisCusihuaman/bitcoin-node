@@ -5,7 +5,7 @@ use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, Mutex};
+use std::thread;
 
 pub struct Logger {
     rx: Receiver<String>,
@@ -52,6 +52,12 @@ impl Logger {
         if let Err(err) = file.write_all(format!("{}\n", message).as_bytes()) {
             eprintln!("Failed to write to log file: {}", err);
         }
+    }
+}
+
+pub fn log(logger_tx: Sender<String>, msg: String) {
+    match logger_tx.send(msg) {
+        _ => {}
     }
 }
 

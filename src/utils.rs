@@ -1,9 +1,10 @@
-use crate::node::message::block::Block;
+use crate::net::message::block::Block;
 use bitcoin_hashes::{sha256, Hash};
 use chrono::prelude::*;
 use chrono::NaiveDate;
 use std::io;
 use std::io::{Read, Write};
+use std::sync::mpsc::Sender;
 
 pub fn get_time() -> String {
     let local: DateTime<Local> = Local::now();

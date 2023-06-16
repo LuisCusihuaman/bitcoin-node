@@ -1,4 +1,4 @@
 pub mod manager;
-pub mod message;
-mod p2p_connection;
-mod utxo;
+pub mod merkle_tree;
+pub mod network;
+pub mod utxo;

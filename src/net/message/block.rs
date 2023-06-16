@@ -1,8 +1,7 @@
-use super::merkle_tree::MerkleTree;
-use super::tx::Tx;
-use super::MessagePayload;
 use crate::error::Error;
-use crate::node::message::tx::decode_tx;
+use crate::net::message::tx::{decode_internal_tx, Tx};
+use crate::net::message::MessagePayload;
+use crate::node::merkle_tree::MerkleTree;
 use crate::utils::*;
 use bitcoin_hashes::Hash;
 use std::vec;
@@ -283,7 +282,7 @@ pub fn decode_block(buffer: &[u8]) -> Result<MessagePayload, String> {
     let mut offset = 80 + get_offset(&buffer[80..]);
 
     for _ in 0..tnx_count {
-        if let Some(tx) = decode_tx(buffer, &mut offset) {
+        if let Some(tx) = decode_internal_tx(buffer, &mut offset) {
             transactions.push(tx);
         } else {
             return Err("Failed to decode transaction".to_string());
@@ -331,7 +330,7 @@ pub fn decode_internal_block(buffer: &[u8]) -> Option<Block> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::node::message::tx::{OutPoint, Tx, TxIn, TxOut};
+    use crate::net::message::tx::{OutPoint, Tx, TxIn, TxOut};
 
     #[test]
     fn test_proof_of_inclution_doesnt_have_invalid_tx() {

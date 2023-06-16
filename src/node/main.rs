@@ -7,14 +7,14 @@ use std::io;
 use std::thread;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let filepath = env::args().nth(1).ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Se debe pasar el nombre del archivo como parametro",
-        )
-    })?;
+    // let filepath = env::args().nth(1).ok_or_else(|| {
+    //     io::Error::new(
+    //         io::ErrorKind::InvalidInput,
+    //         "Se debe pasar el nombre del archivo como parametro",
+    //     )
+    // })?;
 
-    let config = Config::from_file(&filepath)?;
+    let config = Config::from_file(&"nodo.config")?;
 
     let logger = Logger::new(&config)?;
     let logger_tx = logger.tx.clone();
@@ -33,7 +33,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     )?;
     node_manager.handshake();
     node_manager.initial_block_download()?;
-    node_manager.block_broadcasting()?;
+    node_manager.listen()?;
 
     logger_thread.join().unwrap();
 

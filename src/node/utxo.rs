@@ -1,9 +1,6 @@
+use crate::net::message::tx::Tx;
+use crate::net::message::tx::TxIn;
 use std::collections::HashMap;
-
-use rand::seq::index;
-
-use crate::node::message::tx::Tx;
-use crate::node::message::tx::TxIn;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Utxo {
@@ -56,7 +53,7 @@ pub fn generate_utxos(utxo_set: &mut HashMap<[u8; 32], Vec<Utxo>>, tx: &Tx) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::node::message::tx::{OutPoint, Tx, TxIn, TxOut};
+    use crate::net::message::tx::{OutPoint, Tx, TxIn, TxOut};
 
     #[test]
     fn test_generate_utxos_and_update_utxo_set() {
@@ -612,7 +609,7 @@ mod tests {
     #[test]
     fn correctly_updates_spent_utxo() {
         let mut utxo_set = HashMap::new();
-        let new_transaction = Tx {
+        let _new_transaction = Tx {
             id: [
                 72, 132, 120, 96, 171, 214, 128, 219, 33, 157, 16, 192, 174, 101, 128, 69, 181,
                 126, 185, 38, 161, 37, 17, 65, 92, 229, 106, 55, 131, 235, 133, 202,

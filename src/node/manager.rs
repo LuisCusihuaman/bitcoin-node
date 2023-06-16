@@ -15,6 +15,7 @@ use crate::node::utxo::Utxo;
 use crate::utils::*;
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
+use std::net::TcpListener;
 use std::net::{IpAddr, ToSocketAddrs};
 use std::sync::mpsc::Sender;
 
@@ -28,10 +29,30 @@ pub struct NodeManager {
 }
 
 impl NodeManager {
-    pub fn listen(&mut self) -> Result<(), String> {
+    pub fn run(&mut self) -> Result<(), String> {
         loop {
             self.wait_for(vec![]);
         }
+    }
+
+    pub fn listen(&mut self) -> Result<(), String> {
+        let listener = TcpListener::bind("127.0.0.1:8080").unwrap();
+
+        for stream in listener.incoming() {
+            let stream = stream.unwrap();
+
+            let connection = P2PConnection {
+                logger_tx: self.logger_tx.clone(),
+                handshaked: true,
+                tcp_stream: stream,
+                peer_address: "127.0.0.1:8082".to_string(), // Ponele
+            };
+
+            self.node_network.peer_connections.push(connection);
+            self.wait_for(vec![]); // TODO Borrar luego
+        }
+
+        Ok(())
     }
 
     pub fn new(config: Config, logger_tx: Sender<String>) -> NodeManager {

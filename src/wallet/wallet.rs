@@ -18,7 +18,7 @@ pub struct Wallet {
 impl Wallet {
     pub fn new(config: Config, sender: Sender<String>) -> Wallet {
         let logger_tx = sender.clone();
-        let node_manager = P2PConnection::connect("127.0.0.1:631", sender.clone()).unwrap();
+        let node_manager = P2PConnection::connect("127.0.0.1:8080", sender.clone()).unwrap();
 
         Wallet {
             config,

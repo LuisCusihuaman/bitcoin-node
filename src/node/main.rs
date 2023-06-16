@@ -31,9 +31,13 @@ fn main() -> Result<(), Box<dyn Error>> {
             .map(|ip| format!("{}:18333", ip))
             .collect(),
     )?;
-    node_manager.handshake();
-    node_manager.initial_block_download()?;
-    node_manager.listen()?;
+    // node_manager.handshake();
+    // node_manager.initial_block_download()?;
+    // node_manager.run()?;
+
+    thread::spawn(move || {
+        node_manager.listen().unwrap();
+    });
 
     logger_thread.join().unwrap();
 

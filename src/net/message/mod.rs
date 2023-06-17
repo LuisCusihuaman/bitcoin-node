@@ -30,6 +30,7 @@ pub enum MessagePayload {
     Ping(PayloadPingPong),
     Pong(PayloadPingPong),
     WalletTx(Tx),
+    //UTXOS(UTXO),
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]

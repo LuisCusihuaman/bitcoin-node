@@ -1,6 +1,7 @@
 use crate::config::Config;
 use crate::logger::log;
 use crate::net::message::tx::Tx;
+use crate::node::utxo::Utxo;
 use crate::net::message::MessagePayload;
 use crate::net::p2p_connection::P2PConnection;
 use rand::rngs::OsRng;
@@ -41,12 +42,30 @@ impl Wallet {
     }
 
     pub fn receive(&mut self) {
+
+        
+
         let (_addrs, messages) = self.node_manager.receive();
         for message in messages {
+
             log(
                 self.logger_tx.clone(),
                 format!("Wallet received {:?} from nodo-rustico", message),
             );
+
+            // Recibo la lista de UTXOs asociadas al address actual
+            
+            // let UTXOs_to_spend = match message {
+            //     MessagePayload::UTXOS(tx) => tx,
+            //     _ => continue,
+            // };
+
+            // decode UTXO
+            let mut utxos:Vec<Utxo> = vec![];
+
+            
+            // create TX
+          
         }
     }
 }

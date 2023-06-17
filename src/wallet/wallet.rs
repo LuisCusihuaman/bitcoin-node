@@ -134,6 +134,9 @@ mod tests {
 
         wallet.send(ping_message);
         wallet.receive();
+
+
+        println!("Llegue aca");
     }
 
     #[test]

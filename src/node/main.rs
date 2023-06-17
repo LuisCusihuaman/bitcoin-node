@@ -25,7 +25,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut node_manager = NodeManager::new(config, logger_tx);
     //let node_network_ips = node_manager.get_initial_nodes()?;
-    
+
     // node_manager.connect(
     //     node_network_ips
     //         .iter()

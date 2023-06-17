@@ -12,8 +12,8 @@ use std::vec;
 pub struct P2PConnection {
     pub handshaked: bool,
     pub peer_address: String,
-    tcp_stream: TcpStream,
-    logger_tx: Sender<String>,
+    pub tcp_stream: TcpStream,
+    pub logger_tx: Sender<String>,
 }
 
 impl Clone for P2PConnection {

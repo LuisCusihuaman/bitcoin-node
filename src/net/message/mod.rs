@@ -29,7 +29,7 @@ pub enum MessagePayload {
     Block(Block),
     Ping(PayloadPingPong),
     Pong(PayloadPingPong),
-    WalletTx(Tx),
+    Tx(Tx),
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -114,6 +114,7 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::GetData(get_data) => get_data.size(),
             MessagePayload::Ping(ping) => ping.size(),
             MessagePayload::Pong(pong) => pong.size(),
+            MessagePayload::Tx(tx) => tx.size(),
             _ => no_payload,
         }
     }
@@ -138,6 +139,9 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::Pong(pong) => {
                 pong.encode(buffer);
             }
+            MessagePayload::Tx(tx) => {
+                tx.encode(buffer);
+            }
             _ => {}
         }
         Ok(())
@@ -155,7 +159,7 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::Block(_) => "block",
             MessagePayload::Ping(_) => "ping",
             MessagePayload::Pong(_) => "pong",
-            MessagePayload::WalletTx(_) => "wallettx",
+            MessagePayload::Tx(_) => "tx",
         }
     }
 
@@ -168,7 +172,7 @@ impl Encoding<MessagePayload> for MessagePayload {
             "block" => decode_block(buffer),
             "ping" => decode_ping(buffer),
             "pong" => decode_pong(buffer),
-            "wallettx" => decode_tx(buffer),
+            "tx" => decode_tx(buffer),
             _ => Err("Unknown command: ".to_owned() + cmd),
         }
     }

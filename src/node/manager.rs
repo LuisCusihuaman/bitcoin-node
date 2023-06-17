@@ -15,6 +15,7 @@ use crate::node::utxo::Utxo;
 use crate::utils::*;
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
+use std::net::TcpListener;
 use std::net::{IpAddr, ToSocketAddrs};
 use std::sync::mpsc::Sender;
 
@@ -28,10 +29,42 @@ pub struct NodeManager {
 }
 
 impl NodeManager {
-    pub fn listen(&mut self) -> Result<(), String> {
+    pub fn run(&mut self) -> Result<(), String> {
         loop {
             self.wait_for(vec![]);
         }
+    }
+
+    pub fn listen(&mut self) -> Result<(), String> {
+        let listener = TcpListener::bind("127.0.0.1:8080").unwrap();
+
+        // Wait for a connection.
+        match listener.accept() {
+            Ok((stream, addr)) => {
+                log(
+                    self.logger_tx.clone(),
+                    format!("Wallet connected successfully: {addr}"),
+                );
+
+                let connection = P2PConnection {
+                    logger_tx: self.logger_tx.clone(),
+                    handshaked: true,
+                    tcp_stream: stream,
+                    peer_address: addr.to_string(),
+                };
+
+                self.node_network.peer_connections.push(connection);
+            }
+            Err(e) => println!("couldn't connect to wallet: {e:?}"),
+        }
+
+        log(self.logger_tx.clone(), format!("Listening on port 8080..."));
+
+        loop {
+            self.wait_for(vec![]);
+        }
+
+        Ok(())
     }
 
     pub fn new(config: Config, logger_tx: Sender<String>) -> NodeManager {
@@ -216,10 +249,13 @@ impl NodeManager {
                             matched_peer_messages.push(MessagePayload::Pong(pong.clone()));
                         }
                     }
-                    // MessagePayload::WalletTx(tx) => {
-                    //     self.log(format!("Received tx from wallet"));
-
-                    // }
+                    MessagePayload::Tx(_tx) => {
+                        log(
+                            self.logger_tx.clone(),
+                            format!("Received tx from {}", peer_address),
+                        );
+                        // TODO Broadcasting de la tx
+                    }
                     _ => {
                         log(
                             self.logger_tx.clone(),
@@ -405,7 +441,7 @@ impl NodeManager {
         };
 
         let get_data_messages: &Vec<MessagePayload> = &blocks[index..]
-            .chunks(500)
+            .chunks(50)
             .map(|chunk| {
                 let inventories: Vec<Inventory> = chunk
                     .iter()

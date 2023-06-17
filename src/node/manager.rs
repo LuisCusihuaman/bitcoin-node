@@ -38,18 +38,25 @@ impl NodeManager {
     pub fn listen(&mut self) -> Result<(), String> {
         let listener = TcpListener::bind("127.0.0.1:8080").unwrap();
 
-        for stream in listener.incoming() {
-            let stream = stream.unwrap();
+        // Wait for a connection.
+        match listener.accept() {
+            Ok((stream, addr)) => {
+                println!("Wallet conected successfully: {addr}");
 
-            let connection = P2PConnection {
-                logger_tx: self.logger_tx.clone(),
-                handshaked: true,
-                tcp_stream: stream,
-                peer_address: "127.0.0.1:8082".to_string(), // Ponele
-            };
+                let connection = P2PConnection {
+                    logger_tx: self.logger_tx.clone(),
+                    handshaked: true,
+                    tcp_stream: stream,
+                    peer_address: addr.to_string(),
+                };
 
-            self.node_network.peer_connections.push(connection);
-            self.wait_for(vec![]); // TODO Borrar luego
+                self.node_network.peer_connections.push(connection);
+            }
+            Err(e) => println!("couldn't connect to wallet: {e:?}"),
+        }
+
+        loop {
+            self.wait_for(vec![]);
         }
 
         Ok(())

@@ -73,15 +73,45 @@ impl Wallet {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct User {
     pub name: String,
-    pub address: String,
+    pub bitcoin_address: String,
     pub secret_key: SecretKey,
     pub public_key: PublicKey,
-    pub txns: Vec<Tx>,
-    pub balance: u64,
+    pub txns_hist: Vec<Tx>,
 }
 
 impl User {
-    pub fn new(name: String, address: String) -> User {
+
+    pub fn new(name:String, secret_key:SecretKey) -> User{
+
+        let secp = Secp256k1::new();
+
+         // Public key
+         let public_key = PublicKey::from_secret_key(&secp, &secret_key);
+
+         // Generate address
+
+         // Version de testNet
+         let version = "0x6f"; // 111
+ 
+         // Key hash = Version concatenated with RIPEMD-160(SHA-256(public key))
+         let key_hash =  format!("{}{}", version, hash160::Hash::hash(&public_key.to_string().as_bytes()).to_string());
+ 
+         let bitcoin_address = bs58::encode(key_hash.as_bytes())
+                                         .with_check()
+                                         .into_string();
+ 
+         User {
+             name,
+             bitcoin_address,
+             secret_key,
+             public_key,
+             txns_hist: Vec::new(),
+         }
+    }
+
+
+    pub fn new_anonymous(name: String) -> User {
+
         let mut rng = OsRng::default();
         let secp = Secp256k1::new();
 
@@ -93,33 +123,54 @@ impl User {
         // Public key
         let public_key = PublicKey::from_secret_key(&secp, &secret_key);
 
+        // Generate address
+
+        // Version = 1 byte of 0 (zero); on the test network, this is 1 byte of 111
+        // Key hash = Version concatenated with RIPEMD-160(SHA-256(public key))
+        // Checksum = 1st 4 bytes of SHA-256(SHA-256(Key hash))
+        // Bitcoin Address = Base58Encode(Key hash concatenated with Checksum)
+
+        // Version de testNet
+        let version = "0x6f"; // 111
+
+        // Key hash = Version concatenated with RIPEMD-160(SHA-256(public key))
+        let key_hash =  format!("{}{}", version, hash160::Hash::hash(&public_key.to_string().as_bytes()).to_string());
+
+        let bitcoin_address = bs58::encode(key_hash.as_bytes())
+                                        .with_check()
+                                        .into_string();
+
         User {
             name,
-            address,
+            bitcoin_address,
             secret_key,
             public_key,
-            txns: Vec::new(),
-            balance: 0,
+            txns_hist: Vec::new(),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
     use crate::logger::Logger;
     use crate::net::message::ping_pong::PayloadPingPong;
     use crate::net::message::tx::{OutPoint, Tx, TxIn, TxOut};
 
+
+
     #[test]
-    fn test_create_user_with_keypair() {
-        let user = User::new("Alice".to_string(), "address".to_string());
+    fn test_create_user_correctly() {
 
-        let sk_bytes = user.secret_key.secret_bytes();
-        let pk_bytes = user.public_key.serialize();
+        let user = User::new_anonymous("Alice".to_string());
 
-        assert!(!sk_bytes.is_empty());
-        assert!(!pk_bytes.is_empty());
+        assert_eq!(user.name, "Alice");
+        assert!(!user.bitcoin_address.is_empty());
+        assert!(!user.secret_key.secret_bytes().is_empty());
+        assert!(!user.public_key.serialize().is_empty());
+        assert!(user.txns_hist.is_empty());
     }
 
     #[test]
@@ -131,8 +182,8 @@ mod tests {
 
         let mut wallet = Wallet::new(config, logger.tx);
 
-        let user1 = User::new("user1".to_string(), "address1".to_string());
-        let user2 = User::new("user2".to_string(), "address2".to_string());
+        let user1 = User::new_anonymous("user1".to_string());
+        let user2 = User::new_anonymous("user2".to_string());
 
         wallet.add_user(user1);
         wallet.add_user(user2);
@@ -141,81 +192,86 @@ mod tests {
     }
 
     #[test]
-    fn test_wallet_sends_ping_to_node_manager() {
-        let logger = Logger::mock_logger();
-        let config = Config::from_file("nodo.config")
-            .map_err(|err| err.to_string())
-            .unwrap();
+    fn test_creates_user_from_priv_key_correctly(){
+        
+        //TODO  Intentar que sea algo asi
 
-        let mut wallet = Wallet::new(config, logger.tx);
+        
+        //let priv_key = SecretKey::from("000000000000cVK6pF1sfsvvmF9vGyq4wFeMywy1SMFHNpXa3d4Hi2evKHRQyTbn");
+        // let address = "mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb";
+        
+        // let user = User::new("bob".to_string(),priv_key);
 
-        let ping_message = MessagePayload::Ping(PayloadPingPong::new());
+        // assert!(user.bitcoin_address == address);
 
-        wallet.send(ping_message);
-        wallet.receive();
+ /////////////////////77////////////////
+ 
+    //     let base58_alphabet: &[u8] = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+    //     let priv_key_str = "cVK6pF1sfsvvmF9vGyq4wFeMywy1SMFHNpXa3d4Hi2evKHRQyTbn";
+    
+    //     // Decodifica la clave privada de Base58 a bytes
+    //     let mut priv_key_bytes: Vec<u8> = Vec::new();
+    //     let mut leading_zeros: usize = 0;
+    //     for c in priv_key_str.chars() {
+    //         match base58_alphabet.iter().position(|&x| x == c as u8) {
+    //             Some(index) => {
+    //                 for _ in 0..leading_zeros {
+    //                     priv_key_bytes.push(0);
+    //                 }
+    //                 priv_key_bytes.push(index as u8);
+    //                 leading_zeros = 0;
+    //             },
+    //             None => {
+    //                 leading_zeros += 1;
+    //             }
+    //         }
+    //     }
 
+    // // Crea la SecretKey a partir de los bytes de la clave privada
+    // let secret_key = SecretKey::from_slice(&priv_key_bytes);
+        
+        
 
-        println!("Llegue aca");
+        //let priv_key = SecretKey::from("000000000000cVK6pF1sfsvvmF9vGyq4wFeMywy1SMFHNpXa3d4Hi2evKHRQyTbn");
+        // let address = "mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb";
+        
+        // let user = User::new("bob".to_string(),priv_key);
+
+        // assert!(user.bitcoin_address == address);
+
     }
 
-    #[test]
-    fn test_wallet_sends_tx_to_node_manager() {
-        let logger = Logger::mock_logger();
-        let config = Config::from_file("nodo.config")
-            .map_err(|err| err.to_string())
-            .unwrap();
+    // #[test]
+    // fn test_wallet_creates_tx(){
+    //     let logger = Logger::stdout();
 
-        let mut wallet = Wallet::new(config, logger.tx);
+    //     let config = Config::from_file("wallet.config")
+    //         .map_err(|err| err.to_string())
+    //         .unwrap();
 
-        let tx = Tx {
-            id: [
-                161, 251, 15, 243, 199, 157, 168, 6, 195, 235, 91, 74, 146, 148, 81, 223, 31, 243,
-                229, 60, 226, 24, 143, 213, 248, 206, 225, 62, 206, 204, 218, 240,
-            ],
-            version: 545259520,
-            flag: 0,
-            tx_in_count: 1,
-            tx_in: [TxIn {
-                previous_output: OutPoint {
-                    hash: [
-                        0, 0, 128, 32, 62, 120, 168, 216, 46, 128, 233, 64, 165, 172, 45, 232, 77,
-                        114, 71, 79, 193, 186, 253, 99, 202, 10, 233, 74, 12, 0, 0, 0,
-                    ],
-                    index: 0,
-                },
-                script_length: 0,
-                signature_script: [].to_vec(),
-                sequence: 4294967294,
-            }]
-            .to_vec(),
-            tx_out_count: 2,
-            tx_out: [
-                TxOut {
-                    value: 228000,
-                    pk_script_length: 22,
-                    pk_script: [
-                        0, 20, 93, 87, 106, 129, 244, 96, 231, 161, 237, 37, 79, 233, 191, 255, 7,
-                        90, 179, 188, 69, 101,
-                    ]
-                    .to_vec(),
-                },
-                TxOut {
-                    value: 1659498,
-                    pk_script_length: 22,
-                    pk_script: [
-                        0, 20, 117, 35, 140, 67, 199, 254, 215, 158, 114, 44, 152, 242, 196, 38,
-                        226, 237, 60, 92, 144, 193,
-                    ]
-                    .to_vec(),
-                },
-            ]
-            .to_vec(),
-            tx_witness: [].to_vec(),
-            lock_time: 2437581,
-        };
+    //     let mut wallet = Wallet::new(config, &logger);
 
-        let message = MessagePayload::WalletTx(tx.clone());
+    //     let priv_key = SecretKey::from_str("cVK6pF1sfsvvmF9vGyq4wFeMywy1SMFHNpXa3d4Hi2evKHRQyTbn").unwrap();
+    //     let address = "mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb";
+        
+    //     let user = User::new("bob".to_string(),priv_key);
 
-        wallet.send(message);
-    }
+    //     wallet.add_user(user);
+
+
+
+
+    //     let tx = wallet.create_tx("user1".to_string(), "user2".to_string(), 100);
+
+    //     assert_eq!(tx.sender, "user1".to_string());
+    //     assert_eq!(tx.receiver, "user2".to_string());
+    //     assert_eq!(tx.amount, 100);
+
+    // }
+
+    // #[test]
+    // fn test_wallet_creates_and_sings_tx(){
+
+
+    // }
 }

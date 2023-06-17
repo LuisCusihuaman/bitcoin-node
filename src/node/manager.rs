@@ -24,7 +24,7 @@ pub struct NodeManager {
     config: Config,
     logger_tx: Sender<String>,
     blocks: Vec<Block>,
-    utxo_set: HashMap<[u8; 32], Vec<Utxo>>,
+    utxo_set: HashMap<String, Vec<Utxo>>, // utxo_set is a Hash with key <address> and value <OutPoint>
     blocks_btreemap: BTreeMap<[u8; 32], usize>,
 }
 

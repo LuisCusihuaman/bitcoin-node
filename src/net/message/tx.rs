@@ -1,3 +1,5 @@
+use std::mem;
+
 use bitcoin_hashes::Hash;
 
 use crate::utils::get_le_varint;
@@ -27,11 +29,36 @@ pub struct TxIn {
     pub sequence: u32,
 }
 
+impl TxIn {
+    pub fn size(&self) -> usize {
+        let mut size = 0;
+
+        size += self.previous_output.size();
+        size += get_le_varint(self.script_length).len(); // script_length
+        size += self.signature_script.len(); // signature_script
+        size += mem::size_of::<u32>(); // sequence
+
+        size
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TxOut {
     pub value: u64,
     pub pk_script_length: usize, // varint
     pub pk_script: Vec<u8>,
+}
+
+impl TxOut {
+    pub fn size(&self) -> usize {
+        let mut size = 0;
+
+        size += mem::size_of::<u64>(); // value
+        size += get_le_varint(self.pk_script_length).len(); // pk_script_length
+        size += self.pk_script.len(); // pk_script
+
+        size
+    }
 }
 
 //The previous output transaction reference, as an OutPoint structure
@@ -41,8 +68,44 @@ pub struct OutPoint {
     pub index: u32, // The index of the specific TxOut in the transaction. The first output is 0, etc.
 }
 
+impl OutPoint {
+    pub fn size(&self) -> usize {
+        let mut size = 0;
+
+        size += mem::size_of::<[u8; 32]>(); // hash
+        size += mem::size_of::<u32>(); // index
+
+        size
+    }
+}
+
 impl Tx {
-    pub fn encode(&self) -> Vec<u8> {
+    pub fn size(&self) -> usize {
+        let mut size = 0;
+
+        size += mem::size_of::<u32>(); // version
+        size += 0; // flag
+        size += 0; // tx_witness
+        size += mem::size_of::<u32>(); // lock_time
+
+        // TxIn
+        size += get_le_varint(self.tx_in_count).len();
+
+        for tx in &self.tx_in {
+            size += tx.size();
+        }
+
+        // TxOut
+        size += get_le_varint(self.tx_out_count).len();
+
+        for tx in &self.tx_out {
+            size += tx.size();
+        }
+
+        size
+    }
+
+    pub fn encode(&self, buffer: &mut [u8]) -> Vec<u8> {
         let mut encoded: Vec<u8> = Vec::new();
 
         encoded.extend(self.version.to_le_bytes());
@@ -83,6 +146,8 @@ impl Tx {
 
         encoded.extend(self.lock_time.to_le_bytes());
 
+        buffer[..].copy_from_slice(&encoded);
+
         encoded
     }
 }
@@ -90,7 +155,7 @@ impl Tx {
 pub fn decode_tx(buffer: &[u8]) -> Result<MessagePayload, String> {
     let mut offset: usize = 0;
     match decode_internal_tx(buffer, &mut offset) {
-        Some(tx) => Ok(MessagePayload::WalletTx(tx)),
+        Some(tx) => Ok(MessagePayload::Tx(tx)),
         None => Err("Error decoding tx".to_string()),
     }
 }
@@ -283,7 +348,10 @@ mod tests {
 
             expected_encoded.extend(&[0x00, 0x00, 0x00, 0x00]); // lock_time
 
-            assert_eq!(tx.encode(), expected_encoded);
+            let mut buffer = Vec::new();
+            buffer.resize(tx.size(), 0);
+
+            assert_eq!(tx.encode(&mut buffer), expected_encoded);
         }
     }
 
@@ -344,6 +412,9 @@ mod tests {
 
         expected_encoded.extend(&[0x00, 0x00, 0x00, 0x00]); // lock_time
 
-        assert_eq!(tx.encode(), expected_encoded);
+        let mut buffer = Vec::new();
+        buffer.resize(tx.size(), 0);
+
+        assert_eq!(tx.encode(&mut buffer), expected_encoded);
     }
 }

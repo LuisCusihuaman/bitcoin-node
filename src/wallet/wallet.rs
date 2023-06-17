@@ -134,9 +134,6 @@ mod tests {
 
         wallet.send(ping_message);
         wallet.receive();
-
-
-        println!("Llegue aca");
     }
 
     #[test]
@@ -195,8 +192,9 @@ mod tests {
             lock_time: 2437581,
         };
 
-        let message = MessagePayload::WalletTx(tx.clone());
+        let message = MessagePayload::Tx(tx.clone());
 
         wallet.send(message);
+        wallet.receive();
     }
 }

@@ -46,7 +46,11 @@ pub fn update_utxo_set(utxo_set: &mut HashMap<String, Vec<Utxo>>, tx: &Tx) {
                     break;
                 }
             }
-     }
+
+            // Updates the new list of UTXOs for the address
+            utxo_set.insert(address, utxos);
+        }
+    }
 }
 
 pub fn is_tx_spent(utxo_set: &HashMap<String, Vec<Utxo>>, tx_in: &TxIn) -> bool {

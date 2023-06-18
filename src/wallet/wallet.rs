@@ -123,7 +123,7 @@ impl User {
  
          let bitcoin_address = bs58::encode(key_hash.as_bytes())
                                          .with_check()
-                                         .|ng();
+                                         .into_string();
  
          User {
              name,

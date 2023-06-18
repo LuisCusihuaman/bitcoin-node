@@ -141,7 +141,7 @@ impl Wallet {
             let tx_outs = vec![tx_out_amount, tx_out_change];
 
 
-            // Create the Tx
+            // Create the Tx to send to the node
             let tx = Tx {
                 id: [0; 32],
                 version: 1,
@@ -163,8 +163,12 @@ impl Wallet {
     }
 
     // Verify that the ScriptSig successfully unlocks the previous ScriptPubKey.
-    pub fn tx_verified(&mut self, utxo: &Utxo) -> bool {
+    fn tx_verified(&mut self, utxo: &Utxo) -> bool {
         true
+    }
+
+    fn sign_tx(&mut self, tx: Tx) -> Tx {
+        tx
     }
 }
 

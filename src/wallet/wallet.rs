@@ -158,7 +158,7 @@ impl Wallet {
             let signed_tx = self.sign_tx(tx);
 
             // send the Tx to the node
-            self.send(MessagePayload::TX(signed_tx));
+            self.send(MessagePayload::sendTx(signed_tx));
         }
     }
 

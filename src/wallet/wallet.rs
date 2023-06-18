@@ -1,6 +1,6 @@
-use crate::{config::Config, net::message::tx::TxOut};
+use crate::config::Config;
 use crate::logger::log;
-use crate::net::message::tx::Tx;
+use crate::net::message::tx::{Tx,TxIn,TxOut, OutPoint};
 use crate::node::utxo::Utxo;
 use crate::net::message::MessagePayload;
 use crate::net::p2p_connection::P2PConnection;
@@ -100,13 +100,24 @@ impl Wallet {
             }
             
             // Utxos have been verified at this point. We create the Tx_in for each Utxo
+            let sig_script = vec![];
+
+            // TODO: Create sig_script
+
+            
             let mut tx_ins:Vec<TxIn> = vec![];
+            
+            // Create the TxIns from UTXOs
             for i in utxos.iter() {
+
                 let tx_in = TxIn {
-                    previous_output: i,
-                    signature_script_length: ,
-                    signature_script:,
-                    sequence:,
+                    previous_output: OutPoint {
+                        hash: i.transaction_id,
+                        index: i.output_index,
+                    },
+                    script_length: sig_script.len() as usize,
+                    signature_script: sig_script,
+                    sequence: 0, // Verify this
                 };
                 tx_ins.push(tx_in);
             }
@@ -119,26 +130,31 @@ impl Wallet {
 
             // Design choice. There's always going to be two TxOuts. One for the amount and one for the change.
 
+            let mut pk_script_amount = vec![]; // This is the pubHashKey of the receiver
 
+            // TODO: Create pk_script_amount
 
             // This TxOut for the amount goes to the receiver 
             // Here I need the pubHashKey of the receiver
             let tx_out_amount = TxOut {
                 value: amount as u64,
-                pk_script_length: ,
-                pk_script:,
+                pk_script_length: pk_script_amount.len(),
+                pk_script:pk_script_amount,
             };            
 
             // This tx_out_change goes to the sender
             // Here I need the pubHashKey of the sender (The User that owns the wallet)
+
+            let mut pk_script_change = vec![]; // This is the pubHashKey of the sender
+
             let tx_out_change = TxOut {
                 value: change as u64,
-                pk_script_length: ,
-                pk_script:,
+                pk_script_length: pk_script_change.len(),
+                pk_script: pk_script_change,
             };
 
             // list of tx_outs for the Tx
-            let tx_outs = vec![tx_out_amount, tx_out_change];
+            let tx_outs: Vec<TxOut> = vec![tx_out_amount, tx_out_change];
 
 
             // Create the Tx to send to the node
@@ -146,7 +162,7 @@ impl Wallet {
                 id: [0; 32],
                 version: 1,
                 flag: 0,
-                tx_in_count: tx_ins.len() as u64,
+                tx_in_count: tx_ins.len() as usize,
                 tx_in: tx_ins,
                 tx_out_count: tx_outs.len() as usize,
                 tx_out: tx_outs,

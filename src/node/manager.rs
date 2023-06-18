@@ -38,6 +38,8 @@ impl NodeManager {
     pub fn listen(&mut self) -> Result<(), String> {
         let listener = TcpListener::bind("127.0.0.1:8080").unwrap();
 
+        log(self.logger_tx.clone(), format!("Listening on port 8080..."));
+
         // Wait for a connection.
         match listener.accept() {
             Ok((stream, addr)) => {
@@ -57,8 +59,6 @@ impl NodeManager {
             }
             Err(e) => println!("couldn't connect to wallet: {e:?}"),
         }
-
-        log(self.logger_tx.clone(), format!("Listening on port 8080..."));
 
         loop {
             self.wait_for(vec![]);
@@ -249,12 +249,28 @@ impl NodeManager {
                             matched_peer_messages.push(MessagePayload::Pong(pong.clone()));
                         }
                     }
-                    MessagePayload::Tx(_tx) => {
+                    MessagePayload::Tx(tx) => {
                         log(
                             self.logger_tx.clone(),
                             format!("Received tx from {}", peer_address),
                         );
-                        // TODO Broadcasting de la tx
+
+                        let tx_message = MessagePayload::Tx(tx.clone());
+
+                        self.broadcast(&tx_message);
+                    }
+                    MessagePayload::GetData(get_data) => {
+                        log(
+                            self.logger_tx.clone(),
+                            format!("Received getdata from {}", peer_address),
+                        );
+
+                        // let tx_message = MessagePayload::Tx(get_data.inventories[0].hash.clone());
+
+                        // self.send_to(
+                        //     peer_address.clone(),
+                        //     &MessagePayload::Tx(&tx_message),
+                        // )
                     }
                     _ => {
                         log(

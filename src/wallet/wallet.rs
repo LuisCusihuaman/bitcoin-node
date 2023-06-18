@@ -62,8 +62,35 @@ impl Wallet {
             let mut utxos:Vec<Utxo> = vec![];
 
             
-            // create TX
-          
+            // Validating Transactions
+            
+            // 1. The inputs of the transaction are previously unspent.
+
+                // The fact that we ask the node for the UTXOs associated with the address means that they are unspent.
+
+
+            // 2. The sum of the inputs is greater than or equal to the sum of the outputs.
+            let count = 0;
+            for i in utxos.iter() {
+                count += i.value;
+            }
+            
+            // Fix this numbers
+            let amount = 10.0; // amount if the amount of money to send
+            let fee = 0.1; // fee for the Tx
+            
+            if (count as f64) < (amount+fee) { 
+                log(
+                    self.logger_tx.clone(),
+                    format!("Error: Insufficient funds"),
+                );
+                return;
+            }
+            
+            // 3. The ScriptSig successfully unlocks the previous ScriptPubKey.
+            
+
+
         }
     }
 }

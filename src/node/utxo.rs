@@ -22,19 +22,30 @@ pub fn get_utxos_by_add(utxo_set: &HashMap<String, Vec<Utxo>>, address: &str) ->
 }
 
 
-// Gasto el dinero
-// Borrar los outpoints que apunta cada Tx_in
+// Spending money
+// Deletes the outpoints from the UTXO set that each Tx_in points to
 pub fn update_utxo_set(utxo_set: &mut HashMap<String, Vec<Utxo>>, tx: &Tx) {
 
     for tx_in in &tx.tx_in {
 
-        let hash_tx = tx_in.previous_output.hash;
-        let index = tx_in.previous_output.index as usize;
+        // <Sig> <PubKey> OP_DUP OP_HASH160 <PubkeyHash> OP_EQUALVERIFY OP_CHECKSIG
+        let mut aux = tx_in.signature_script.clone();
+        aux.reverse();
 
-    //     if let Some(utxo) = utxo_set.get_mut(&hash_tx) {
-    //         // Mark the UTXO as spent
-    //         utxo[index].spent = true;
-    //     }
+        let address = bs58::encode(&aux[2..22]).into_string();
+
+        let hash_tx = tx_in.previous_output.hash;
+        let index = tx_in.previous_output.index;
+
+        if let Some(utxos) = utxo_set.get_mut(&address) {
+            let mut utxos = utxos.clone();
+
+            for i in 0..utxos.len() {
+                if utxos[i].transaction_id == hash_tx && utxos[i].output_index == index {
+                    utxos.remove(i);
+                    break;
+                }
+            }
      }
 }
 
@@ -51,8 +62,7 @@ pub fn is_tx_spent(utxo_set: &HashMap<String, Vec<Utxo>>, tx_in: &TxIn) -> bool 
         }
     }
 
-    // Si no esta en la tabla entonces es porque ya se gasto el UTXO
-    true
+    true // If we can't find the Tx then it's spent
 }
 
 // Add UTXO to each UTXO
@@ -67,6 +77,7 @@ pub fn generate_utxos(utxo_set: &mut HashMap<String, Vec<Utxo>>, tx: &Tx) {
             value: tx_out.value,
         };
 
+        // OP_DUP OP_HASH160 <PubkeyHash> OP_EQUALVERIFY OP_CHECKSIG
         let pk_script = &tx_out.pk_script;
 
         // From pk_script obtain the address

@@ -100,15 +100,16 @@ impl Wallet {
             }
             
             // Utxos have been verified at this point. We create the Tx_in for each Utxo
-            let sig_script = vec![];
-
-            // TODO: Create sig_script
-
             
+
+
             let mut tx_ins:Vec<TxIn> = vec![];
             
             // Create the TxIns from UTXOs
             for i in utxos.iter() {
+
+                let sig_script = vec![];
+                // TODO: Create sig_script
 
                 let tx_in = TxIn {
                     previous_output: OutPoint {
@@ -151,7 +152,7 @@ impl Wallet {
                 value: change as u64,
                 pk_script_length: pk_script_change.len(),
                 pk_script: pk_script_change,
-            };
+            };  
 
             // list of tx_outs for the Tx
             let tx_outs: Vec<TxOut> = vec![tx_out_amount, tx_out_change];

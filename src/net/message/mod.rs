@@ -5,6 +5,9 @@ use crate::net::message::get_headers::{decode_headers, PayloadGetHeaders};
 use crate::net::message::ping_pong::{decode_ping, decode_pong, PayloadPingPong};
 use crate::net::message::tx::{decode_tx, Tx};
 use crate::net::message::version::{decode_version, PayloadVersion};
+use crate::net::message::get_utxo::{decode_get_utxos, PayloadGetUtxo};
+use crate::net::message::send_utxo::{decode_send_utxos, PayloadSendUtxo};
+
 
 use crate::utils::read_le;
 use std::mem;
@@ -16,6 +19,8 @@ pub mod get_headers;
 pub mod ping_pong;
 pub mod tx;
 pub mod version;
+pub mod get_utxo;
+pub mod send_utxo;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum MessagePayload {
@@ -30,7 +35,8 @@ pub enum MessagePayload {
     Ping(PayloadPingPong),
     Pong(PayloadPingPong),
     WalletTx(Tx),
-    //UTXOS(UTXO),
+    GetUTXOs(PayloadGetUtxo),
+    SendUTXOs(PayloadSendUtxo),
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -139,6 +145,9 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::Pong(pong) => {
                 pong.encode(buffer);
             }
+            MessagePayload::SendUTXOs(send_utxo) => {
+                send_utxo.encode(buffer);
+            }
             _ => {}
         }
         Ok(())
@@ -157,6 +166,8 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::Ping(_) => "ping",
             MessagePayload::Pong(_) => "pong",
             MessagePayload::WalletTx(_) => "wallettx",
+            MessagePayload::GetUTXOs(_) => "getutxos",
+            MessagePayload::SendUTXOs(_) => "sendutxos",
         }
     }
 
@@ -170,6 +181,7 @@ impl Encoding<MessagePayload> for MessagePayload {
             "ping" => decode_ping(buffer),
             "pong" => decode_pong(buffer),
             "wallettx" => decode_tx(buffer),
+            "getutxos" => decode_get_utxos(buffer),
             _ => Err("Unknown command: ".to_owned() + cmd),
         }
     }

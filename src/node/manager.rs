@@ -5,6 +5,7 @@ use crate::net::message::get_data_inv::Inventory;
 use crate::net::message::get_data_inv::PayloadGetDataInv;
 use crate::net::message::get_headers::PayloadGetHeaders;
 use crate::net::message::ping_pong::PayloadPingPong;
+use crate::net::message::send_utxo::PayloadSendUtxo;
 use crate::net::message::version::PayloadVersion;
 use crate::net::message::MessagePayload;
 use crate::net::p2p_connection::P2PConnection;
@@ -18,6 +19,8 @@ use std::fs;
 use std::net::TcpListener;
 use std::net::{IpAddr, ToSocketAddrs};
 use std::sync::mpsc::Sender;
+
+use super::utxo::get_utxos_by_add;
 
 pub struct NodeManager {
     node_network: NodeNetwork,
@@ -81,6 +84,13 @@ impl NodeManager {
         self.wait_for(vec!["version", "verack"]);
     }
 
+    // getBalance (wallet a nodo)
+    // Si balance > amount 
+    // pedir UTXO -> getUTXOs (wallet a nodos)
+    // devolver la lista de UTXO -> sendUTXOs (del nodo a wallet)
+    // sendTx (wallet a nodo)
+    // sendTx (nodo a nodos)
+    
     pub fn wait_for(&mut self, commands: Vec<&str>) -> Vec<(String, Vec<MessagePayload>)> {
         let mut matched_messages: Vec<(String, Vec<MessagePayload>)> = Vec::new();
 
@@ -245,6 +255,37 @@ impl NodeManager {
                             matched_peer_messages.push(MessagePayload::Pong(pong.clone()));
                         }
                     }
+
+                    MessagePayload::GetUTXOs(payloadUtxo) => {
+                        log(
+                            self.logger_tx.clone(),
+                            format!("Received getutxos message from {}", peer_address),
+                        );
+                        
+
+                        let utxos = get_utxos_by_add(&self.utxo_set, &payloadUtxo.address);
+
+                        if !utxos.is_empty() {
+
+                            // devolver la lista de UTXO -> sendUTXOs (del nodo a wallet)
+
+                            self.send_to(
+                                peer_address.clone(),
+                                &MessagePayload::SendUTXOs(PayloadSendUtxo {
+                                    utxos: utxos.clone(),
+                                }),
+                            );
+
+                        }
+                        else{
+
+                            log(
+                                self.logger_tx.clone(),
+                                format!("No utxos found for address {}", payloadUtxo.address),
+                            );  
+                        }                     
+                    }
+
                     // MessagePayload::WalletTx(tx) => {
                     //     self.log(format!("Received tx from wallet"));
 

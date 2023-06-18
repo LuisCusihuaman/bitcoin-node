@@ -43,8 +43,6 @@ impl Wallet {
 
     pub fn receive(&mut self) {
 
-        
-
         let (_addrs, messages) = self.node_manager.receive();
         for message in messages {
 
@@ -98,7 +96,7 @@ impl User {
  
          let bitcoin_address = bs58::encode(key_hash.as_bytes())
                                          .with_check()
-                                         .into_string();
+                                         .|ng();
  
          User {
              name,
@@ -189,6 +187,29 @@ mod tests {
         wallet.add_user(user2);
 
         assert_eq!(wallet.users.len(), 2);
+    }
+
+    #[test]
+    fn test_received_correctly_UTXOs(){
+
+        let logger = Logger::mock_logger();
+        let config = Config::from_file("nodo.config")
+            .map_err(|err| err.to_string())
+            .unwrap();
+
+        let mut wallet = Wallet::new(config, logger.tx);
+
+        let user = User::new_anonymous("user".to_string());
+
+        wallet.add_user(user);
+
+        // enviar get utxos
+        // voy a enviar un msg Payload y quiero recibir una lista de UTXOs
+
+        //let utxo = !vec[]
+
+
+
     }
 
     #[test]

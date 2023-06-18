@@ -2,9 +2,9 @@ use crate::net::message::tx::Tx;
 use crate::net::message::tx::TxIn;
 use std::collections::HashMap;
 
-use rand::seq::index;
-use bs58::encode::EncodeBuilder;
 use bs58;
+use bs58::encode::EncodeBuilder;
+use rand::seq::index;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Utxo {
@@ -13,25 +13,32 @@ pub struct Utxo {
     pub value: u64,
 }
 
+// Get UTXOs of a specific address
+pub fn get_utxos_by_add(utxo_set: &HashMap<String, Vec<Utxo>>, address: &str) -> Vec<Utxo> {
+    match utxo_set.get(address) {
+        Some(utxos) => utxos.clone(),
+        None => Vec::new(),
+    }
+}
+
+
 // Gasto el dinero
 // Borrar los outpoints que apunta cada Tx_in
 pub fn update_utxo_set(utxo_set: &mut HashMap<String, Vec<Utxo>>, tx: &Tx) {
 
-    // for tx_in in &tx.tx_in {
+    for tx_in in &tx.tx_in {
 
-    //     let hash_tx = tx_in.previous_output.hash;
-    //     let index = tx_in.previous_output.index as usize;
+        let hash_tx = tx_in.previous_output.hash;
+        let index = tx_in.previous_output.index as usize;
 
     //     if let Some(utxo) = utxo_set.get_mut(&hash_tx) {
     //         // Mark the UTXO as spent
     //         utxo[index].spent = true;
     //     }
-    // }
+     }
 }
 
-
 pub fn is_tx_spent(utxo_set: &HashMap<String, Vec<Utxo>>, tx_in: &TxIn) -> bool {
-    
     // recorrer todos los hashes y ver si tiene el outpoint que apunta al tx_in que quiero
     let tx_hash = tx_in.previous_output.hash;
 
@@ -50,11 +57,9 @@ pub fn is_tx_spent(utxo_set: &HashMap<String, Vec<Utxo>>, tx_in: &TxIn) -> bool 
 
 // Add UTXO to each UTXO
 pub fn generate_utxos(utxo_set: &mut HashMap<String, Vec<Utxo>>, tx: &Tx) {
-    
     let mut utxos = Vec::new();
-    
-    for (index, tx_out) in tx.tx_out.iter().enumerate() {
 
+    for (index, tx_out) in tx.tx_out.iter().enumerate() {
         //  Creo un outpoint a partir de la TxOut
         let utxo = Utxo {
             transaction_id: tx.id,
@@ -62,18 +67,18 @@ pub fn generate_utxos(utxo_set: &mut HashMap<String, Vec<Utxo>>, tx: &Tx) {
             value: tx_out.value,
         };
 
-        let pk_script = &tx_out.pk_script;      
+        let pk_script = &tx_out.pk_script;
 
         // From pk_script obtain the address
         let address = bs58::encode(&pk_script[2..22]).into_string();
 
         // append to address this UTXO
-        utxos = match utxo_set.get(&address){
+        utxos = match utxo_set.get(&address) {
             Some(utxos) => {
                 let mut utxos = utxos.clone();
                 utxos.push(utxo);
                 utxos
-            },
+            }
             None => {
                 let mut utxos = Vec::new();
                 utxos.push(utxo);
@@ -83,7 +88,6 @@ pub fn generate_utxos(utxo_set: &mut HashMap<String, Vec<Utxo>>, tx: &Tx) {
 
         utxo_set.insert(address, utxos);
     }
-
 }
 
 // #[cfg(test)]

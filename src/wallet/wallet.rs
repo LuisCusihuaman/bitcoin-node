@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::{config::Config, net::message::tx::TxOut};
 use crate::logger::log;
 use crate::net::message::tx::Tx;
 use crate::node::utxo::Utxo;
@@ -41,6 +41,11 @@ impl Wallet {
         self.node_manager.send(&message).unwrap();
     }
 
+    // Necesito recibir aca
+
+    // * Amount to spend
+    // * Address to send
+    // * UTXOs to spend
     pub fn receive(&mut self) {
 
         let (_addrs, messages) = self.node_manager.receive();
@@ -69,9 +74,16 @@ impl Wallet {
                 // The fact that we ask the node for the UTXOs associated with the address means that they are unspent.
 
 
-            // 2. The sum of the inputs is greater than or equal to the sum of the outputs.
+            // The sum of the inputs is greater than or equal to the sum of the outputs.
             let count = 0;
             for i in utxos.iter() {
+                
+                if !self.tx_verified(i){  // Verify the sigScript
+                    log(
+                        self.logger_tx.clone(),
+                        format!("Could not verify transaction {:?} ", i));
+                    continue; // should return at this point
+                }
                 count += i.value;
             }
             
@@ -87,11 +99,72 @@ impl Wallet {
                 return;
             }
             
-            // 3. The ScriptSig successfully unlocks the previous ScriptPubKey.
-            
+            // Utxos have been verified at this point. We create the Tx_in for each Utxo
+            let mut tx_ins:Vec<TxIn> = vec![];
+            for i in utxos.iter() {
+                let tx_in = TxIn {
+                    previous_output: i,
+                    signature_script_length: ,
+                    signature_script:,
+                    sequence:,
+                };
+                tx_ins.push(tx_in);
+            }
+
+            // Create the TxOuts
+
+            let change = (count as f64) - amount - fee;
+
+            // create pk_script for each TxOut
+
+            // Design choice. There's always going to be two TxOuts. One for the amount and one for the change.
 
 
+
+            // This TxOut for the amount goes to the receiver 
+            // Here I need the pubHashKey of the receiver
+            let tx_out_amount = TxOut {
+                value: amount as u64,
+                pk_script_length: ,
+                pk_script:,
+            };            
+
+            // This tx_out_change goes to the sender
+            // Here I need the pubHashKey of the sender (The User that owns the wallet)
+            let tx_out_change = TxOut {
+                value: change as u64,
+                pk_script_length: ,
+                pk_script:,
+            };
+
+            // list of tx_outs for the Tx
+            let tx_outs = vec![tx_out_amount, tx_out_change];
+
+
+            // Create the Tx
+            let tx = Tx {
+                id: [0; 32],
+                version: 1,
+                flag: 0,
+                tx_in_count: tx_ins.len() as u64,
+                tx_in: tx_ins,
+                tx_out_count: tx_outs.len() as usize,
+                tx_out: tx_outs,
+                tx_witness: vec![],
+                lock_time: 0,
+            };
+
+            // sign the Tx
+            let signed_tx = self.sign_tx(tx);
+
+            // send the Tx to the node
+            self.send(MessagePayload::TX(signed_tx));
         }
+    }
+
+    // Verify that the ScriptSig successfully unlocks the previous ScriptPubKey.
+    pub fn tx_verified(&mut self, utxo: &Utxo) -> bool {
+        true
     }
 }
 

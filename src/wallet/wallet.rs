@@ -188,7 +188,7 @@ impl Wallet {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct User {
     pub name: String,
-    pub bitcoin_address: [u8; 20],
+    pub address: [u8; 20],
     pub secret_key: SecretKey,
     pub public_key: [u8; 33],
     pub txns_hist: Vec<Tx>,
@@ -201,14 +201,12 @@ impl User {
         // Public key
         let public_key = secret_key.public_key(&secp).serialize();
 
-        println!("public_key {:?}", public_key);
-
         // Generate address
-        let bitcoin_address = hash160::Hash::hash(&public_key).to_byte_array();
+        let address = hash160::Hash::hash(&public_key).to_byte_array();
 
         User {
             name,
-            bitcoin_address,
+            address,
             secret_key,
             public_key,
             txns_hist: Vec::new(),
@@ -227,21 +225,36 @@ impl User {
         // Public key
         let public_key = secret_key.public_key(&secp).serialize();
 
-        let bitcoin_address = hash160::Hash::hash(&public_key).to_byte_array();
+        let address = hash160::Hash::hash(&public_key).to_byte_array();
 
         User {
             name,
-            bitcoin_address,
+            address,
             secret_key,
             public_key,
             txns_hist: Vec::new(),
         }
     }
+
+    pub fn get_pub_key(&self) -> [u8;33]{
+        self.public_key
+    }
+
+    pub fn get_addr(&self) -> [u8;20]{
+        self.address
+    }
+
+    pub fn get_name(&self) -> String{
+        self.name.clone()
+    }
+
+    pub fn get_tx_hist(&self) -> Vec<Tx>{
+        self.txns_hist.clone()
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
 
     use super::*;
     use crate::logger::Logger;
@@ -253,7 +266,7 @@ mod tests {
         let user = User::new_anonymous("Alice".to_string());
 
         assert_eq!(user.name, "Alice");
-        assert!(!user.bitcoin_address.is_empty());
+        assert!(!user.address.is_empty());
         assert!(!user.secret_key.secret_bytes().is_empty());
         // assert!(!user.public_key.serialize().is_empty());
         assert!(user.txns_hist.is_empty());
@@ -320,7 +333,7 @@ mod tests {
         // [111, 181, 51, 138, 19, 120, 118, 0, 187, 24, 163, 236, 151, 149, 117, 93, 82, 212, 10, 107, 236]
         let user = User::new("bob".to_string(), secret_key);
 
-        assert_eq!(user.bitcoin_address, address_bytes[..]);
+        assert_eq!(user.address, address_bytes[..]);
     }
 
     #[test]
@@ -361,5 +374,7 @@ mod tests {
     }
 
     #[test]
-    fn test_wallet_create_tx() {}
+    fn test_wallet_create_tx() {
+        
+    }
 }

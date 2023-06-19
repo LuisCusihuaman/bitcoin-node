@@ -1,7 +1,8 @@
-mod imp;
-
 use glib::Object;
 use gtk::glib;
+use gtk::subclass::prelude::ObjectSubclassIsExt;
+
+mod imp;
 
 // ANCHOR: glib_wrapper_and_new
 glib::wrapper! {
@@ -15,11 +16,22 @@ impl TaskObject {
             .property("content", content)
             .build()
     }
+    pub fn is_completed(&self) -> bool {
+        self.imp().data.borrow().completed
+    }
+
+    pub fn task_data(&self) -> TaskData {
+        self.imp().data.borrow().clone()
+    }
+
+    pub fn from_task_data(task_data: TaskData) -> Self {
+        Self::new(task_data.completed, task_data.content)
+    }
 }
 // ANCHOR_END: glib_wrapper_and_new
 
 // ANCHOR: task_data
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct TaskData {
     pub completed: bool,
     pub content: String,

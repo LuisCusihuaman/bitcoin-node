@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use glib::subclass::InitializingObject;
 use gtk::{CompositeTemplate, Entry, gio, glib, ListView};
 use gtk::gio::Settings;
-use gtk::glib::once_cell::sync::OnceCell;
+use gtk::glib::once_cell::unsync::OnceCell;
 use gtk::subclass::prelude::*;
 
 // ANCHOR: struct_and_subclass
@@ -46,6 +46,7 @@ impl ObjectImpl for Window {
 
         // Setup
         let obj = self.obj();
+        obj.setup_settings();
         obj.setup_tasks();
         obj.setup_callbacks();
         obj.setup_factory();

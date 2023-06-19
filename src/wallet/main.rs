@@ -6,6 +6,8 @@ use gtk::prelude::*;
 use gtk::{gio, glib, Application};
 use window::Window;
 
+const APP_ID: &str = "org.gtk_rs.wallet-rustica";
+
 fn main() -> glib::ExitCode {
     // Register and include resources
     gio::resources_register_include!("wallet-rustica.gresource")
@@ -13,7 +15,7 @@ fn main() -> glib::ExitCode {
 
     // Create a new application
     let app = Application::builder()
-        .application_id("org.gtk_rs.wallet-rustica")
+        .application_id(APP_ID)
         .build();
 
     // Connect to "activate" signal of `app`

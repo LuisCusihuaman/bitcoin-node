@@ -4,6 +4,8 @@ use glib::{clone, Object};
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib, Application, NoSelection, SignalListItemFactory};
 use gtk::{prelude::*, ListItem};
+use gtk::gio::Settings;
+use crate::APP_ID;
 
 use crate::task_object::TaskObject;
 use crate::task_row::TaskRow;
@@ -133,4 +135,19 @@ impl Window {
         self.imp().tasks_list.set_factory(Some(&factory));
     }
     // ANCHOR_END: setup_factory
+    // ANCHOR: setup_settings
+    fn setup_settings(&self) {
+        let settings = Settings::new(APP_ID);
+        self.imp()
+            .settings
+            .set(settings)
+            .expect("`settings` should not be set before calling `setup_settings`.");
+    }
+    fn settings(&self) -> &Settings {
+        self.imp()
+            .settings
+            .get()
+            .expect("`settings` should be set in `setup_settings`.")
+    }
+    // ANCHOR_END: setup_settings
 }

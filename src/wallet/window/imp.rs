@@ -1,8 +1,10 @@
 use std::cell::RefCell;
 
 use glib::subclass::InitializingObject;
+use gtk::{CompositeTemplate, Entry, gio, glib, ListView};
+use gtk::gio::Settings;
+use gtk::glib::once_cell::sync::OnceCell;
 use gtk::subclass::prelude::*;
-use gtk::{gio, glib, CompositeTemplate, Entry, ListView};
 
 // ANCHOR: struct_and_subclass
 // Object holding the state
@@ -14,6 +16,7 @@ pub struct Window {
     #[template_child]
     pub tasks_list: TemplateChild<ListView>,
     pub tasks: RefCell<Option<gio::ListStore>>,
+    pub settings: OnceCell<Settings>,
 }
 
 // The central trait for subclassing a GObject

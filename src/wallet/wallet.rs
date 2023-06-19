@@ -9,6 +9,7 @@ use bitcoin_hashes::Hash;
 use rand::rngs::OsRng;
 use rand::Rng;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
+use std::str::FromStr;
 use std::sync::mpsc::Sender;
 use std::vec;
 
@@ -187,9 +188,9 @@ impl Wallet {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct User {
     pub name: String,
-    pub bitcoin_address: String,
+    pub bitcoin_address: [u8; 20],
     pub secret_key: SecretKey,
-    pub public_key: PublicKey,
+    pub public_key: [u8; 33],
     pub txns_hist: Vec<Tx>,
 }
 
@@ -198,21 +199,12 @@ impl User {
         let secp = Secp256k1::new();
 
         // Public key
-        let public_key = PublicKey::from_secret_key(&secp, &secret_key);
+        let public_key = secret_key.public_key(&secp).serialize();
+
+        println!("public_key {:?}", public_key);
 
         // Generate address
-
-        // Version de testNet
-        let version = "0x6f"; // 111
-
-        // Key hash = Version concatenated with RIPEMD-160(SHA-256(public key))
-        let key_hash = format!(
-            "{}{}",
-            version,
-            hash160::Hash::hash(&public_key.to_string().as_bytes()).to_string()
-        );
-
-        let bitcoin_address = bs58::encode(key_hash.as_bytes()).with_check().into_string();
+        let bitcoin_address = hash160::Hash::hash(&public_key).to_byte_array();
 
         User {
             name,
@@ -233,26 +225,9 @@ impl User {
         let secret_key = SecretKey::from_slice(&private_key_bytes).unwrap();
 
         // Public key
-        let public_key = PublicKey::from_secret_key(&secp, &secret_key);
+        let public_key = secret_key.public_key(&secp).serialize();
 
-        // Generate address
-
-        // Version = 1 byte of 0 (zero); on the test network, this is 1 byte of 111
-        // Key hash = Version concatenated with RIPEMD-160(SHA-256(public key))
-        // Checksum = 1st 4 bytes of SHA-256(SHA-256(Key hash))
-        // Bitcoin Address = Base58Encode(Key hash concatenated with Checksum)
-
-        // Version de testNet
-        let version = "0x6f"; // 111
-
-        // Key hash = Version concatenated with RIPEMD-160(SHA-256(public key))
-        let key_hash = format!(
-            "{}{}",
-            version,
-            hash160::Hash::hash(&public_key.to_string().as_bytes()).to_string()
-        );
-
-        let bitcoin_address = bs58::encode(key_hash.as_bytes()).with_check().into_string();
+        let bitcoin_address = hash160::Hash::hash(&public_key).to_byte_array();
 
         User {
             name,
@@ -280,7 +255,7 @@ mod tests {
         assert_eq!(user.name, "Alice");
         assert!(!user.bitcoin_address.is_empty());
         assert!(!user.secret_key.secret_bytes().is_empty());
-        assert!(!user.public_key.serialize().is_empty());
+        // assert!(!user.public_key.serialize().is_empty());
         assert!(user.txns_hist.is_empty());
     }
 
@@ -323,48 +298,29 @@ mod tests {
 
     #[test]
     fn test_creates_user_from_priv_key_correctly() {
+        let priv_key_wif = "cVK6pF1sfsvvmF9vGyq4wFeMywy1SMFHNpXa3d4Hi2evKHRQyTbn";
+        let address_wif = "mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb";
 
-        //TODO  Intentar que sea algo asi
+        let priv_key_bytes = bs58::decode(priv_key_wif)
+            .with_check(None)
+            .into_vec()
+            .unwrap();
 
-        //let priv_key = SecretKey::from("000000000000cVK6pF1sfsvvmF9vGyq4wFeMywy1SMFHNpXa3d4Hi2evKHRQyTbn");
-        // let address = "mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb";
+        // Crea la secretKey a partir de los bytes de la clave privada
+        // [0xef, secret_key (32 bytes), 0x01]
+        let secret_key = SecretKey::from_slice(&priv_key_bytes[1..33]).unwrap();
 
-        // let user = User::new("bob".to_string(),priv_key);
+        let pub_addr_hashed = bs58::decode(address_wif)
+            .with_check(None)
+            .into_vec()
+            .unwrap();
 
-        // assert!(user.bitcoin_address == address);
+        let address_bytes = &pub_addr_hashed[1..];
 
-        /////////////////////77////////////////
+        // [111, 181, 51, 138, 19, 120, 118, 0, 187, 24, 163, 236, 151, 149, 117, 93, 82, 212, 10, 107, 236]
+        let user = User::new("bob".to_string(), secret_key);
 
-        //     let base58_alphabet: &[u8] = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-        //     let priv_key_str = "cVK6pF1sfsvvmF9vGyq4wFeMywy1SMFHNpXa3d4Hi2evKHRQyTbn";
-
-        //     // Decodifica la clave privada de Base58 a bytes
-        //     let mut priv_key_bytes: Vec<u8> = Vec::new();
-        //     let mut leading_zeros: usize = 0;
-        //     for c in priv_key_str.chars() {
-        //         match base58_alphabet.iter().position(|&x| x == c as u8) {
-        //             Some(index) => {
-        //                 for _ in 0..leading_zeros {
-        //                     priv_key_bytes.push(0);
-        //                 }
-        //                 priv_key_bytes.push(index as u8);
-        //                 leading_zeros = 0;
-        //             },
-        //             None => {
-        //                 leading_zeros += 1;
-        //             }
-        //         }
-        //     }
-
-        // // Crea la SecretKey a partir de los bytes de la clave privada
-        // let secret_key = SecretKey::from_slice(&priv_key_bytes);
-
-        //let priv_key = SecretKey::from("000000000000cVK6pF1sfsvvmF9vGyq4wFeMywy1SMFHNpXa3d4Hi2evKHRQyTbn");
-        // let address = "mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb";
-
-        // let user = User::new("bob".to_string(),priv_key);
-
-        // assert!(user.bitcoin_address == address);
+        assert_eq!(user.bitcoin_address, address_bytes[..]);
     }
 
     #[test]

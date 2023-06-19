@@ -18,7 +18,7 @@ fn main() -> glib::ExitCode {
         .application_id(APP_ID)
         .build();
 
-    // Connect to "activate" signal of `app`
+    app.connect_startup(setup_shortcuts);
     app.connect_activate(build_ui);
 
     // Run the application
@@ -31,3 +31,8 @@ fn build_ui(app: &Application) {
     window.present();
 }
 // ANCHOR_END: main
+fn setup_shortcuts(app: &Application) {
+    app.set_accels_for_action("win.filter('All')", &["<Ctrl>a"]);
+    app.set_accels_for_action("win.filter('Open')", &["<Ctrl>o"]);
+    app.set_accels_for_action("win.filter('Done')", &["<Ctrl>d"]);
+}

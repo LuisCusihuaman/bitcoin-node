@@ -10,23 +10,24 @@ use rand::rngs::OsRng;
 use rand::Rng;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use std::sync::mpsc::Sender;
+use std::vec;
 
 pub struct Wallet {
     config: Config,
     logger_tx: Sender<String>,
-    node_manager: P2PConnection,
+    node_manager: String, // P2PConnection,
     users: Vec<User>,
 }
 
 impl Wallet {
     pub fn new(config: Config, sender: Sender<String>) -> Wallet {
         let logger_tx = sender.clone();
-        let node_manager = P2PConnection::connect("127.0.0.1:8080", sender.clone()).unwrap();
+        // let node_manager = P2PConnection::connect("127.0.0.1:8080", sender.clone()).unwrap();
 
         Wallet {
             config,
             logger_tx,
-            node_manager,
+            node_manager: String::new(),
             users: Vec::new(),
         }
     }
@@ -40,7 +41,105 @@ impl Wallet {
             self.logger_tx.clone(),
             format!("Wallet sending message: {:?}", message),
         );
-        self.node_manager.send(&message).unwrap();
+        // self.node_manager.send(&message).unwrap();
+    }
+
+    fn createTx(&mut self, mut utxos: Vec<Utxo>) -> Option<Tx> {
+        // Validating Transactions
+
+        // 1. The inputs of the transaction are previously unspent. The fact that we ask the node for the UTXOs
+        //  associated with the address means that they are unspent.
+
+        // The sum of the inputs is greater than or equal to the sum of the outputs.
+        let mut available_money = 0;
+        for i in utxos.iter() {
+            if !self.tx_verified(i) {
+                // Verify the sigScript
+                log(
+                    self.logger_tx.clone(),
+                    format!("Could not verify transaction {:?} ", i),
+                );
+                continue; // should return at this point
+            }
+            available_money += i.value;
+        }
+
+        // Fix this numbers
+        let amount = 10.0; // amount if the amount of money to send
+        let fee = 0.1; // fee for the Tx
+
+        if (available_money as f64) < (amount + fee) {
+            log(self.logger_tx.clone(), format!("Error: Insufficient funds"));
+            return None;
+        }
+
+        // Utxos have been verified at this point. We create the Tx_in for each Utxo
+
+        let mut tx_ins: Vec<TxIn> = vec![];
+
+        // Create the TxIns from UTXOs
+        for i in utxos.iter() {
+            let sig_script = vec![];
+            // TODO: Create sig_script
+
+            let tx_in = TxIn {
+                previous_output: OutPoint {
+                    hash: i.transaction_id,
+                    index: i.output_index,
+                },
+                script_length: sig_script.len() as usize,
+                signature_script: sig_script,
+                sequence: 0, // Verify this
+            };
+            tx_ins.push(tx_in);
+        }
+
+        // Create the TxOuts
+        let change = (available_money as f64) - amount - fee;
+
+        // create pk_script for each TxOut
+
+        // Design choice. There's always going to be two TxOuts. One for the amount and one for the change.
+
+        let mut pk_script_amount = vec![]; // This is the pubHashKey of the receiver
+
+        // TODO: Create pk_script_amount
+
+        // This TxOut for the amount goes to the receiver
+        // Here I need the pubHashKey of the receiver
+        let tx_out_amount = TxOut {
+            value: amount as u64,
+            pk_script_length: pk_script_amount.len(),
+            pk_script: pk_script_amount,
+        };
+
+        // This tx_out_change goes to the sender
+        // Here I need the pubHashKey of the sender (The User that owns the wallet)
+
+        let mut pk_script_change = vec![]; // This is the pubHashKey of the sender
+
+        let tx_out_change = TxOut {
+            value: change as u64,
+            pk_script_length: pk_script_change.len(),
+            pk_script: pk_script_change,
+        };
+
+        // list of tx_outs for the Tx
+        let tx_outs: Vec<TxOut> = vec![tx_out_amount, tx_out_change];
+
+        // Create the Tx to send to the node
+        let tx = Tx {
+            id: [0; 32],
+            version: 1,
+            flag: 0,
+            tx_in_count: tx_ins.len() as usize,
+            tx_in: tx_ins,
+            tx_out_count: tx_outs.len() as usize,
+            tx_out: tx_outs,
+            tx_witness: vec![],
+            lock_time: 0,
+        };
+        Some(tx)
     }
 
     // Necesito recibir aca
@@ -49,125 +148,30 @@ impl Wallet {
     // * Address to send
     // * UTXOs to spend
     pub fn receive(&mut self) {
-        let (_addrs, messages) = self.node_manager.receive();
-        for message in messages {
-            log(
-                self.logger_tx.clone(),
-                format!("Wallet received {:?} from nodo-rustico", message),
-            );
+        // let (_addrs, messages) = self.node_manager.receive();
+        // for message in messages {
+        //     log(
+        //         self.logger_tx.clone(),
+        //         format!("Wallet received {:?} from nodo-rustico", message),
+        //     );
 
-            // Recibo la lista de UTXOs asociadas al address actual
+        // Recibo la lista de UTXOs asociadas al address actual
 
-            // let UTXOs_to_spend = match message {
-            //     MessagePayload::UTXOS(tx) => tx,
-            //     _ => continue,
-            // };
+        // let UTXOs_to_spend = match message {
+        //     MessagePayload::UTXOS(tx) => tx,
+        //     _ => continue,
+        // };
+        // let utxos: Vec<Utxo> = vec![];
+        // let tx = self.createTx(utxos)?;
 
-            // decode UTXO
-            let mut utxos: Vec<Utxo> = vec![];
+        // sign the Tx
+        // let signed_tx = self.sign_tx(tx);
 
-            // Validating Transactions
+        // let serialized_tx = self.serialize(signed_tx);
 
-            // 1. The inputs of the transaction are previously unspent.
-
-            // The fact that we ask the node for the UTXOs associated with the address means that they are unspent.
-
-            // The sum of the inputs is greater than or equal to the sum of the outputs.
-            let mut available_money = 0;
-            for i in utxos.iter() {
-                if !self.tx_verified(i) {
-                    // Verify the sigScript
-                    log(
-                        self.logger_tx.clone(),
-                        format!("Could not verify transaction {:?} ", i),
-                    );
-                    continue; // should return at this point
-                }
-                available_money += i.value;
-            }
-
-            // Fix this numbers
-            let amount = 10.0; // amount if the amount of money to send
-            let fee = 0.1; // fee for the Tx
-
-            if (available_money as f64) < (amount + fee) {
-                log(self.logger_tx.clone(), format!("Error: Insufficient funds"));
-                return;
-            }
-
-            // Utxos have been verified at this point. We create the Tx_in for each Utxo
-
-            let mut tx_ins: Vec<TxIn> = vec![];
-
-            // Create the TxIns from UTXOs
-            for i in utxos.iter() {
-                let sig_script = vec![];
-                // TODO: Create sig_script
-
-                let tx_in = TxIn {
-                    previous_output: OutPoint {
-                        hash: i.transaction_id,
-                        index: i.output_index,
-                    },
-                    script_length: sig_script.len() as usize,
-                    signature_script: sig_script,
-                    sequence: 0, // Verify this
-                };
-                tx_ins.push(tx_in);
-            }
-
-            // Create the TxOuts
-            let change = (available_money as f64) - amount - fee;
-
-            // create pk_script for each TxOut
-
-            // Design choice. There's always going to be two TxOuts. One for the amount and one for the change.
-
-            let mut pk_script_amount = vec![]; // This is the pubHashKey of the receiver
-
-            // TODO: Create pk_script_amount
-
-            // This TxOut for the amount goes to the receiver
-            // Here I need the pubHashKey of the receiver
-            let tx_out_amount = TxOut {
-                value: amount as u64,
-                pk_script_length: pk_script_amount.len(),
-                pk_script: pk_script_amount,
-            };
-
-            // This tx_out_change goes to the sender
-            // Here I need the pubHashKey of the sender (The User that owns the wallet)
-
-            let mut pk_script_change = vec![]; // This is the pubHashKey of the sender
-
-            let tx_out_change = TxOut {
-                value: change as u64,
-                pk_script_length: pk_script_change.len(),
-                pk_script: pk_script_change,
-            };
-
-            // list of tx_outs for the Tx
-            let tx_outs: Vec<TxOut> = vec![tx_out_amount, tx_out_change];
-
-            // Create the Tx to send to the node
-            let tx = Tx {
-                id: [0; 32],
-                version: 1,
-                flag: 0,
-                tx_in_count: tx_ins.len() as usize,
-                tx_in: tx_ins,
-                tx_out_count: tx_outs.len() as usize,
-                tx_out: tx_outs,
-                tx_witness: vec![],
-                lock_time: 0,
-            };
-
-            // sign the Tx
-            let signed_tx = self.sign_tx(tx);
-
-            // send the Tx to the node
-            //self.send(MessagePayload::sendTx(signed_tx));
-        }
+        // send the Tx to the node
+        //self.send(MessagePayload::sendTx(signed_tx));
+        //}
     }
 
     // Verify that the ScriptSig successfully unlocks the previous ScriptPubKey.
@@ -364,31 +368,42 @@ mod tests {
     }
 
     #[test]
-    fn test_wallet_creates_tx() {
-        let logger = Logger::mock_logger();
-        let config = Config::from_file("nodo.config")
-            .map_err(|err| err.to_string())
+    fn test_encode_decode_priv_key() {
+        // Encodeo
+        // Here is how the WIF format is created:
+        // 1. For mainnet private keys, start with the prefix 0x80 , for testnet 0xef .
+        // 2. Encode the secret in 32-byte big-endian.
+        // 3. If the SEC format used for the public key address was compressed, add a suffix of 0x01 .
+        // 4. Combine the prefix from #1, serialized secret from #2, and suffix from #3.
+        // 5. Do a hash256 of the result from #4 and get the first 4 bytes.
+        // 6. Take the combination of #4 and #5 and encode it in Base58.
+
+        let priv_key_wif = "cVK6pF1sfsvvmF9vGyq4wFeMywy1SMFHNpXa3d4Hi2evKHRQyTbn";
+
+        let priv_key_bytes = bs58::decode(priv_key_wif)
+            .with_check(None)
+            .into_vec()
             .unwrap();
 
-        let mut wallet = Wallet::new(config, logger.tx);
+        // Crea la secretKey a partir de los bytes de la clave privada
+        // [0xef, secret_key (32 bytes), 0x01]
+        let secret_key = SecretKey::from_slice(&priv_key_bytes[1..33]).unwrap();
 
-        let priv_key =
-            SecretKey::from_str("cVK6pF1sfsvvmF9vGyq4wFeMywy1SMFHNpXa3d4Hi2evKHRQyTbn").unwrap();
-        let address = "mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb";
+        // Encode
+        let mut buff = vec![0xef];
 
-        let user = User::new("bob".to_string(), priv_key);
+        for i in priv_key_bytes[1..33].iter() {
+            buff.push(*i);
+        }
 
-        wallet.add_user(user);
+        buff.push(0x01);
 
-        //     let tx = wallet.create_tx("user1".to_string(), "user2".to_string(), 100);
+        // buffer has [0xef, ... , 0x01]
+        let wif = bs58::encode(buff).with_check().into_string();
 
-        //     assert_eq!(tx.sender, "user1".to_string());
-        //     assert_eq!(tx.receiver, "user2".to_string());
-        //     assert_eq!(tx.amount, 100);
-
-        // }
-
-        // #[test]
-        // fn test_wallet_creates_and_sings_tx(){
+        assert_eq!(wif, priv_key_wif);
     }
+
+    #[test]
+    fn test_wallet_create_tx() {}
 }

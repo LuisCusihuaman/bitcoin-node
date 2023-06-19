@@ -195,36 +195,33 @@ pub struct User {
 }
 
 impl User {
-    pub fn new(name: String, secret_key: SecretKey) -> User {
+    pub fn new(name: String, priv_key_wif: String, is_anonymous:bool) -> User {
+        let mut rng = OsRng::default();
         let secp = Secp256k1::new();
+
+        // Secret Key
+        let secret_key = match is_anonymous{
+            true => {
+                let mut private_key_bytes: [u8; 32] = [0; 32];
+                rng.fill(&mut private_key_bytes);
+                SecretKey::from_slice(&private_key_bytes).unwrap()
+            }
+            false => {
+                let priv_key_bytes = bs58::decode(priv_key_wif)
+                .with_check(None)
+                .into_vec()
+                .unwrap();
+
+                // Crea la secretKey a partir de los bytes de la clave privada
+                // [0xef, secret_key (32 bytes), 0x01]
+                SecretKey::from_slice(&priv_key_bytes[1..33]).unwrap()
+            }
+        };
 
         // Public key
         let public_key = secret_key.public_key(&secp).serialize();
 
         // Generate address
-        let address = hash160::Hash::hash(&public_key).to_byte_array();
-
-        User {
-            name,
-            address,
-            secret_key,
-            public_key,
-            txns_hist: Vec::new(),
-        }
-    }
-
-    pub fn new_anonymous(name: String) -> User {
-        let mut rng = OsRng::default();
-        let secp = Secp256k1::new();
-
-        // Secret key
-        let mut private_key_bytes: [u8; 32] = [0; 32];
-        rng.fill(&mut private_key_bytes);
-        let secret_key = SecretKey::from_slice(&private_key_bytes).unwrap();
-
-        // Public key
-        let public_key = secret_key.public_key(&secp).serialize();
-
         let address = hash160::Hash::hash(&public_key).to_byte_array();
 
         User {
@@ -262,17 +259,6 @@ mod tests {
     use crate::net::message::tx::{OutPoint, Tx, TxIn, TxOut};
 
     #[test]
-    fn test_create_user_correctly() {
-        let user = User::new_anonymous("Alice".to_string());
-
-        assert_eq!(user.name, "Alice");
-        assert!(!user.address.is_empty());
-        assert!(!user.secret_key.secret_bytes().is_empty());
-        // assert!(!user.public_key.serialize().is_empty());
-        assert!(user.txns_hist.is_empty());
-    }
-
-    #[test]
     fn test_wallet_save_multiple_users() {
         let logger = Logger::mock_logger();
         let config = Config::from_file("nodo.config")
@@ -281,8 +267,8 @@ mod tests {
 
         let mut wallet = Wallet::new(config, logger.tx);
 
-        let user1 = User::new_anonymous("user1".to_string());
-        let user2 = User::new_anonymous("user2".to_string());
+        let user1 = User::new("Alice".to_string(), "".to_string(), true);
+        let user2 = User::new("Bob".to_string(), "".to_string(), true);
 
         wallet.add_user(user1);
         wallet.add_user(user2);
@@ -299,7 +285,7 @@ mod tests {
 
         let mut wallet = Wallet::new(config, logger.tx);
 
-        let user = User::new_anonymous("user".to_string());
+        let user = User::new("Alice".to_string(), "".to_string(), true);
 
         wallet.add_user(user);
 
@@ -310,18 +296,19 @@ mod tests {
     }
 
     #[test]
+    fn test_create_anonymous_user_correctly() {
+        let user = User::new("Alice".to_string(), "".to_string(), true);
+
+        assert_eq!(user.get_name(), "Alice");
+        assert!(!user.get_addr().is_empty());
+        assert!(!user.get_pub_key().is_empty());
+        assert!(user.get_tx_hist().is_empty());
+    }
+
+    #[test]
     fn test_creates_user_from_priv_key_correctly() {
-        let priv_key_wif = "cVK6pF1sfsvvmF9vGyq4wFeMywy1SMFHNpXa3d4Hi2evKHRQyTbn";
+        let priv_key_wif = "cVK6pF1sfsvvmF9vGyq4wFeMywy1SMFHNpXa3d4Hi2evKHRQyTbn".to_string();
         let address_wif = "mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb";
-
-        let priv_key_bytes = bs58::decode(priv_key_wif)
-            .with_check(None)
-            .into_vec()
-            .unwrap();
-
-        // Crea la secretKey a partir de los bytes de la clave privada
-        // [0xef, secret_key (32 bytes), 0x01]
-        let secret_key = SecretKey::from_slice(&priv_key_bytes[1..33]).unwrap();
 
         let pub_addr_hashed = bs58::decode(address_wif)
             .with_check(None)
@@ -331,9 +318,11 @@ mod tests {
         let address_bytes = &pub_addr_hashed[1..];
 
         // [111, 181, 51, 138, 19, 120, 118, 0, 187, 24, 163, 236, 151, 149, 117, 93, 82, 212, 10, 107, 236]
-        let user = User::new("bob".to_string(), secret_key);
+        let user = User::new("bob".to_string(), priv_key_wif, false);
 
-        assert_eq!(user.address, address_bytes[..]);
+        assert_eq!(user.get_addr(), address_bytes[..]);
+        assert_eq!(user.get_name(), "bob");
+        assert!(user.get_tx_hist().is_empty());
     }
 
     #[test]

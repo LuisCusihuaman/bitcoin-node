@@ -41,25 +41,24 @@ impl NodeManager {
     pub fn listen(&mut self) -> Result<(), String> {
         let listener = TcpListener::bind("127.0.0.1:8080").unwrap();
 
-
         // Wait for a connection.
         match listener.accept() {
             Ok((stream, addr)) => {
                 println!("Wallet conected successfully: {addr}");
-                
+
                 let connection = P2PConnection {
                     logger_tx: self.logger_tx.clone(),
                     handshaked: true,
                     tcp_stream: stream,
                     peer_address: addr.to_string(),
                 };
-                
+
                 self.node_network.peer_connections.push(connection);
             }
             Err(e) => println!("couldn't connect to wallet: {e:?}"),
         }
 
-        loop{
+        loop {
             self.wait_for(vec![]);
         }
 
@@ -85,12 +84,12 @@ impl NodeManager {
     }
 
     // getBalance (wallet a nodo)
-    // Si balance > amount 
+    // Si balance > amount
     // pedir UTXO -> getUTXOs (wallet a nodos)
     // devolver la lista de UTXO -> sendUTXOs (del nodo a wallet)
     // sendTx (wallet a nodo)
     // sendTx (nodo a nodos)
-    
+
     pub fn wait_for(&mut self, commands: Vec<&str>) -> Vec<(String, Vec<MessagePayload>)> {
         let mut matched_messages: Vec<(String, Vec<MessagePayload>)> = Vec::new();
 
@@ -261,12 +260,10 @@ impl NodeManager {
                             self.logger_tx.clone(),
                             format!("Received getutxos message from {}", peer_address),
                         );
-                        
 
                         let utxos = get_utxos_by_add(&self.utxo_set, &payloadUtxo.address);
 
                         if !utxos.is_empty() {
-
                             // devolver la lista de UTXO -> sendUTXOs (del nodo a wallet)
 
                             self.send_to(
@@ -275,15 +272,12 @@ impl NodeManager {
                                     utxos: utxos.clone(),
                                 }),
                             );
-
-                        }
-                        else{
-
+                        } else {
                             log(
                                 self.logger_tx.clone(),
                                 format!("No utxos found for address {}", payloadUtxo.address),
-                            );  
-                        }                     
+                            );
+                        }
                     }
 
                     // MessagePayload::WalletTx(tx) => {

@@ -2,14 +2,13 @@ use crate::net::message::block::{decode_block, Block};
 use crate::net::message::get_blocks::PayloadGetBlocks;
 use crate::net::message::get_data_inv::{decode_data_inv, PayloadGetDataInv};
 use crate::net::message::get_headers::{decode_headers, PayloadGetHeaders};
+use crate::net::message::get_utxo::{decode_get_utxos, PayloadGetUtxo};
 use crate::net::message::ping_pong::{decode_ping, decode_pong, PayloadPingPong};
+use crate::net::message::send_utxo::{decode_send_utxos, PayloadSendUtxo};
 use crate::net::message::tx::{decode_tx, Tx};
 use crate::net::message::version::{decode_version, PayloadVersion};
-use crate::net::message::get_utxo::{decode_get_utxos, PayloadGetUtxo};
-use crate::net::message::send_utxo::{decode_send_utxos, PayloadSendUtxo};
 
 //use crate::net::message::send_tx::{decode_send_tx, PayloadSendTx};
-
 
 use crate::utils::read_le;
 use std::mem;
@@ -18,11 +17,11 @@ pub mod block;
 pub mod get_blocks;
 pub mod get_data_inv;
 pub mod get_headers;
+pub mod get_utxo;
 pub mod ping_pong;
+pub mod send_utxo;
 pub mod tx;
 pub mod version;
-pub mod get_utxo;
-pub mod send_utxo;
 
 //pub mod send_tx;
 

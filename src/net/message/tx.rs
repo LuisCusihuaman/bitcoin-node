@@ -42,8 +42,13 @@ pub struct OutPoint {
 }
 
 impl Tx {
-
-    pub fn new(version: u32, flag: u16, tx_in: Vec<TxIn>, tx_out: Vec<TxOut>, lock_time: u32) -> Tx {
+    pub fn new(
+        version: u32,
+        flag: u16,
+        tx_in: Vec<TxIn>,
+        tx_out: Vec<TxOut>,
+        lock_time: u32,
+    ) -> Tx {
         let mut tx = Tx {
             id: [0; 32],
             version,

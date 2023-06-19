@@ -1,10 +1,7 @@
 use crate::net::message::tx::Tx;
 use crate::net::message::tx::TxIn;
-use std::collections::HashMap;
-
 use bs58;
-use bs58::encode::EncodeBuilder;
-use rand::seq::index;
+use std::collections::HashMap;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Utxo {
@@ -21,13 +18,10 @@ pub fn get_utxos_by_add(utxo_set: &HashMap<String, Vec<Utxo>>, address: &str) ->
     }
 }
 
-
 // Spending money
 // Deletes the outpoints from the UTXO set that each Tx_in points to
 pub fn update_utxo_set(utxo_set: &mut HashMap<String, Vec<Utxo>>, tx: &Tx) {
-
     for tx_in in &tx.tx_in {
-
         // <Sig> <PubKey> OP_DUP OP_HASH160 <PubkeyHash> OP_EQUALVERIFY OP_CHECKSIG
         let mut aux = tx_in.signature_script.clone();
         aux.reverse();

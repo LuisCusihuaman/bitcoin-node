@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::logger::log;
+use crate::net::message::get_utxos::PayloadGetUtxos;
 use crate::net::message::tx::{OutPoint, Tx, TxIn, TxOut};
 use crate::net::message::MessagePayload;
 use crate::net::p2p_connection::P2PConnection;
@@ -9,26 +10,26 @@ use bitcoin_hashes::Hash;
 use rand::rngs::OsRng;
 use rand::Rng;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
-use std::str::FromStr;
 use std::sync::mpsc::Sender;
+use std::time::Duration;
 use std::vec;
 
 pub struct Wallet {
     config: Config,
     logger_tx: Sender<String>,
-    node_manager: String, // P2PConnection,
+    node_manager: P2PConnection,
     users: Vec<User>,
 }
 
 impl Wallet {
     pub fn new(config: Config, sender: Sender<String>) -> Wallet {
         let logger_tx = sender.clone();
-        // let node_manager = P2PConnection::connect("127.0.0.1:8080", sender.clone()).unwrap();
+        let node_manager = P2PConnection::connect("127.0.0.1:8080", sender.clone()).unwrap();
 
         Wallet {
             config,
             logger_tx,
-            node_manager: String::new(),
+            node_manager,
             users: Vec::new(),
         }
     }
@@ -42,10 +43,42 @@ impl Wallet {
             self.logger_tx.clone(),
             format!("Wallet sending message: {:?}", message),
         );
-        // self.node_manager.send(&message).unwrap();
+        self.node_manager.send(&message).unwrap();
     }
 
-    fn createTx(&mut self, mut utxos: Vec<Utxo>) -> Option<Tx> {
+    // Wallet --> Nodo
+    // espero espero espero (bloqueante)
+    // Nodo --> Wallet
+    // va a hacer cosas
+
+    // Wallet --> Nodo, dame las utxos
+    // FIN
+    // Nodo --> Wallet utxos
+    // wallet crea tx con esas utxos (si puede)
+
+    pub fn receive(&mut self) {
+        let (_addrs, messages) = self.node_manager.receive();
+        for message in messages {
+            match message {
+                MessagePayload::UTXOs(payload) => {
+                    let tx = match self.create_tx(payload.utxos) {
+                        Some(tx) => tx,
+                        None => continue,
+                    };
+
+                    // sign the Tx
+                    let signed_tx = self.sign_tx(tx);
+
+                    // send the Tx to the node
+                    self.send(MessagePayload::WalletTx(signed_tx));
+                }
+
+                _ => continue,
+            }
+        }
+    }
+
+    fn create_tx(&mut self, mut utxos: Vec<Utxo>) -> Option<Tx> {
         // Validating Transactions
 
         // 1. The inputs of the transaction are previously unspent. The fact that we ask the node for the UTXOs
@@ -148,32 +181,6 @@ impl Wallet {
     // * Amount to spend
     // * Address to send
     // * UTXOs to spend
-    pub fn receive(&mut self) {
-        // let (_addrs, messages) = self.node_manager.receive();
-        // for message in messages {
-        //     log(
-        //         self.logger_tx.clone(),
-        //         format!("Wallet received {:?} from nodo-rustico", message),
-        //     );
-
-        // Recibo la lista de UTXOs asociadas al address actual
-
-        // let UTXOs_to_spend = match message {
-        //     MessagePayload::UTXOS(tx) => tx,
-        //     _ => continue,
-        // };
-        // let utxos: Vec<Utxo> = vec![];
-        // let tx = self.createTx(utxos)?;
-
-        // sign the Tx
-        // let signed_tx = self.sign_tx(tx);
-
-        // let serialized_tx = self.serialize(signed_tx);
-
-        // send the Tx to the node
-        //self.send(MessagePayload::sendTx(signed_tx));
-        //}
-    }
 
     // Verify that the ScriptSig successfully unlocks the previous ScriptPubKey.
     fn tx_verified(&mut self, utxo: &Utxo) -> bool {
@@ -183,24 +190,63 @@ impl Wallet {
     fn sign_tx(&mut self, tx: Tx) -> Tx {
         tx
     }
+
+    // Raul quiere crear una transacción para Roberto, de 10 patacones.
+    // wallet.create_tx(from, to, amount); Termina lo que ve Raul
+
+    // Wallet le pide al nodo las UTXOs de Raul
+    // Nodo le envía a Wallet las UTXOs de Raul
+    // Wallet crea la transacción
+
+    fn create_pending_tx(&mut self, mut from: User, to: String, amount: f64) {
+        // PONELE
+        // Create send utxo message
+        let get_utxo_message = MessagePayload::GetUTXOs(PayloadGetUtxos {
+            address: from.get_pubkeyhash(),
+        });
+
+        // Send message to node
+        self.send(get_utxo_message);
+
+        // Wait for response
+        let response = self.receive();
+
+        // Save the pending transaction
+        let pending = PendingTx {
+            from: from.pubkeyhash,
+            to: to,
+            amount: amount,
+            created: false,
+        };
+        from.pending_tx.push(pending); // Otro nombre
+    }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
+pub struct PendingTx {
+    from: [u8; 20],
+    to: String, // TODO Esta en formato wallet address?
+    amount: f64,
+    created: bool,
+}
+
+#[derive(Clone, Debug)]
 pub struct User {
     pub name: String,
-    pub address: [u8; 20],
+    pub pubkeyhash: [u8; 20],
     pub secret_key: SecretKey,
     pub public_key: [u8; 33],
     pub txns_hist: Vec<Tx>,
+    pub pending_tx: Vec<PendingTx>, // TODO quizas alcanza solo con el vector de arriba
 }
 
 impl User {
-    pub fn new(name: String, priv_key_wif: String, is_anonymous:bool) -> User {
+    pub fn new(name: String, priv_key_wif: String, is_anonymous: bool) -> User {
         let mut rng = OsRng::default();
         let secp = Secp256k1::new();
 
         // Secret Key
-        let secret_key = match is_anonymous{
+        let secret_key = match is_anonymous {
             true => {
                 let mut private_key_bytes: [u8; 32] = [0; 32];
                 rng.fill(&mut private_key_bytes);
@@ -208,9 +254,9 @@ impl User {
             }
             false => {
                 let priv_key_bytes = bs58::decode(priv_key_wif)
-                .with_check(None)
-                .into_vec()
-                .unwrap();
+                    .with_check(None)
+                    .into_vec()
+                    .unwrap();
 
                 // Crea la secretKey a partir de los bytes de la clave privada
                 // [0xef, secret_key (32 bytes), 0x01]
@@ -222,37 +268,46 @@ impl User {
         let public_key = secret_key.public_key(&secp).serialize();
 
         // Generate address
-        let address = hash160::Hash::hash(&public_key).to_byte_array();
+        let pubkeyhash = hash160::Hash::hash(&public_key).to_byte_array();
 
         User {
             name,
-            address,
+            pubkeyhash,
             secret_key,
             public_key,
             txns_hist: Vec::new(),
+            pending_tx: Vec::new(),
         }
     }
 
-    pub fn get_pub_key(&self) -> [u8;33]{
+    pub fn get_pub_key(&self) -> [u8; 33] {
         self.public_key
     }
 
-    pub fn get_addr(&self) -> [u8;20]{
-        self.address
+    // Returns the address in base58Check
+    pub fn get_address(&self) -> String {
+        let version = [0x6f];
+        let pub_hash_key = self.get_pub_key();
+        let input = [&version[..], &pub_hash_key[..]].concat();
+
+        bs58::encode(input).with_check().into_string() // TODO checkear, no funciona aun
     }
 
-    pub fn get_name(&self) -> String{
+    pub fn get_pubkeyhash(&self) -> [u8; 20] {
+        self.pubkeyhash
+    }
+
+    pub fn get_name(&self) -> String {
         self.name.clone()
     }
 
-    pub fn get_tx_hist(&self) -> Vec<Tx>{
+    pub fn get_tx_hist(&self) -> Vec<Tx> {
         self.txns_hist.clone()
     }
 }
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
     use crate::logger::Logger;
     use crate::net::message::ping_pong::PayloadPingPong;
@@ -277,7 +332,7 @@ mod tests {
     }
 
     #[test]
-    fn test_received_correctly_UTXOs() {
+    fn test_received_correctly_uxtos() {
         let logger = Logger::mock_logger();
         let config = Config::from_file("nodo.config")
             .map_err(|err| err.to_string())
@@ -300,7 +355,7 @@ mod tests {
         let user = User::new("Alice".to_string(), "".to_string(), true);
 
         assert_eq!(user.get_name(), "Alice");
-        assert!(!user.get_addr().is_empty());
+        assert!(!user.get_pubkeyhash().is_empty());
         assert!(!user.get_pub_key().is_empty());
         assert!(user.get_tx_hist().is_empty());
     }
@@ -320,7 +375,8 @@ mod tests {
         // [111, 181, 51, 138, 19, 120, 118, 0, 187, 24, 163, 236, 151, 149, 117, 93, 82, 212, 10, 107, 236]
         let user = User::new("bob".to_string(), priv_key_wif, false);
 
-        assert_eq!(user.get_addr(), address_bytes[..]);
+        assert_eq!(user.get_pubkeyhash(), address_bytes[..]);
+        // assert_eq!(user.get_address(), address_wif); // TODO: fix this
         assert_eq!(user.get_name(), "bob");
         assert!(user.get_tx_hist().is_empty());
     }
@@ -345,7 +401,7 @@ mod tests {
 
         // Crea la secretKey a partir de los bytes de la clave privada
         // [0xef, secret_key (32 bytes), 0x01]
-        let secret_key = SecretKey::from_slice(&priv_key_bytes[1..33]).unwrap();
+        let _secret_key = SecretKey::from_slice(&priv_key_bytes[1..33]).unwrap();
 
         // Encode
         let mut buff = vec![0xef];
@@ -363,7 +419,50 @@ mod tests {
     }
 
     #[test]
-    fn test_wallet_create_tx() {
-        
+    fn test_wallet_sends_ping_to_node_manager() -> Result<(), String> {
+        let logger = Logger::mock_logger();
+        let config = Config::from_file("nodo.config")
+            .map_err(|err| err.to_string())
+            .unwrap();
+
+        let mut wallet = Wallet::new(config, logger.tx);
+
+        let ping_message = MessagePayload::Ping(PayloadPingPong::new());
+
+        wallet.send(ping_message);
+        wallet.receive();
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_wallet_create_tx() -> Result<(), String> {
+        let logger = Logger::mock_logger();
+        let config = Config::from_file("nodo.config")
+            .map_err(|err| err.to_string())
+            .unwrap();
+
+        let mut wallet = Wallet::new(config, logger.tx);
+
+        let priv_key_wif = "cVK6pF1sfsvvmF9vGyq4wFeMywy1SMFHNpXa3d4Hi2evKHRQyTbn".to_string();
+        let messi = User::new("Messi".to_string(), priv_key_wif, false);
+
+        wallet.add_user(messi.clone());
+
+        // address bitcoin = "maksjhduyihjkdr232389748heiuy4ow8u"
+        // address: [u8; 20] = hash160(pub_key)
+
+        // TODO de una TxOut necesitamos el address bitcoin
+
+        // TODO : chequear el to
+        wallet.create_pending_tx(
+            messi.clone(),
+            "maksjhduyihjkdr232389748heiuy4ow8u".to_string(),
+            10.0,
+        );
+
+        wallet.receive();
+
+        Ok(())
     }
 }

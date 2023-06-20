@@ -1,6 +1,5 @@
 use crate::net::message::tx::Tx;
 use crate::net::message::tx::TxIn;
-use bs58;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -11,8 +10,8 @@ pub struct Utxo {
 }
 
 // Get UTXOs of a specific address
-pub fn get_utxos_by_add(utxo_set: &HashMap<String, Vec<Utxo>>, address: &str) -> Vec<Utxo> {
-    match utxo_set.get(address) {
+pub fn get_utxos_by_add(utxo_set: &HashMap<[u8; 20], Vec<Utxo>>, address: [u8; 20]) -> Vec<Utxo> {
+    match utxo_set.get(&address) {
         Some(utxos) => utxos.clone(),
         None => Vec::new(),
     }
@@ -20,13 +19,15 @@ pub fn get_utxos_by_add(utxo_set: &HashMap<String, Vec<Utxo>>, address: &str) ->
 
 // Spending money
 // Deletes the outpoints from the UTXO set that each Tx_in points to
-pub fn update_utxo_set(utxo_set: &mut HashMap<String, Vec<Utxo>>, tx: &Tx) {
+pub fn update_utxo_set(utxo_set: &mut HashMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
     for tx_in in &tx.tx_in {
-        // <Sig> <PubKey> OP_DUP OP_HASH160 <PubkeyHash> OP_EQUALVERIFY OP_CHECKSIG
+        // pubkey_script = <Sig> <PubKey> OP_DUP OP_HASH160 <PubkeyHash> OP_EQUALVERIFY OP_CHECKSIG
         let mut aux = tx_in.signature_script.clone();
         aux.reverse();
 
-        let address = bs58::encode(&aux[2..22]).into_string();
+        // address = PubkeyHash before base58 encoding
+        let mut address = [0u8; 20];
+        address.copy_from_slice(&aux[2..22]);
 
         let hash_tx = tx_in.previous_output.hash;
         let index = tx_in.previous_output.index;
@@ -47,7 +48,7 @@ pub fn update_utxo_set(utxo_set: &mut HashMap<String, Vec<Utxo>>, tx: &Tx) {
     }
 }
 
-pub fn is_tx_spent(utxo_set: &HashMap<String, Vec<Utxo>>, tx_in: &TxIn) -> bool {
+pub fn is_tx_spent(utxo_set: &HashMap<[u8; 20], Vec<Utxo>>, tx_in: &TxIn) -> bool {
     // recorrer todos los hashes y ver si tiene el outpoint que apunta al tx_in que quiero
     let tx_hash = tx_in.previous_output.hash;
 
@@ -64,7 +65,7 @@ pub fn is_tx_spent(utxo_set: &HashMap<String, Vec<Utxo>>, tx_in: &TxIn) -> bool 
 }
 
 // Add UTXO to each UTXO
-pub fn generate_utxos(utxo_set: &mut HashMap<String, Vec<Utxo>>, tx: &Tx) {
+pub fn generate_utxos(utxo_set: &mut HashMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
     let mut utxos = Vec::new();
 
     for (index, tx_out) in tx.tx_out.iter().enumerate() {
@@ -79,7 +80,8 @@ pub fn generate_utxos(utxo_set: &mut HashMap<String, Vec<Utxo>>, tx: &Tx) {
         let pk_script = &tx_out.pk_script;
 
         // From pk_script obtain the address
-        let address = bs58::encode(&pk_script[2..22]).into_string();
+        let mut address = [0u8; 20];
+        address.copy_from_slice(&pk_script[2..22]);
 
         // append to address this UTXO
         utxos = match utxo_set.get(&address) {

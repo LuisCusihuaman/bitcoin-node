@@ -280,6 +280,7 @@ impl User {
         }
     }
 
+    // 33 byte public key
     pub fn get_pub_key(&self) -> [u8; 33] {
         self.public_key
     }
@@ -291,6 +292,19 @@ impl User {
         let input = [&version[..], &pub_hash_key[..]].concat();
 
         bs58::encode(input).with_check().into_string()
+    }
+
+    // get pubkeyhash from an addr in base58Check
+    pub fn pubkeyhash_from_addr(&self, addr:&str) -> [u8; 20]{
+        let pub_addr_hashed = bs58::decode(addr)
+            .with_check(None)
+            .into_vec()
+            .unwrap();
+
+        let mut address_bytes = [0;20];
+        address_bytes.copy_from_slice(&pub_addr_hashed[1..]);
+
+        address_bytes
     }
 
     // address = pubkeyHash

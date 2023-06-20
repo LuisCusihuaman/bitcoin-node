@@ -87,14 +87,17 @@
                         <property name="orientation">vertical</property>
                         <child>
                             <object class="GtkLabel">
+                                <property name="label">Send Transaction</property>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkLabel">
                                 <property name="label">Pay To:</property>
                             </object>
                         </child>
                         <child>
                             <object class="GtkEntry" id="pay_to_entry">
-                                <property name="placeholder-text">Enter a Bitcoin address (e.g.
-                                    ajnfafnjnafoajnfoejnfoejanf)
-                                </property>
+                                <property name="placeholder-text">Enter a Bitcoin address (e.g. ajnfafnjnafoajnfoejnfoejanf)</property>
                             </object>
                         </child>
                         <child>
@@ -112,6 +115,21 @@
                                 <property name="label">SEND</property>
                                 <property name="icon-name">document-send</property>
                                 <property name="name">send_transaction_button</property>
+                            </object>
+                        </child>
+                    </object>
+                </child>
+                <child>
+                    <object class="GtkBox" id="transactions">
+                        <property name="orientation">vertical</property>
+                        <child>
+                            <object class="GtkLabel" id="transactions_title">
+                                <property name="label">Transactions</property>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkColumnView" id="transactions_columnview">
+                                <!-- The columns will be added dynamically in Rust code -->
                             </object>
                         </child>
                     </object>

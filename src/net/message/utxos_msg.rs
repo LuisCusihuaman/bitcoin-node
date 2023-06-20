@@ -9,6 +9,7 @@ pub struct PayloadUtxosMsg {
 
 impl PayloadUtxosMsg {
     pub fn encode(&self, buffer: &mut [u8]) {
+        // TODO
         // encode UTXO
     }
 

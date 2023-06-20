@@ -5,6 +5,7 @@ use crate::net::message::tx::{OutPoint, Tx, TxIn, TxOut};
 use crate::net::message::MessagePayload;
 use crate::net::p2p_connection::P2PConnection;
 use crate::node::utxo::Utxo;
+use crate::utils::pubkeyhash_from_addr;
 use bitcoin_hashes::hash160;
 use bitcoin_hashes::Hash;
 use rand::rngs::OsRng;
@@ -198,11 +199,12 @@ impl Wallet {
     // Nodo le envía a Wallet las UTXOs de Raul
     // Wallet crea la transacción
 
-    fn create_pending_tx(&mut self, mut from: User, to: String, amount: f64) {
-        // PONELE
+    fn create_pending_tx(&mut self, mut sender: User, receiver: &str, amount: f64) {
+        let addr_receiver = pubkeyhash_from_addr(receiver);
+
         // Create send utxo message
         let get_utxo_message = MessagePayload::GetUTXOs(PayloadGetUtxos {
-            address: from.get_address(),
+            address: sender.get_address(),
         });
 
         // Send message to node
@@ -210,20 +212,20 @@ impl Wallet {
 
         // Save the pending transaction
         let pending = PendingTx {
-            from: from.pubkeyhash,
-            to: to,
+            from: sender.pubkeyhash,
+            to: addr_receiver,
             amount: amount,
             created: false,
         };
-        
-        from.pending_tx.push(pending); // Otro nombre
+
+        sender.pending_tx.push(pending); // Otro nombre
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct PendingTx {
     from: [u8; 20],
-    to: String, // TODO Esta en formato wallet address?
+    to: [u8; 20],
     amount: f64,
     created: bool,
 }
@@ -283,28 +285,6 @@ impl User {
         self.public_key
     }
 
-    // Returns the address in base58Check (34 letras)
-    pub fn get_address_base58(&self) -> String {
-        let version = [0x6f];
-        let pub_hash_key = self.get_address();
-        let input = [&version[..], &pub_hash_key[..]].concat();
-        
-        bs58::encode(input).with_check().into_string()
-    }
-
-    // get pubkeyhash from an addr in base58Check
-    pub fn pubkeyhash_from_addr(&self, addr:&str) -> [u8; 20]{
-        let pub_addr_hashed = bs58::decode(addr)
-            .with_check(None)
-            .into_vec()
-            .unwrap();
-
-        let mut address_bytes = [0;20];
-        address_bytes.copy_from_slice(&pub_addr_hashed[1..]);
-
-        address_bytes
-    }
-
     // address = pubkeyHash
     pub fn get_address(&self) -> [u8; 20] {
         self.pubkeyhash
@@ -325,6 +305,7 @@ mod tests {
     use crate::logger::Logger;
     use crate::net::message::ping_pong::PayloadPingPong;
     use crate::net::message::tx::{OutPoint, Tx, TxIn, TxOut};
+    use crate::utils::get_address_base58;
 
     #[test]
     fn test_wallet_save_multiple_users() {
@@ -389,7 +370,7 @@ mod tests {
         let user = User::new("bob".to_string(), priv_key_wif, false);
 
         assert_eq!(user.get_address(), address_bytes[..]);
-        assert_eq!(user.get_address_base58(), address_wif); // TODO: fix this
+        assert_eq!(get_address_base58(user.get_address()), address_wif);
         assert_eq!(user.get_name(), "bob");
         assert!(user.get_tx_hist().is_empty());
     }
@@ -468,11 +449,7 @@ mod tests {
         // TODO de una TxOut necesitamos el address bitcoin
 
         // TODO : chequear el to
-        wallet.create_pending_tx(
-            messi.clone(),
-            "maksjhduyihjkdr232389748heiuy4ow8u".to_string(),
-            10.0,
-        );
+        wallet.create_pending_tx(messi.clone(), "mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb", 10.0);
 
         wallet.receive();
 

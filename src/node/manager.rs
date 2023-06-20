@@ -5,6 +5,7 @@ use crate::net::message::get_data_inv::Inventory;
 use crate::net::message::get_data_inv::PayloadGetDataInv;
 use crate::net::message::get_headers::PayloadGetHeaders;
 use crate::net::message::ping_pong::PayloadPingPong;
+use crate::net::message::utxos_msg::PayloadUtxosMsg;
 use crate::net::message::version::PayloadVersion;
 use crate::net::message::MessagePayload;
 use crate::net::p2p_connection::P2PConnection;
@@ -19,12 +20,14 @@ use std::net::TcpListener;
 use std::net::{IpAddr, ToSocketAddrs};
 use std::sync::mpsc::Sender;
 
+use super::utxo::get_utxos_by_address;
+
 pub struct NodeManager {
     node_network: NodeNetwork,
     config: Config,
     logger_tx: Sender<String>,
     blocks: Vec<Block>,
-    utxo_set: HashMap<[u8; 20], Vec<Utxo>>, // utxo_set is a Hash with key <address> and value <OutPoint>
+    utxo_set: HashMap<String, Vec<Utxo>>, // utxo_set is a Hash with key <address> and value <OutPoint>
     blocks_btreemap: BTreeMap<[u8; 32], usize>,
 }
 
@@ -35,7 +38,7 @@ impl NodeManager {
         }
     }
 
-    pub fn listen(&mut self) -> Result<(), String> {
+    pub fn listen(&mut self) {
         let listener = TcpListener::bind("127.0.0.1:8080").unwrap();
 
         // Wait for a connection.
@@ -58,8 +61,6 @@ impl NodeManager {
         loop {
             self.wait_for(vec![]);
         }
-
-        Ok(())
     }
 
     pub fn new(config: Config, logger_tx: Sender<String>) -> NodeManager {
@@ -258,23 +259,24 @@ impl NodeManager {
                             format!("Received getutxos message from {}", peer_address),
                         );
 
-                        let utxos = &self.utxo_set.get(&payload.address);
+                        let utxos = get_utxos_by_address(&self.utxo_set, payload.address.clone());
 
-                        // if !utxos.is_empty() {
-                        //     // devolver la lista de UTXO -> sendUTXOs (del nodo a wallet)
+                        if utxos.is_empty() {
+                            log(
+                                self.logger_tx.clone(),
+                                format!(
+                                    "No utxos found for address {}",
+                                    get_address_base58(payload.address)
+                                ),
+                            );
+                        }
 
-                        //     self.send_to(
-                        //         peer_address.clone(),
-                        //         &MessagePayload::SendUTXOs(PayloadSendUtxo {
-                        //             utxos: utxos.clone(),
-                        //         }),
-                        //     );
-                        // } else {
-                        //     log(
-                        //         self.logger_tx.clone(),
-                        //         format!("No utxos found for address {}", payloadUtxo.address),
-                        //     );
-                        // }
+                        self.send_to(
+                            peer_address.clone(),
+                            &MessagePayload::UTXOs(PayloadUtxosMsg {
+                                utxos: utxos.clone(),
+                            }),
+                        );
                     }
 
                     // MessagePayload::WalletTx(tx) => {

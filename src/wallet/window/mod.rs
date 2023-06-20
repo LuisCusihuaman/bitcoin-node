@@ -194,7 +194,7 @@ impl Window {
         // });
         //
         // // Set the factory of the list view
-        // self.imp().tasks_list.set_factory(Some(&factory));
+        //self.imp().transactions_columnview.set_factory(Some(&factory));
     }
 
     // ANCHOR: setup_actions

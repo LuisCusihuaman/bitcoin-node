@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 
 use glib::subclass::InitializingObject;
-use gtk::{CompositeTemplate, Entry, gio, glib, ListView};
+use gtk::{ColumnView, CompositeTemplate, Entry, gio, glib, ListView};
 use gtk::gio::Settings;
 use gtk::glib::once_cell::unsync::OnceCell;
 use gtk::subclass::prelude::*;
@@ -11,8 +11,8 @@ use gtk::subclass::prelude::*;
 #[derive(CompositeTemplate, Default)]
 #[template(resource = "/org/gtk_rs/wallet-rustica/window.ui")]
 pub struct Window {
-    pub tasks: RefCell<Option<gio::ListStore>>,
-    pub settings: OnceCell<Settings>,
+    #[template_child]
+    pub transactions_columnview: TemplateChild<ColumnView>,
 }
 
 // The central trait for subclassing a GObject

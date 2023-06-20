@@ -1,3 +1,4 @@
+mod grid_cell;
 mod window;
 
 use gtk::prelude::*;

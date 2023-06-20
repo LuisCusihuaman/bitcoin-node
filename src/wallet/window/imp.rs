@@ -11,8 +11,6 @@ use gtk::subclass::prelude::*;
 #[derive(CompositeTemplate, Default)]
 #[template(resource = "/org/gtk_rs/wallet-rustica/window.ui")]
 pub struct Window {
-    #[template_child]
-    pub tasks_list: TemplateChild<ListView>,
     pub tasks: RefCell<Option<gio::ListStore>>,
     pub settings: OnceCell<Settings>,
 }

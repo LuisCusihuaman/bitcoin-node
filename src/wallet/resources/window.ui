@@ -12,7 +12,7 @@
                 <property name="margin-end">12</property>
                 <property name="spacing">6</property>
                 <child>
-                    <object class="GtkBox">
+                    <object class="GtkBox" id="tabs">
                         <property name="orientation">horizontal</property>
                         <property name="margin-top">12</property>
                         <property name="margin-bottom">12</property>
@@ -26,10 +26,10 @@
                                 <property name="name">overview_button</property>
                                 <property name="receives-default">false</property>
                                 <style>
-                                    <class name="linked" />
-                                    <class name="suggested-action" />
-                                    <class name="active" />
-                                    <class name="insensitive" />
+                                    <class name="linked"/>
+                                    <class name="suggested-action"/>
+                                    <class name="active"/>
+                                    <class name="insensitive"/>
                                 </style>
                             </object>
                         </child>
@@ -83,13 +83,35 @@
                     </object>
                 </child>
                 <child>
-                    <object class="GtkScrolledWindow">
-                        <property name="hscrollbar-policy">never</property>
-                        <property name="min-content-height">360</property>
-                        <property name="vexpand">true</property>
+                    <object class="GtkBox" id="send_transaction">
+                        <property name="orientation">vertical</property>
                         <child>
-                            <object class="GtkListView" id="tasks_list">
-                                <property name="valign">start</property>
+                            <object class="GtkLabel">
+                                <property name="label">Pay To:</property>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkEntry" id="pay_to_entry">
+                                <property name="placeholder-text">Enter a Bitcoin address (e.g.
+                                    ajnfafnjnafoajnfoejnfoejanf)
+                                </property>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkLabel">
+                                <property name="label">Amount:</property>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkEntry" id="amount_entry">
+                                <property name="placeholder-text">...</property>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkButton">
+                                <property name="label">SEND</property>
+                                <property name="icon-name">document-send</property>
+                                <property name="name">send_transaction_button</property>
                             </object>
                         </child>
                     </object>

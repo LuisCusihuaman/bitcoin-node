@@ -22,7 +22,15 @@
                         <child>
                             <object class="GtkButton">
                                 <property name="label">Overview</property>
-                                <property name="icon-name">view-list-symbolic</property>
+                                <property name="icon-name">user-info</property>
+                                <property name="name">overview_button</property>
+                                <property name="receives-default">false</property>
+                                <style>
+                                    <class name="linked" />
+                                    <class name="suggested-action" />
+                                    <class name="active" />
+                                    <class name="insensitive" />
+                                </style>
                             </object>
                         </child>
                         <child>
@@ -31,9 +39,9 @@
                         <child>
                             <object class="GtkButton">
                                 <property name="label">Send</property>
-                                <property name="icon-name">mail-send-receive-symbolic</property>
                                 <property name="use-underline">true</property>
                                 <property name="icon-name">mail-send-receive-symbolic</property>
+                                <property name="name">send_button</property>
                             </object>
                         </child>
                         <child>
@@ -42,17 +50,36 @@
                         <child>
                             <object class="GtkButton">
                                 <property name="label">Transactions</property>
-                                <property name="icon-name">document-properties-symbolic</property>
                                 <property name="use-underline">true</property>
-                                <property name="icon-name">document-properties-symbolic</property>
+                                <property name="icon-name">view-list-symbolic</property>
+                                <property name="name">transactions_button</property>
                             </object>
                         </child>
                     </object>
                 </child>
                 <child>
-                    <object class="GtkEntry" id="entry">
-                        <property name="placeholder-text" translatable="yes">Enter a Task…</property>
-                        <property name="secondary-icon-name">list-add-symbolic</property>
+                    <object class="GtkBox" id="balance">
+                        <property name="orientation">vertical</property>
+                        <child>
+                            <object class="GtkLabel" id="balance_title">
+                                <property name="label">Balance</property>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkLabel" id="available_balance_label">
+                                <property name="label">Available: 50.0000 BTC</property>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkLabel" id="pending_balance_label">
+                                <property name="label">Pending: 20.000 BTC</property>
+                            </object>
+                        </child>
+                        <child>
+                            <object class="GtkLabel" id="total_balance_label">
+                                <property name="label">TOTAL: 70.0000 BTC</property>
+                            </object>
+                        </child>
                     </object>
                 </child>
                 <child>

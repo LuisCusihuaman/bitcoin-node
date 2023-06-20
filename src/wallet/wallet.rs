@@ -208,9 +208,6 @@ impl Wallet {
         // Send message to node
         self.send(get_utxo_message);
 
-        // Wait for response
-        let response = self.receive();
-
         // Save the pending transaction
         let pending = PendingTx {
             from: from.pubkeyhash,
@@ -218,6 +215,7 @@ impl Wallet {
             amount: amount,
             created: false,
         };
+        
         from.pending_tx.push(pending); // Otro nombre
     }
 }
@@ -289,7 +287,7 @@ impl User {
         let version = [0x6f];
         let pub_hash_key = self.get_address();
         let input = [&version[..], &pub_hash_key[..]].concat();
-
+        
         bs58::encode(input).with_check().into_string()
     }
 

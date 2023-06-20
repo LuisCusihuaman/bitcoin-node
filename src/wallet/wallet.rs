@@ -202,7 +202,7 @@ impl Wallet {
         // PONELE
         // Create send utxo message
         let get_utxo_message = MessagePayload::GetUTXOs(PayloadGetUtxos {
-            address: from.get_pubkeyhash(),
+            address: from.get_address(),
         });
 
         // Send message to node
@@ -284,16 +284,17 @@ impl User {
         self.public_key
     }
 
-    // Returns the address in base58Check
-    pub fn get_address(&self) -> String {
+    // Returns the address in base58Check (34 letras)
+    pub fn get_address_base58(&self) -> String {
         let version = [0x6f];
-        let pub_hash_key = self.get_pub_key();
+        let pub_hash_key = self.get_address();
         let input = [&version[..], &pub_hash_key[..]].concat();
 
-        bs58::encode(input).with_check().into_string() // TODO checkear, no funciona aun
+        bs58::encode(input).with_check().into_string()
     }
 
-    pub fn get_pubkeyhash(&self) -> [u8; 20] {
+    // address = pubkeyHash
+    pub fn get_address(&self) -> [u8; 20] {
         self.pubkeyhash
     }
 
@@ -355,7 +356,7 @@ mod tests {
         let user = User::new("Alice".to_string(), "".to_string(), true);
 
         assert_eq!(user.get_name(), "Alice");
-        assert!(!user.get_pubkeyhash().is_empty());
+        assert!(!user.get_address().is_empty());
         assert!(!user.get_pub_key().is_empty());
         assert!(user.get_tx_hist().is_empty());
     }
@@ -375,8 +376,8 @@ mod tests {
         // [111, 181, 51, 138, 19, 120, 118, 0, 187, 24, 163, 236, 151, 149, 117, 93, 82, 212, 10, 107, 236]
         let user = User::new("bob".to_string(), priv_key_wif, false);
 
-        assert_eq!(user.get_pubkeyhash(), address_bytes[..]);
-        // assert_eq!(user.get_address(), address_wif); // TODO: fix this
+        assert_eq!(user.get_address(), address_bytes[..]);
+        assert_eq!(user.get_address_base58(), address_wif); // TODO: fix this
         assert_eq!(user.get_name(), "bob");
         assert!(user.get_tx_hist().is_empty());
     }

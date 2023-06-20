@@ -128,11 +128,7 @@ pub fn decode_internal_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
     let (flag, flag_bytes) = check_flag(&buffer[*offset..]);
     *offset += flag_bytes;
 
-    if flag == 1 {
-        println!("flag: 1 LOL")
-    }
-
-    let tx_in_count = read_varint(&buffer[*offset..]); // Never zero, TODO calcular bien offset arriba
+    let tx_in_count = read_varint(&buffer[*offset..]); // Never zero
     *offset += get_offset(&buffer[*offset..]);
 
     let mut tx_in = Vec::new();

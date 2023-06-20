@@ -1,6 +1,7 @@
 use crate::net::message::tx::Tx;
 use crate::net::message::tx::TxIn;
 use crate::utils::*;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -12,40 +13,33 @@ pub struct Utxo {
 
 // Get UTXOs of a specific address
 pub fn get_utxos_by_address(
-    utxo_set: &HashMap<String, Vec<Utxo>>,
-    pub_hash_key: [u8; 20],
+    utxo_set: &BTreeMap<[u8; 20], Vec<Utxo>>,
+    pk_hash: [u8; 20],
 ) -> Vec<Utxo> {
-    let address = get_address_base58(pub_hash_key);
-
-    match utxo_set.get(&address) {
+    match utxo_set.get(&pk_hash) {
         Some(utxos) => utxos.clone(),
         None => Vec::new(),
     }
 }
 
-// Spending money
 // Deletes the outpoints from the UTXO set that each Tx_in points to
-pub fn update_utxo_set(utxo_set: &mut HashMap<String, Vec<Utxo>>, tx: &Tx) {
+pub fn update_utxo_set(utxo_set: &mut BTreeMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
     for tx_in in &tx.tx_in {
-        // pubkey_script = <Sig> <PubKey> OP_DUP OP_HASH160 <PubkeyHash> OP_EQUALVERIFY OP_CHECKSIG
+        // <Sig> <PubKey> OP_DUP OP_HASH160 <PubkeyHash> OP_EQUALVERIFY OP_CHECKSIG
         let mut sig_script_inv = tx_in.signature_script.clone();
         sig_script_inv.reverse();
 
-        // address = PubkeyHash encoded in base58Check
-        let mut aux = [0u8; 20];
-
-        if (sig_script_inv.len() < 22) {
+        if sig_script_inv.len() < 22 {
             return;
         }
 
-        aux.copy_from_slice(&sig_script_inv[2..22]);
-
-        let address = get_address_base58(aux);
+        let mut pk_hash = [0u8; 20];
+        pk_hash.copy_from_slice(&sig_script_inv[2..22]);
 
         let hash_tx = tx_in.previous_output.hash;
         let index = tx_in.previous_output.index;
 
-        if let Some(utxos) = utxo_set.get_mut(&address) {
+        if let Some(utxos) = utxo_set.get_mut(&pk_hash) {
             let mut utxos = utxos.clone();
 
             for i in 0..utxos.len() {
@@ -56,12 +50,12 @@ pub fn update_utxo_set(utxo_set: &mut HashMap<String, Vec<Utxo>>, tx: &Tx) {
             }
 
             // Updates the new list of UTXOs for the address
-            utxo_set.insert(address, utxos);
+            utxo_set.insert(pk_hash, utxos);
         }
     }
 }
 
-pub fn is_tx_spent(utxo_set: &HashMap<String, Vec<Utxo>>, tx_in: &TxIn) -> bool {
+pub fn is_tx_spent(utxo_set: &HashMap<[u8; 20], Vec<Utxo>>, tx_in: &TxIn) -> bool {
     // recorrer todos los hashes y ver si tiene el outpoint que apunta al tx_in que quiero
     let tx_hash = tx_in.previous_output.hash;
 
@@ -78,9 +72,7 @@ pub fn is_tx_spent(utxo_set: &HashMap<String, Vec<Utxo>>, tx_in: &TxIn) -> bool 
 }
 
 // Add UTXO to each UTXO
-pub fn generate_utxos(utxo_set: &mut HashMap<String, Vec<Utxo>>, tx: &Tx) {
-    let mut utxos = Vec::new();
-
+pub fn generate_utxos(utxo_set: &mut BTreeMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
     for (index, tx_out) in tx.tx_out.iter().enumerate() {
         //  Creo un outpoint a partir de la TxOut
         let utxo = Utxo {
@@ -97,13 +89,11 @@ pub fn generate_utxos(utxo_set: &mut HashMap<String, Vec<Utxo>>, tx: &Tx) {
             continue;
         }
 
-        let mut aux = [0u8; 20];
-        aux.copy_from_slice(&pk_script[2..22]);
-
-        let address = get_address_base58(aux);
+        let mut pk_hash = [0u8; 20];
+        pk_hash.copy_from_slice(&pk_script[2..22]);
 
         // append to address this UTXO
-        utxos = match utxo_set.get(&address) {
+        let utxos = match utxo_set.get(&pk_hash) {
             Some(utxos) => {
                 let mut utxos = utxos.clone();
                 utxos.push(utxo);
@@ -116,7 +106,7 @@ pub fn generate_utxos(utxo_set: &mut HashMap<String, Vec<Utxo>>, tx: &Tx) {
             }
         };
 
-        utxo_set.insert(address, utxos);
+        utxo_set.insert(pk_hash, utxos);
     }
 }
 

@@ -27,7 +27,7 @@ pub struct NodeManager {
     config: Config,
     logger_tx: Sender<String>,
     blocks: Vec<Block>,
-    utxo_set: HashMap<String, Vec<Utxo>>, // utxo_set is a Hash with key <address> and value <OutPoint>
+    utxo_set: BTreeMap<[u8; 20], Vec<Utxo>>, // utxo_set is a Hash with key <address> and value <OutPoint>
     blocks_btreemap: BTreeMap<[u8; 32], usize>,
 }
 
@@ -70,7 +70,7 @@ impl NodeManager {
             node_network: NodeNetwork::new(logger_tx),
             logger_tx: logger_tx_cloned,
             blocks: vec![], // inicializar el block genesis (con el config)
-            utxo_set: HashMap::new(),
+            utxo_set: BTreeMap::new(),
             blocks_btreemap: BTreeMap::new(),
         }
     }

@@ -11,6 +11,7 @@ use gtk::subclass::prelude::*;
 
 use crate::APP_ID;
 use crate::transaction_object::TransactionObject;
+use crate::transaction_row::TransactionRow;
 
 mod imp;
 
@@ -186,6 +187,59 @@ impl Window {
     // }
 
     fn setup_factory(&self) {
+        // Create a new factory
+        let factory = SignalListItemFactory::new();
+
+        // Create an empty `TransactionRow` during setup
+        //Emitted when a new listitem has been created and needs to be setup for use.
+        // It is the first signal emitted for every listitem.
+        factory.connect_setup(move |_, list_item| {
+            // Create `TransactionRow`
+            let transaction_row = TransactionRow::new(); //is like a box with a label
+            list_item
+                .downcast_ref::<ListItem>()
+                .expect("Needs to be ListItem")
+                .set_child(Some(&transaction_row));
+        });
+
+        // Tell factory how to bind `TransactionRow` to a `TransactionObject`
+        //Emitted when an object has been bound, for example when a new item has been set on a ListItem and should be bound for use.
+        // After this signal was emitted, the object might be shown in a ListView or other widget.
+        factory.connect_bind(move |_, list_item| {
+            // Get `TransactionObject` from `ListItem`
+            let transaction_object = list_item
+                .downcast_ref::<ListItem>()
+                .expect("Needs to be ListItem")
+                .item()
+                .and_downcast::<TransactionObject>()
+                .expect("Needs to be TransactionObject");
+            // Get `TransactionRow` from `ListItem`
+            let transaction_row = list_item
+                .downcast_ref::<ListItem>()
+                .expect("Needs to be ListItem")
+                .child()
+                .and_downcast::<TransactionRow>()
+                .expect("The child has to be a `TaskRow`.");
+
+            transaction_row.bind(&transaction_object);
+        });
+
+        // Tell factory how to unbind `TransactionRow` from `TransactionObject`
+        //Emitted when a object has been unbound from its item, for example when a listitem was removed from use in a list widget and its new item is about to be unset.
+        // This signal is the opposite of the bind signal and should be used to undo everything done in that signal.
+        factory.connect_unbind(move |_, list_item| {
+            // Get `TaskRow` from `ListItem`
+            let transaction_row = list_item
+                .downcast_ref::<ListItem>()
+                .expect("Needs to be ListItem")
+                .child()
+                .and_downcast::<TransactionRow>()
+                .expect("The child has to be a `TaskRow`.");
+
+            transaction_row.unbind();
+        });
+
+        self.imp().transactions_list.set_factory(Some(&factory));
         // // Create a new factory
         // let factory = SignalListItemFactory::new();
         //
@@ -266,5 +320,5 @@ impl Window {
         // );
         // self.add_action(&action_remove_done_tasks);
     }
-    // ANCHOR_END: setup_actions
+// ANCHOR_END: setup_actions
 }

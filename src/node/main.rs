@@ -35,7 +35,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     node_manager.handshake();
     // node_manager.initial_block_download()?;
-    node_manager.listen()?;
+    node_manager.listen();
 
     logger_thread.join().unwrap();
 

@@ -5,6 +5,7 @@ use crate::net::message::get_data_inv::Inventory;
 use crate::net::message::get_data_inv::PayloadGetDataInv;
 use crate::net::message::get_headers::PayloadGetHeaders;
 use crate::net::message::ping_pong::PayloadPingPong;
+use crate::net::message::tx::Tx;
 use crate::net::message::version::PayloadVersion;
 use crate::net::message::MessagePayload;
 use crate::net::p2p_connection::P2PConnection;
@@ -26,6 +27,7 @@ pub struct NodeManager {
     blocks: Vec<Block>,
     utxo_set: HashMap<[u8; 32], Vec<Utxo>>,
     blocks_btreemap: BTreeMap<[u8; 32], usize>,
+    pending_txns: HashMap<Vec<u8>, Tx>,
 }
 
 impl NodeManager {
@@ -35,10 +37,13 @@ impl NodeManager {
         }
     }
 
-    pub fn listen(&mut self) -> Result<(), String> {
-        let listener = TcpListener::bind("127.0.0.1:8080").unwrap();
+    pub fn listen(&mut self) {
+        let listener = TcpListener::bind("127.0.0.1:18333").unwrap();
 
-        log(self.logger_tx.clone(), format!("Listening on port 8080..."));
+        log(
+            self.logger_tx.clone(),
+            format!("Listening on port 18333..."),
+        );
 
         // Wait for a connection.
         match listener.accept() {
@@ -63,8 +68,6 @@ impl NodeManager {
         loop {
             self.wait_for(vec![]);
         }
-
-        Ok(())
     }
 
     pub fn new(config: Config, logger_tx: Sender<String>) -> NodeManager {
@@ -76,6 +79,7 @@ impl NodeManager {
             blocks: vec![], // inicializar el block genesis (con el config)
             utxo_set: HashMap::new(),
             blocks_btreemap: BTreeMap::new(),
+            pending_txns: HashMap::new(),
         }
     }
 
@@ -255,6 +259,13 @@ impl NodeManager {
                             format!("Received tx from {}", peer_address),
                         );
 
+                        // TODO: Validations
+                        // 1. The inputs are previously unspent.
+                        // 2. The sum of the inputs is greater than or equal to the sum of the outputs.
+                        // 3. The ScriptSig successfully unlocks the previous ScriptPubKey.
+
+                        self.pending_txns.insert(tx.id.clone().to_vec(), tx.clone());
+
                         let tx_message = MessagePayload::Tx(tx.clone());
 
                         self.broadcast(&tx_message);
@@ -265,12 +276,33 @@ impl NodeManager {
                             format!("Received getdata from {}", peer_address),
                         );
 
-                        // let tx_message = MessagePayload::Tx(get_data.inventories[0].hash.clone());
+                        for inv in get_data.inventories.clone() {
+                            if inv.inv_type != 1 {
+                                continue;
+                            };
 
-                        // self.send_to(
-                        //     peer_address.clone(),
-                        //     &MessagePayload::Tx(&tx_message),
-                        // )
+                            let tx_pending = match self.pending_txns.get(&inv.hash) {
+                                Some(tx_pending) => {
+                                    log(
+                                        self.logger_tx.clone(),
+                                        format!("Tx found in pending txns"),
+                                    );
+                                    tx_pending
+                                }
+                                None => {
+                                    log(
+                                        self.logger_tx.clone(),
+                                        format!("Tx not found in pending txns"),
+                                    );
+                                    continue;
+                                }
+                            };
+
+                            self.send_to(
+                                peer_address.clone(),
+                                &MessagePayload::Tx(tx_pending.clone()),
+                            );
+                        }
                     }
                     _ => {
                         log(

@@ -128,8 +128,15 @@
                             </object>
                         </child>
                         <child>
-                            <object class="GtkColumnView" id="transactions_columnview">
-                                <!-- The columns will be added dynamically in Rust code -->
+                            <object class="GtkScrolledWindow">
+                                <property name="hscrollbar-policy">never</property>
+                                <property name="min-content-height">360</property>
+                                <property name="vexpand">true</property>
+                                <child>
+                                    <object class="GtkListView" id="transactions_list">
+                                        <property name="valign">start</property>
+                                    </object>
+                                </child>
                             </object>
                         </child>
                     </object>

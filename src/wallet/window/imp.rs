@@ -12,7 +12,12 @@ use gtk::subclass::prelude::*;
 #[template(resource = "/org/gtk_rs/wallet-rustica/window.ui")]
 pub struct Window {
     #[template_child]
-    pub transactions_columnview: TemplateChild<ColumnView>,
+    pub pay_to_entry: TemplateChild<Entry>,
+    #[template_child]
+    pub amount_entry: TemplateChild<Entry>,
+    #[template_child]
+    pub transactions_list: TemplateChild<ListView>,
+    pub transactions: RefCell<Option<gio::ListStore>>,
 }
 
 // The central trait for subclassing a GObject
@@ -42,8 +47,7 @@ impl ObjectImpl for Window {
 
         // Setup
         let obj = self.obj();
-        obj.setup_settings();
-        obj.setup_tasks();
+        obj.setup_transactions();
         obj.setup_callbacks();
         obj.setup_factory();
     }

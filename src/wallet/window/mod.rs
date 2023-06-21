@@ -91,7 +91,7 @@ impl Window {
     // // ANCHOR_END: filter
 
     // ANCHOR: setup_tasks
-    fn setup_tasks(&self) {
+    fn setup_transactions(&self) {
         // // Create new model
         // let model = gio::ListStore::new(TaskObject::static_type());
         //

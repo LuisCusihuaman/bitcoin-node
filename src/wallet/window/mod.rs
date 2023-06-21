@@ -10,6 +10,7 @@ use gtk::{ListItem, prelude::*};
 use gtk::subclass::prelude::*;
 
 use crate::APP_ID;
+use crate::transaction_object::TransactionObject;
 
 mod imp;
 
@@ -90,8 +91,27 @@ impl Window {
     // }
     // // ANCHOR_END: filter
 
+    // ANCHOR: tasks
+    fn transactions(&self) -> gio::ListStore {
+        // Get state
+        self.imp()
+            .transactions
+            .borrow()
+            .clone()
+            .expect("Could not get current transactions.")
+    }
+
     // ANCHOR: setup_tasks
     fn setup_transactions(&self) {
+        // Create new mode
+        let model = gio::ListStore::new(TransactionObject::static_type());
+
+        // Get state and set model
+        self.imp().transactions.replace(Some(model));
+
+        // Wrap model with selection and pass it to the list view
+        let selection_model = NoSelection::new(Some(self.transactions()));
+        self.imp().transactions_list.set_model(Some(&selection_model));
         // // Create new model
         // let model = gio::ListStore::new(TaskObject::static_type());
         //

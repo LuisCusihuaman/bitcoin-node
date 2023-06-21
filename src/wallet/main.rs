@@ -1,4 +1,5 @@
 mod grid_cell;
+mod transaction_object;
 mod window;
 
 use gtk::prelude::*;

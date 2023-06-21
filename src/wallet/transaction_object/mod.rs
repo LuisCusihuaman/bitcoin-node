@@ -9,9 +9,10 @@ glib::wrapper! {
 }
 
 impl TransactionObject {
-    pub fn new(content: String) -> Self {
+    pub fn new(address: String, amount: String) -> Self {
         Object::builder()
-            .property("content", content)
+            .property("address", address)
+            .property("amount", amount)
             .build()
     }
 }
@@ -20,6 +21,7 @@ impl TransactionObject {
 // ANCHOR: task_data
 #[derive(Default)]
 pub struct TransactionData {
-    pub content: String,
+    pub address: String,
+    pub amount: String,
 }
 // ANCHOR: task_data

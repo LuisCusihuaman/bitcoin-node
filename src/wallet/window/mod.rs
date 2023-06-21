@@ -135,17 +135,20 @@ impl Window {
     // ANCHOR_END: setup_tasks
     // ANCHOR: new_transaction
     fn new_transaction(&self) {
-        // Get content from entry and clear it
-        let buffer = self.imp().pay_to_entry.buffer();
-        let content = buffer.text().to_string();
-        if content.is_empty() {
+        // Get Transaction from entry and clear it
+        let buffer_address = self.imp().pay_to_entry.buffer();
+        let buffer_amount = self.imp().amount_entry.buffer();
+        let address = buffer_address.text().to_string();
+        let amount = buffer_amount.text().to_string();
+        if address.is_empty() || amount.is_empty() {
             return;
         }
         //clean buffer
-        buffer.set_text("");
+        buffer_address.set_text("");
+        buffer_amount.set_text("");
 
         // Add new transaction to model
-        let transaction = TransactionObject::new(content);
+        let transaction = TransactionObject::new(address, amount);
         self.transactions().append(&transaction); // added to a 'model' store
     }
     // ANCHOR_END: new_task
@@ -154,7 +157,7 @@ impl Window {
         self.imp()
             .send_transaction_button
             .connect_clicked(clone!(@weak self as window => move |_| {
-            window.new_transaction();
+                window.new_transaction();
             }));
         // // Setup callback for activation of the entry
         // self.imp()
@@ -188,12 +191,12 @@ impl Window {
 
     fn setup_factory(&self) {
         // Create a new factory
-        let factory = SignalListItemFactory::new();
+        let factory_address = SignalListItemFactory::new();
 
         // Create an empty `TransactionRow` during setup
         //Emitted when a new listitem has been created and needs to be setup for use.
         // It is the first signal emitted for every listitem.
-        factory.connect_setup(move |_, list_item| {
+        factory_address.connect_setup(move |_, list_item| {
             // Create `TransactionRow`
             let transaction_row = TransactionRow::new(); //is like a box with a label
             list_item
@@ -205,7 +208,7 @@ impl Window {
         // Tell factory how to bind `TransactionRow` to a `TransactionObject`
         //Emitted when an object has been bound, for example when a new item has been set on a ListItem and should be bound for use.
         // After this signal was emitted, the object might be shown in a ListView or other widget.
-        factory.connect_bind(move |_, list_item| {
+        factory_address.connect_bind(move |_, list_item| {
             // Get `TransactionObject` from `ListItem`
             let transaction_object = list_item
                 .downcast_ref::<ListItem>()
@@ -219,32 +222,75 @@ impl Window {
                 .expect("Needs to be ListItem")
                 .child()
                 .and_downcast::<TransactionRow>()
-                .expect("The child has to be a `TaskRow`.");
+                .expect("The child has to be a `TransactionRow`.");
 
-            transaction_row.bind(&transaction_object);
+            transaction_row.bind("address", &transaction_object);
         });
 
         // Tell factory how to unbind `TransactionRow` from `TransactionObject`
         //Emitted when a object has been unbound from its item, for example when a listitem was removed from use in a list widget and its new item is about to be unset.
         // This signal is the opposite of the bind signal and should be used to undo everything done in that signal.
-        factory.connect_unbind(move |_, list_item| {
-            // Get `TaskRow` from `ListItem`
+        factory_address.connect_unbind(move |_, list_item| {
+            // Get `TransactionRow` from `ListItem`
             let transaction_row = list_item
                 .downcast_ref::<ListItem>()
                 .expect("Needs to be ListItem")
                 .child()
                 .and_downcast::<TransactionRow>()
-                .expect("The child has to be a `TaskRow`.");
+                .expect("The child has to be a `TransactionRow`.");
 
             transaction_row.unbind();
         });
 
-        self.imp().transactions_list.set_title(Option::from("Address"));
-        self.imp().transactions_list.set_factory(Some(&factory));
+        self.imp().address_column.set_factory(Some(&factory_address));
+
+        let factory_amount = SignalListItemFactory::new();
+
+        factory_amount.connect_setup(move |_, list_item| {
+            // Create `TransactionRow`
+            let transaction_row = TransactionRow::new(); //is like a box with a label
+            list_item
+                .downcast_ref::<ListItem>()
+                .expect("Needs to be ListItem")
+                .set_child(Some(&transaction_row));
+        });
+
+        factory_amount.connect_bind(move |_, list_item| {
+            // Get `TransactionObject` from `ListItem`
+            let transaction_object = list_item
+                .downcast_ref::<ListItem>()
+                .expect("Needs to be ListItem")
+                .item()
+                .and_downcast::<TransactionObject>()
+                .expect("Needs to be TransactionObject");
+            // Get `TransactionRow` from `ListItem`
+            let transaction_row = list_item
+                .downcast_ref::<ListItem>()
+                .expect("Needs to be ListItem")
+                .child()
+                .and_downcast::<TransactionRow>()
+                .expect("The child has to be a `TransactionRow`.");
+
+            transaction_row.bind("amount", &transaction_object);
+        });
+
+        factory_amount.connect_unbind(move |_, list_item| {
+            // Get `TransactionRow` from `ListItem`
+            let transaction_row = list_item
+                .downcast_ref::<ListItem>()
+                .expect("Needs to be ListItem")
+                .child()
+                .and_downcast::<TransactionRow>()
+                .expect("The child has to be a `TransactionRow`.");
+
+            transaction_row.unbind();
+        });
+
+        self.imp().amount_column.set_factory(Some(&factory_amount));
         // // Create a new factory
         // let factory = SignalListItemFactory::new();
         //
-        // // Create an empty `TaskRow` during setup
+        // // Create an empty `TransactionRow` during setup
         // factory.connect_setup(move |_, list_item| {
         //     // Create `TaskRow`
         //     let task_row = TaskRow::new();

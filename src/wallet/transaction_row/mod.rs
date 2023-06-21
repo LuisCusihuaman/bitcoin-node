@@ -27,14 +27,14 @@ impl TransactionRow {
         Object::builder().build()
     }
     // ANCHOR: bind
-    pub fn bind(&self, transaction_object: &TransactionObject) {
+    pub fn bind(&self, attribute: &str, transaction_object: &TransactionObject) {
         // Get state
         let content_label = self.imp().content_label.get();
         let mut bindings = self.imp().bindings.borrow_mut();
 
         // Bind `transaction_object.content` to `transaction_row.content_label.label`
         let content_label_binding = transaction_object
-            .bind_property("content", &content_label, "label")
+            .bind_property(attribute, &content_label, "label")
             .sync_create()
             .build();
         // Save binding

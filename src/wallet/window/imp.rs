@@ -20,7 +20,9 @@ pub struct Window {
     #[template_child]
     pub transactions_view: TemplateChild<ColumnView>,
     #[template_child]
-    pub transactions_list: TemplateChild<ColumnViewColumn>,
+    pub address_column: TemplateChild<ColumnViewColumn>,
+    #[template_child]
+    pub amount_column: TemplateChild<ColumnViewColumn>,
     pub transactions: RefCell<Option<gio::ListStore>>,
 }
 

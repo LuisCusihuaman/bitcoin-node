@@ -133,8 +133,14 @@
                                 <property name="min-content-height">360</property>
                                 <property name="vexpand">true</property>
                                 <child>
-                                    <object class="GtkListView" id="transactions_list">
+                                    <object class="GtkColumnView" id="transactions_view">
                                         <property name="valign">start</property>
+                                        <child>
+                                            <object class="GtkColumnViewColumn" id="transactions_list">
+                                                <property name="title">Transaction</property>
+                                                    <!-- Add your desired widget for each transaction item -->
+                                            </object>
+                                        </child>
                                     </object>
                                 </child>
                             </object>

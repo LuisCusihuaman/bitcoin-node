@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 
 use glib::subclass::InitializingObject;
-use gtk::{ColumnView, CompositeTemplate, Entry, gio, glib, ListView};
+use gtk::{ColumnView, ColumnViewColumn, CompositeTemplate, Entry, gio, glib, ListView};
 use gtk::gio::Settings;
 use gtk::glib::once_cell::unsync::OnceCell;
 use gtk::subclass::prelude::*;
@@ -18,7 +18,9 @@ pub struct Window {
     #[template_child]
     pub send_transaction_button: TemplateChild<gtk::Button>,
     #[template_child]
-    pub transactions_list: TemplateChild<ListView>,
+    pub transactions_view: TemplateChild<ColumnView>,
+    #[template_child]
+    pub transactions_list: TemplateChild<ColumnViewColumn>,
     pub transactions: RefCell<Option<gio::ListStore>>,
 }
 

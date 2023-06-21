@@ -1,4 +1,3 @@
-mod grid_cell;
 mod transaction_object;
 mod transaction_row;
 mod window;

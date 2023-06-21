@@ -112,7 +112,7 @@ impl Window {
 
         // Wrap model with selection and pass it to the list view
         let selection_model = NoSelection::new(Some(self.transactions()));
-        self.imp().transactions_list.set_model(Some(&selection_model));
+        self.imp().transactions_view.set_model(Some(&selection_model));
         // // Create new model
         // let model = gio::ListStore::new(TaskObject::static_type());
         //
@@ -146,7 +146,7 @@ impl Window {
 
         // Add new transaction to model
         let transaction = TransactionObject::new(content);
-        self.transactions().append(&transaction);
+        self.transactions().append(&transaction); // added to a 'model' store
     }
     // ANCHOR_END: new_task
     // ANCHOR: setup_callbacks
@@ -239,6 +239,7 @@ impl Window {
             transaction_row.unbind();
         });
 
+        self.imp().transactions_list.set_title(Option::from("Address"));
         self.imp().transactions_list.set_factory(Some(&factory));
         // // Create a new factory
         // let factory = SignalListItemFactory::new();

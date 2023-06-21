@@ -55,7 +55,7 @@ impl ObjectImpl for Window {
         let obj = self.obj();
         obj.setup_transactions();
         obj.setup_callbacks();
-        obj.setup_factory();
+        obj.setup_factories();
     }
 }
 // ANCHOR_END: constructed

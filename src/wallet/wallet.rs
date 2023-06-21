@@ -10,9 +10,8 @@ use bitcoin_hashes::hash160;
 use bitcoin_hashes::Hash;
 use rand::rngs::OsRng;
 use rand::Rng;
-use secp256k1::{PublicKey, Secp256k1, SecretKey};
+use secp256k1::{Secp256k1, SecretKey};
 use std::sync::mpsc::Sender;
-use std::time::Duration;
 use std::vec;
 
 pub struct Wallet {
@@ -71,7 +70,7 @@ impl Wallet {
                     let signed_tx = self.sign_tx(tx);
 
                     // send the Tx to the node
-                    self.send(MessagePayload::WalletTx(signed_tx));
+                    self.send(MessagePayload::Tx(signed_tx));
                 }
 
                 _ => continue,
@@ -79,7 +78,7 @@ impl Wallet {
         }
     }
 
-    fn create_tx(&mut self, mut utxos: Vec<Utxo>) -> Option<Tx> {
+    fn create_tx(&mut self, utxos: Vec<Utxo>) -> Option<Tx> {
         // Validating Transactions
 
         // 1. The inputs of the transaction are previously unspent. The fact that we ask the node for the UTXOs

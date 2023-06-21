@@ -5,7 +5,7 @@ use gtk::subclass::prelude::*;
 #[template(resource = "/org/gtk_rs/wallet-rustica/grid_cell.ui")]
 pub struct GridCell {
     #[template_child]
-    pub name: TemplateChild<gtk::Inscription>,
+    pub name: TemplateChild<gtk::Label>,
 }
 
 #[glib::object_subclass]

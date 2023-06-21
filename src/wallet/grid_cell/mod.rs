@@ -31,7 +31,7 @@ impl GridCell {
     }
 
     pub fn set_entry(&self, entry: &Entry) {
-        self.imp().name.set_text(Some(&entry.name));
+        self.imp().name.set_label(&entry.name);
     }
     fn setup_factory(&self) {
         let store = gio::ListStore::new(BoxedAnyObject::static_type());

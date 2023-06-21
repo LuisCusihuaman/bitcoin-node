@@ -19,7 +19,7 @@ impl TransactionObject {
 
 // ANCHOR: task_data
 #[derive(Default)]
-pub struct TaskData {
+pub struct TransactionData {
     pub content: String,
 }
 // ANCHOR: task_data

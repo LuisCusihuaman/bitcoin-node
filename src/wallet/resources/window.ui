@@ -111,7 +111,7 @@
                             </object>
                         </child>
                         <child>
-                            <object class="GtkButton">
+                            <object class="GtkButton" id="send_transaction_button">
                                 <property name="label">SEND</property>
                                 <property name="icon-name">document-send</property>
                                 <property name="name">send_transaction_button</property>

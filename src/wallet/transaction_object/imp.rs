@@ -5,7 +5,7 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use super::TaskData;
+use super::TransactionData;
 
 // ANCHOR: struct_and_subclass
 // Object holding the state
@@ -13,7 +13,7 @@ use super::TaskData;
 #[properties(wrapper_type = super::TransactionObject)]
 pub struct TransactionObject {
     #[property(name = "content", get, set, type = String, member = content)]
-    pub data: RefCell<TaskData>,
+    pub data: RefCell<TransactionData>,
 }
 
 // The central trait for subclassing a GObject

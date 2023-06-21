@@ -107,7 +107,7 @@ impl Window {
         let model = gio::ListStore::new(TransactionObject::static_type());
 
         // Get state and set model
-        self.imp().transactions.replace(Some(model));
+        self.imp().transactions.replace(Some(model)); //transaction: Option<RefCell<gio::ListStore>>,
 
         // Wrap model with selection and pass it to the list view
         let selection_model = NoSelection::new(Some(self.transactions()));
@@ -132,9 +132,29 @@ impl Window {
         // );
     }
     // ANCHOR_END: setup_tasks
+    // ANCHOR: new_transaction
+    fn new_transaction(&self) {
+        // Get content from entry and clear it
+        let buffer = self.imp().pay_to_entry.buffer();
+        let content = buffer.text().to_string();
+        if content.is_empty() {
+            return;
+        }
+        //clean buffer
+        buffer.set_text("");
 
+        // Add new transaction to model
+        let transaction = TransactionObject::new(content);
+        self.transactions().append(&transaction);
+    }
+    // ANCHOR_END: new_task
     // ANCHOR: setup_callbacks
     fn setup_callbacks(&self) {
+        self.imp()
+            .send_transaction_button
+            .connect_clicked(clone!(@weak self as window => move |_| {
+            window.new_transaction();
+            }));
         // // Setup callback for activation of the entry
         // self.imp()
         //     .entry

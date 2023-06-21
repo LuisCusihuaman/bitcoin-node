@@ -44,7 +44,10 @@ impl NodeManager {
         // Wait for a connection.
         match listener.accept() {
             Ok((stream, addr)) => {
-                println!("Wallet conected successfully: {addr}");
+                log(
+                    self.logger_tx.clone(),
+                    format!("Wallet connected successfully: {addr}"),
+                );
 
                 let connection = P2PConnection {
                     logger_tx: self.logger_tx.clone(),
@@ -57,6 +60,8 @@ impl NodeManager {
             }
             Err(e) => println!("couldn't connect to wallet: {e:?}"),
         }
+
+        log(self.logger_tx.clone(), format!("Listening on port 8080..."));
 
         loop {
             self.wait_for(vec![]);
@@ -252,7 +257,6 @@ impl NodeManager {
                             matched_peer_messages.push(MessagePayload::Pong(pong.clone()));
                         }
                     }
-
                     MessagePayload::GetUTXOs(payload) => {
                         log(
                             self.logger_tx.clone(),
@@ -278,11 +282,13 @@ impl NodeManager {
                             }),
                         );
                     }
-
-                    // MessagePayload::WalletTx(tx) => {
-                    //     self.log(format!("Received tx from wallet"));
-
-                    // }
+                    MessagePayload::Tx(_tx) => {
+                        log(
+                            self.logger_tx.clone(),
+                            format!("Received tx from {}", peer_address),
+                        );
+                        // TODO Broadcasting de la tx
+                    }
                     _ => {
                         log(
                             self.logger_tx.clone(),

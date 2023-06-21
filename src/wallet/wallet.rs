@@ -443,12 +443,6 @@ mod tests {
 
         wallet.add_user(messi.clone());
 
-        // address bitcoin = "maksjhduyihjkdr232389748heiuy4ow8u"
-        // address: [u8; 20] = hash160(pub_key)
-
-        // TODO de una TxOut necesitamos el address bitcoin
-
-        // TODO : chequear el to
         wallet.create_pending_tx(messi.clone(), "mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb", 10.0);
 
         wallet.receive();

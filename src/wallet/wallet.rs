@@ -299,6 +299,7 @@ impl User {
 #[cfg(test)]
 mod tests {
     use bitcoin_hashes::sha256;
+    use bs58::decode;
     use secp256k1::ffi::{secp256k1_ecdsa_signature_serialize_der, PublicKey};
     use secp256k1::Message;
 
@@ -452,27 +453,20 @@ mod tests {
     }
 
     #[test]
-    fn create_tx() -> Result<(), String> {
+    fn create_tx_from_jimmy_song() -> Result<(), String> {
         let priv_key_wif = "cSM1NQcoCMDP8jy2AMQWHXTLc9d4HjSr7H4AqxKk2bD1ykbaRw59".to_string();
 
         let messi = User::new("Messi".to_string(), priv_key_wif, false);
 
-        // In this example, we will pay 0.1 testnet bitcoins (tBTC) to mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb (nuestra otra cuenta)
-        // we have an output denoted by a transaction ID and output index bce66d595cff8650ac37fc181727f1c5c6a8731409694b29708f368a1289cc7b:1
-        // (0.01302208 tBTC) we’ll send the bitcoins back to outselves to mpiQbuypLNHoUCXeFtrS956jPSNhwmYwai (nuestra cuenta actual)
-        // we’ll use 0.001 tBTC as our fee
-
-        // 1 BTC = 100,000,000 SAT.
-
-        // 0.01302208 BTC in wallet
-        // 0.001 BTC for fee
-        // 0.001 BTC to send
-        // 0.01102208 BTC to receive
-
-        let signature_script: Vec<u8> = vec![
-            0x76, 0xa9, 0x14, 0x64, 0xe3, 0xab, 0x1b, 0xbc, 0xa0, 0xd2, 0x74, 0x6e, 0x51, 0x61,
-            0x41, 0x61, 0xa9, 0x15, 0x80, 0x31, 0xcf, 0xb8, 0xed, 0x88, 0xac,
-        ];
+        // p2pkh ScriptPubKey, or locking script
+        // let signature_script: Vec<u8> = vec![
+        //      0x76,
+        //      0xa9,
+        //      0x14,
+        //      0x64, 0xe3, 0xab, 0x1b, 0xbc, 0xa0, 0xd2, 0x74, 0x6e, 0x51, 0x61, 0x41, 0x61, 0xa9, 0x15, 0x80, 0x31, 0xcf, 0xb8, 0xed,
+        //      0x88,
+        //      0xac,
+        // ];
 
         let tx_in_1 = TxIn {
             previous_output: OutPoint {
@@ -483,9 +477,9 @@ mod tests {
                 ],
                 index: 1,
             },
-            script_length: signature_script.len(),
-            signature_script,
-            sequence: 0,
+            script_length: 0, // signature_script.len(),
+            signature_script: vec![],
+            sequence: 4294967294,
         };
 
         // Target tx_out
@@ -536,34 +530,159 @@ mod tests {
         let mut buffer = [0u8; 1];
         let mut tx_bytes = tx.encode(&mut buffer);
 
-        println!("{:?}", tx);
-        println!("tx_bytes{:?}", tx_bytes);
-
         tx_bytes.extend([0x01, 0x00, 0x00, 0x00]);
 
-        // let signature_hash = sha256::Hash::hash(&tx_bytes); // signature hash
-        let signature_hash = double_sha256(&tx_bytes).to_byte_array(); // signature hash
-        println!("signature_hash: {:?}", signature_hash);
-
-        let private_key = messi.secret_key_bytes;
-        println!("private_key: {:?}", private_key);
-
         // firmar la transaccion
+        let private_key = messi.secret_key;
+        let signature_hash = double_sha256(&tx_bytes).to_byte_array(); // signature hash
+                                                                       // let signature_hash = sha256::Hash::hash(&tx_bytes); // signature hash
 
         let secp = Secp256k1::new();
-        let private_key = messi.secret_key;
-
         let message = Message::from_slice(&signature_hash).unwrap();
-
         let signature = secp.sign_ecdsa(&message.clone(), &private_key);
-
-        // println!("signature: {:?}", signature);
-
         let signature_bytes = signature.clone().serialize_der().to_vec();
-        // println!("signature_bytes: {:?}", signature_bytes);
 
         tx.tx_in[0].signature_script = signature_bytes.clone();
         tx.tx_in[0].script_length = signature_bytes.len();
+
+        let expected_bytes = [
+            1, 0, 0, 0, 1, 129, 63, 121, 1, 26, 203, 128, 146, 93, 254, 105, 179, 222, 243, 85,
+            254, 145, 75, 209, 217, 106, 63, 95, 113, 191, 131, 3, 198, 169, 137, 199, 209, 0, 0,
+            0, 0, 107, 72, 48, 69, 2, 33, 0, 237, 129, 255, 25, 46, 117, 163, 253, 35, 4, 0, 77,
+            202, 219, 116, 111, 165, 226, 76, 80, 49, 204, 252, 242, 19, 32, 176, 39, 116, 87, 201,
+            143, 2, 32, 122, 152, 109, 149, 92, 110, 12, 179, 93, 68, 106, 137, 211, 245, 97, 0,
+            244, 215, 246, 120, 1, 195, 25, 103, 116, 58, 156, 142, 16, 97, 91, 237, 1, 33, 3, 73,
+            252, 78, 99, 30, 54, 36, 165, 69, 222, 63, 137, 245, 216, 104, 76, 123, 129, 56, 189,
+            148, 189, 213, 49, 210, 226, 19, 191, 1, 107, 39, 138, 254, 255, 255, 255, 2, 161, 53,
+            239, 1, 0, 0, 0, 0, 25, 118, 169, 20, 188, 59, 101, 77, 202, 126, 86, 176, 77, 202, 24,
+            242, 86, 108, 218, 240, 46, 141, 154, 218, 136, 172, 153, 195, 152, 0, 0, 0, 0, 0, 25,
+            118, 169, 20, 28, 75, 199, 98, 221, 84, 35, 227, 50, 22, 103, 2, 203, 117, 244, 13,
+            247, 159, 234, 18, 136, 172, 25, 67, 6, 0,
+        ];
+
+        println!("tx_bytes: {:?}", tx_bytes);
+
+        let mut offset = 0;
+        let expected_bytes = decode_internal_tx(&expected_bytes, &mut offset).unwrap();
+
+        // assert!(tx.id == expected_bytes.id);
+        assert!(tx.version == expected_bytes.version);
+        assert!(tx.flag == expected_bytes.flag);
+        assert!(tx.tx_in_count == expected_bytes.tx_in_count);
+        // assert!(tx.tx_in == expected_bytes.tx_in);
+        assert!(tx.tx_out_count == expected_bytes.tx_out_count);
+        // assert!(tx.tx_out == expected_bytes.tx_out);
+        assert!(tx.tx_witness == expected_bytes.tx_witness);
+        assert!(tx.lock_time == expected_bytes.lock_time);
+
+        Ok(())
+    }
+
+    #[test]
+    fn create_tx() -> Result<(), String> {
+        let priv_key_wif = "cSM1NQcoCMDP8jy2AMQWHXTLc9d4HjSr7H4AqxKk2bD1ykbaRw59".to_string();
+
+        let messi = User::new("Messi".to_string(), priv_key_wif, false);
+
+        // In this example, we will pay 0.1 testnet bitcoins (tBTC) to mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb (nuestra otra cuenta)
+        // we have an output denoted by a transaction ID and output index bce66d595cff8650ac37fc181727f1c5c6a8731409694b29708f368a1289cc7b:0
+        // (0.01302208 tBTC) we’ll send the bitcoins back to outselves to mpiQbuypLNHoUCXeFtrS956jPSNhwmYwai (nuestra cuenta actual)
+
+        // 0.01302208 BTC in wallet
+        // 0.001 BTC for fee
+        // 0.001 BTC to send
+        // 0.01102208 BTC to receive
+
+        let mut hash = [
+            0xbc, 0xe6, 0x6d, 0x59, 0x5c, 0xff, 0x86, 0x50, 0xac, 0x37, 0xfc, 0x18, 0x17, 0x27,
+            0xf1, 0xc5, 0xc6, 0xa8, 0x73, 0x14, 0x09, 0x69, 0x4b, 0x29, 0x70, 0x8f, 0x36, 0x8a,
+            0x12, 0x89, 0xcc, 0x7b,
+        ];
+
+        hash.reverse();
+
+        let tx_in_1 = TxIn {
+            previous_output: OutPoint {
+                hash: hash,
+                index: 0,
+            },
+            script_length: 0,
+            signature_script: vec![],
+            sequence: 0xffffffff,
+        };
+
+        // Target tx_out
+        let value = (0.001 * 100_000_000.0) as u64;
+
+        let mut p2kh_script_target: Vec<u8> = Vec::new();
+        p2kh_script_target.extend([0x76]); // 0x76 = OP_DUP
+        p2kh_script_target.extend([0xa9]); // 0xa9 = OP_HASH160
+        p2kh_script_target.extend(pk_hash_from_addr("mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb"));
+        p2kh_script_target.extend([0x88]); // 0x88 = OP_EQUALVERIFY
+        p2kh_script_target.extend([0xac]); // 0xac = OP_CHECKSIG
+
+        let tx_out_target = TxOut {
+            value: value,
+            pk_script_length: p2kh_script_target.len(),
+            pk_script: p2kh_script_target.clone(),
+        };
+
+        // Change tx_out
+        let change = (0.01102208 * 100_000_000.0) as u64;
+
+        let mut p2pkh_script_change: Vec<u8> = Vec::new();
+        p2pkh_script_change.extend([0x76]); // 0x76 = OP_DUP
+        p2pkh_script_change.extend([0xa9]); // 0xa9 = OP_HASH160
+        p2pkh_script_change.extend(pk_hash_from_addr("mpiQbuypLNHoUCXeFtrS956jPSNhwmYwai"));
+        p2pkh_script_change.extend([0x88]); // 0x88 = OP_EQUALVERIFY
+        p2pkh_script_change.extend([0xac]); // 0xac = OP_CHECKSIG
+
+        let tx_out_change = TxOut {
+            value: change,
+            pk_script_length: p2pkh_script_change.len(),
+            pk_script: p2pkh_script_change.clone(),
+        };
+
+        // Create tx
+        let mut tx = Tx {
+            id: [0u8; 32],
+            version: 1,
+            flag: 0,
+            tx_in_count: 1,
+            tx_in: vec![tx_in_1],
+            tx_out_count: 2,
+            tx_out: vec![tx_out_target, tx_out_change],
+            tx_witness: vec![],
+            lock_time: 0,
+        };
+
+        let mut buffer = [0u8; 1];
+        let mut tx_bytes = tx.encode(&mut buffer);
+
+        tx_bytes.extend([1, 0, 0, 0]);
+
+        // let signature_hash = sha256::Hash::hash(&tx_bytes); // signature hash
+        let signature_hash = double_sha256(&tx_bytes).to_byte_array(); // signature hash
+
+        // firmar la transaccion
+        let secp = Secp256k1::new();
+        let private_key = messi.secret_key;
+        let message = Message::from_slice(&signature_hash).unwrap();
+        let signature = secp.sign_ecdsa(&message.clone(), &private_key);
+        let der_signature = signature.clone().serialize_der().to_vec();
+
+        // Agregar el tipo de hash (SIGHASH_ALL) al final de la firma
+        let signature_with_hash_type = [&der_signature[..], &[0x01]].concat();
+
+        // Obtener la representación comprimida de la clave pública
+        let public_key = messi.public_key;
+
+        let script_sig = [&signature_with_hash_type[..], &public_key[..]].concat();
+
+        println!("script_sig: {:?}", script_sig);
+
+        tx.tx_in[0].signature_script = script_sig.clone();
+        tx.tx_in[0].script_length = script_sig.len();
 
         let final_tx_encode = tx.encode(&mut buffer);
         println!("final_tx_encode: {:?}", final_tx_encode);
@@ -574,15 +693,6 @@ mod tests {
         //     secp.verify_ecdsa(&message.clone(), &signature.clone(), &public_key.clone()); // Devuelve OK(()) es que está verificada, es horrible esto
         // println!("verification_result: {:?}", verification_result);
 
-        let mut offset: usize = 0;
-        let tx_test = decode_internal_tx(&final_tx_encode, &mut offset);
-
-        println!("tx: {:?}", tx);
-
-        println!("tx_test: {:?}", tx_test);
-
         Ok(())
     }
 }
-
-// [1, 0, 0, 0, 1, 188, 230, 109, 89, 92, 255, 134, 80, 172, 55, 252, 24, 23, 39, 241, 197, 198, 168, 115, 20, 9, 105, 75, 41, 112, 143, 54, 138, 18, 137, 204, 123, 1, 0, 0, 0, 71, 48, 69, 2, 33, 0, 253, 227, 106, 209, 195, 168, 142, 86, 225, 135, 209, 172, 29, 149, 133, 168, 132, 96, 7, 130, 193, 97, 81, 169, 112, 141, 67, 194, 167, 4, 112, 10, 2, 32, 48, 13, 13, 125, 82, 223, 93, 137, 128, 65, 180, 250, 216, 141, 46, 239, 243, 27, 200, 242, 14, 189, 210, 0, 47, 128, 140, 32, 240, 33, 8, 137, 255, 255, 255, 255, 2, 160, 134, 1, 0, 0, 0, 0, 0, 24, 118, 169, 181, 51, 138, 19, 120, 118, 0, 187, 24, 163, 236, 151, 149, 117, 93, 82, 212, 10, 107, 236, 136, 172, 128, 209, 16, 0, 0, 0, 0, 0, 24, 118, 169, 100, 227, 171, 27, 188, 160, 210, 116, 110, 81, 97, 65, 97, 169, 21, 128, 49, 207, 184, 237, 136, 172, 0, 0, 0, 0]

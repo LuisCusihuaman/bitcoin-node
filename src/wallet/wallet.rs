@@ -601,25 +601,35 @@ mod tests {
 
         hash.reverse();
 
+        let mut script_prev_hash = [
+            0x76, 0xa9, 0x14, 0xb0, 0x99, 0xbf, 0xf0, 0x65, 0x3d, 0x67, 0xaf, 0x61, 0xc1, 0x83,
+            0xfe, 0xb3, 0xee, 0xfe, 0x05, 0xeb, 0xf5, 0xcf, 0x4e, 0x88, 0xac,
+        ];
+
+        script_prev_hash.reverse();
+
         let tx_in_1 = TxIn {
             previous_output: OutPoint {
                 hash: hash,
                 index: 0,
             },
-            script_length: 0,
-            signature_script: vec![],
+            script_length: script_prev_hash.len(),
+            signature_script: script_prev_hash.to_vec(),
             sequence: 0xffffffff,
         };
 
         // Target tx_out
         let value = (0.001 * 100_000_000.0) as u64;
 
+        let pk_hash_target = pk_hash_from_addr("mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb");
+
         let mut p2kh_script_target: Vec<u8> = Vec::new();
-        p2kh_script_target.extend([0x76]); // 0x76 = OP_DUP
-        p2kh_script_target.extend([0xa9]); // 0xa9 = OP_HASH160
-        p2kh_script_target.extend(pk_hash_from_addr("mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb"));
-        p2kh_script_target.extend([0x88]); // 0x88 = OP_EQUALVERIFY
-        p2kh_script_target.extend([0xac]); // 0xac = OP_CHECKSIG
+        p2kh_script_target.extend([118]); // 0x76 = OP_DUP
+        p2kh_script_target.extend([169]); // 0xa9 = OP_HASH160
+        p2kh_script_target.extend(vec![pk_hash_target.len() as u8]);
+        p2kh_script_target.extend(pk_hash_target);
+        p2kh_script_target.extend([136]); // 0x88 = OP_EQUALVERIFY
+        p2kh_script_target.extend([172]); // 0xac = OP_CHECKSIG
 
         let tx_out_target = TxOut {
             value: value,
@@ -630,12 +640,15 @@ mod tests {
         // Change tx_out
         let change = (0.01102208 * 100_000_000.0) as u64;
 
+        let pk_hash = messi.get_pk_hash();
+
         let mut p2pkh_script_change: Vec<u8> = Vec::new();
-        p2pkh_script_change.extend([0x76]); // 0x76 = OP_DUP
-        p2pkh_script_change.extend([0xa9]); // 0xa9 = OP_HASH160
-        p2pkh_script_change.extend(pk_hash_from_addr("mpiQbuypLNHoUCXeFtrS956jPSNhwmYwai"));
-        p2pkh_script_change.extend([0x88]); // 0x88 = OP_EQUALVERIFY
-        p2pkh_script_change.extend([0xac]); // 0xac = OP_CHECKSIG
+        p2pkh_script_change.extend([118]); // 0x76 = OP_DUP
+        p2pkh_script_change.extend([169]); // 0xa9 = OP_HASH160
+        p2pkh_script_change.extend(vec![pk_hash.len() as u8]);
+        p2pkh_script_change.extend(pk_hash);
+        p2pkh_script_change.extend([136]); // 0x88 = OP_EQUALVERIFY
+        p2pkh_script_change.extend([172]); // 0xac = OP_CHECKSIG
 
         let tx_out_change = TxOut {
             value: change,

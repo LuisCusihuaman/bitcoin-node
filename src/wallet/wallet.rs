@@ -5,7 +5,7 @@ use crate::net::message::tx::{OutPoint, Tx, TxIn, TxOut};
 use crate::net::message::MessagePayload;
 use crate::net::p2p_connection::P2PConnection;
 use crate::node::utxo::Utxo;
-use crate::utils::pubkeyhash_from_addr;
+use crate::utils::pk_hash_from_addr;
 use bitcoin_hashes::hash160;
 use bitcoin_hashes::Hash;
 use rand::rngs::OsRng;
@@ -199,11 +199,11 @@ impl Wallet {
     // Wallet crea la transacción
 
     fn create_pending_tx(&mut self, mut sender: User, receiver: &str, amount: f64) {
-        let addr_receiver = pubkeyhash_from_addr(receiver);
+        let addr_receiver = pk_hash_from_addr(receiver);
 
         // Create send utxo message
         let get_utxo_message = MessagePayload::GetUTXOs(PayloadGetUtxos {
-            address: sender.get_address(),
+            address: sender.get_pk_hash(),
         });
 
         // Send message to node
@@ -211,7 +211,7 @@ impl Wallet {
 
         // Save the pending transaction
         let pending = PendingTx {
-            from: sender.pubkeyhash,
+            from: sender.get_pk_hash(),
             to: addr_receiver,
             amount: amount,
             created: false,
@@ -232,7 +232,8 @@ pub struct PendingTx {
 #[derive(Clone, Debug)]
 pub struct User {
     pub name: String,
-    pub pubkeyhash: [u8; 20],
+    pub pk_hash: [u8; 20],
+    pub secret_key_bytes: Vec<u8>,
     pub secret_key: SecretKey,
     pub public_key: [u8; 33],
     pub txns_hist: Vec<Tx>,
@@ -245,33 +246,31 @@ impl User {
         let secp = Secp256k1::new();
 
         // Secret Key
-        let secret_key = match is_anonymous {
+        let secret_key_bytes = match is_anonymous {
             true => {
                 let mut private_key_bytes: [u8; 32] = [0; 32];
                 rng.fill(&mut private_key_bytes);
-                SecretKey::from_slice(&private_key_bytes).unwrap()
-            }
-            false => {
-                let priv_key_bytes = bs58::decode(priv_key_wif)
-                    .with_check(None)
-                    .into_vec()
-                    .unwrap();
 
-                // Crea la secretKey a partir de los bytes de la clave privada
-                // [0xef, secret_key (32 bytes), 0x01]
-                SecretKey::from_slice(&priv_key_bytes[1..33]).unwrap()
+                private_key_bytes.to_vec()
             }
+            false => bs58::decode(priv_key_wif)
+                .with_check(None)
+                .into_vec()
+                .unwrap(),
         };
+
+        let secret_key = SecretKey::from_slice(&secret_key_bytes[1..33]).unwrap();
 
         // Public key
         let public_key = secret_key.public_key(&secp).serialize();
 
         // Generate address
-        let pubkeyhash = hash160::Hash::hash(&public_key).to_byte_array();
+        let pk_hash = hash160::Hash::hash(&public_key).to_byte_array();
 
         User {
             name,
-            pubkeyhash,
+            pk_hash,
+            secret_key_bytes,
             secret_key,
             public_key,
             txns_hist: Vec::new(),
@@ -284,9 +283,8 @@ impl User {
         self.public_key
     }
 
-    // address = pubkeyHash
-    pub fn get_address(&self) -> [u8; 20] {
-        self.pubkeyhash
+    pub fn get_pk_hash(&self) -> [u8; 20] {
+        self.pk_hash
     }
 
     pub fn get_name(&self) -> String {
@@ -300,11 +298,15 @@ impl User {
 
 #[cfg(test)]
 mod tests {
+    use bitcoin_hashes::sha256;
+    use secp256k1::ffi::{secp256k1_ecdsa_signature_serialize_der, PublicKey};
+    use secp256k1::Message;
+
     use super::*;
     use crate::logger::Logger;
     use crate::net::message::ping_pong::PayloadPingPong;
-    use crate::net::message::tx::{OutPoint, Tx, TxIn, TxOut};
-    use crate::utils::get_address_base58;
+    use crate::net::message::tx::{decode_internal_tx, OutPoint, Tx, TxIn, TxOut};
+    use crate::utils::{double_sha256, get_address_base58};
 
     #[test]
     fn test_wallet_save_multiple_users() {
@@ -348,7 +350,7 @@ mod tests {
         let user = User::new("Alice".to_string(), "".to_string(), true);
 
         assert_eq!(user.get_name(), "Alice");
-        assert!(!user.get_address().is_empty());
+        assert!(!user.get_pk_hash().is_empty());
         assert!(!user.get_pub_key().is_empty());
         assert!(user.get_tx_hist().is_empty());
     }
@@ -368,8 +370,8 @@ mod tests {
         // [111, 181, 51, 138, 19, 120, 118, 0, 187, 24, 163, 236, 151, 149, 117, 93, 82, 212, 10, 107, 236]
         let user = User::new("bob".to_string(), priv_key_wif, false);
 
-        assert_eq!(user.get_address(), address_bytes[..]);
-        assert_eq!(get_address_base58(user.get_address()), address_wif);
+        assert_eq!(user.get_pk_hash(), address_bytes[..]);
+        assert_eq!(get_address_base58(user.get_pk_hash()), address_wif);
         assert_eq!(user.get_name(), "bob");
         assert!(user.get_tx_hist().is_empty());
     }
@@ -448,4 +450,139 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn create_tx() -> Result<(), String> {
+        let priv_key_wif = "cSM1NQcoCMDP8jy2AMQWHXTLc9d4HjSr7H4AqxKk2bD1ykbaRw59".to_string();
+
+        let messi = User::new("Messi".to_string(), priv_key_wif, false);
+
+        // In this example, we will pay 0.1 testnet bitcoins (tBTC) to mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb (nuestra otra cuenta)
+        // we have an output denoted by a transaction ID and output index bce66d595cff8650ac37fc181727f1c5c6a8731409694b29708f368a1289cc7b:1
+        // (0.01302208 tBTC) we’ll send the bitcoins back to outselves to mpiQbuypLNHoUCXeFtrS956jPSNhwmYwai (nuestra cuenta actual)
+        // we’ll use 0.001 tBTC as our fee
+
+        // 1 BTC = 100,000,000 SAT.
+
+        // 0.01302208 BTC in wallet
+        // 0.001 BTC for fee
+        // 0.001 BTC to send
+        // 0.01102208 BTC to receive
+
+        let signature_script: Vec<u8> = vec![
+            0x76, 0xa9, 0x14, 0x64, 0xe3, 0xab, 0x1b, 0xbc, 0xa0, 0xd2, 0x74, 0x6e, 0x51, 0x61,
+            0x41, 0x61, 0xa9, 0x15, 0x80, 0x31, 0xcf, 0xb8, 0xed, 0x88, 0xac,
+        ];
+
+        let tx_in_1 = TxIn {
+            previous_output: OutPoint {
+                hash: [
+                    0xbc, 0xe6, 0x6d, 0x59, 0x5c, 0xff, 0x86, 0x50, 0xac, 0x37, 0xfc, 0x18, 0x17,
+                    0x27, 0xf1, 0xc5, 0xc6, 0xa8, 0x73, 0x14, 0x09, 0x69, 0x4b, 0x29, 0x70, 0x8f,
+                    0x36, 0x8a, 0x12, 0x89, 0xcc, 0x7b,
+                ],
+                index: 1,
+            },
+            script_length: signature_script.len(),
+            signature_script,
+            sequence: 0,
+        };
+
+        // Target tx_out
+        let value = (0.001 * 100_000_000.0) as u64;
+
+        let mut p2kh_script_target: Vec<u8> = Vec::new();
+        p2kh_script_target.extend([0x76]); // 0x76 = OP_DUP
+        p2kh_script_target.extend([0xa9]); // 0xa9 = OP_HASH160
+        p2kh_script_target.extend(pk_hash_from_addr("mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb"));
+        p2kh_script_target.extend([0x88]); // 0x88 = OP_EQUALVERIFY
+        p2kh_script_target.extend([0xac]); // 0xac = OP_CHECKSIG
+
+        let tx_out_target = TxOut {
+            value: value,
+            pk_script_length: p2kh_script_target.len(),
+            pk_script: p2kh_script_target.clone(),
+        };
+
+        // Change tx_out
+        let change = (0.01102208 * 100_000_000.0) as u64;
+
+        let mut p2pkh_script_change: Vec<u8> = Vec::new();
+        p2pkh_script_change.extend([0x76]); // 0x76 = OP_DUP
+        p2pkh_script_change.extend([0xa9]); // 0xa9 = OP_HASH160
+        p2pkh_script_change.extend(messi.get_pk_hash());
+        p2pkh_script_change.extend([0x88]); // 0x88 = OP_EQUALVERIFY
+        p2pkh_script_change.extend([0xac]); // 0xac = OP_CHECKSIG
+
+        let tx_out_change = TxOut {
+            value: change,
+            pk_script_length: p2pkh_script_change.len(),
+            pk_script: p2pkh_script_change.clone(),
+        };
+
+        // Create tx
+        let mut tx = Tx {
+            id: [0u8; 32], // Se rellena despues
+            version: 1,
+            flag: 0,
+            tx_in_count: 1,
+            tx_in: vec![tx_in_1],
+            tx_out_count: 2,
+            tx_out: vec![tx_out_target, tx_out_change],
+            tx_witness: vec![],
+            lock_time: 0,
+        };
+
+        let mut buffer = [0u8; 1];
+        let mut tx_bytes = tx.encode(&mut buffer);
+
+        println!("{:?}", tx);
+        println!("tx_bytes{:?}", tx_bytes);
+
+        tx_bytes.extend([0x01, 0x00, 0x00, 0x00]);
+
+        // let signature_hash = sha256::Hash::hash(&tx_bytes); // signature hash
+        let signature_hash = double_sha256(&tx_bytes).to_byte_array(); // signature hash
+        println!("signature_hash: {:?}", signature_hash);
+
+        let private_key = messi.secret_key_bytes;
+        println!("private_key: {:?}", private_key);
+
+        // firmar la transaccion
+
+        let secp = Secp256k1::new();
+        let private_key = messi.secret_key;
+
+        let message = Message::from_slice(&signature_hash).unwrap();
+
+        let signature = secp.sign_ecdsa(&message.clone(), &private_key);
+
+        // println!("signature: {:?}", signature);
+
+        let signature_bytes = signature.clone().serialize_der().to_vec();
+        // println!("signature_bytes: {:?}", signature_bytes);
+
+        tx.tx_in[0].signature_script = signature_bytes.clone();
+        tx.tx_in[0].script_length = signature_bytes.len();
+
+        let final_tx_encode = tx.encode(&mut buffer);
+        println!("final_tx_encode: {:?}", final_tx_encode);
+
+        // Verifica la firma usando la clave pública correspondiente
+        // let public_key = messi.secret_key.public_key(&secp);
+        // let verification_result =
+        //     secp.verify_ecdsa(&message.clone(), &signature.clone(), &public_key.clone()); // Devuelve OK(()) es que está verificada, es horrible esto
+        // println!("verification_result: {:?}", verification_result);
+
+        let mut offset: usize = 0;
+        let tx_test = decode_internal_tx(&final_tx_encode, &mut offset);
+
+        println!("tx: {:?}", tx);
+
+        println!("tx_test: {:?}", tx_test);
+
+        Ok(())
+    }
 }
+
+// [1, 0, 0, 0, 1, 188, 230, 109, 89, 92, 255, 134, 80, 172, 55, 252, 24, 23, 39, 241, 197, 198, 168, 115, 20, 9, 105, 75, 41, 112, 143, 54, 138, 18, 137, 204, 123, 1, 0, 0, 0, 71, 48, 69, 2, 33, 0, 253, 227, 106, 209, 195, 168, 142, 86, 225, 135, 209, 172, 29, 149, 133, 168, 132, 96, 7, 130, 193, 97, 81, 169, 112, 141, 67, 194, 167, 4, 112, 10, 2, 32, 48, 13, 13, 125, 82, 223, 93, 137, 128, 65, 180, 250, 216, 141, 46, 239, 243, 27, 200, 242, 14, 189, 210, 0, 47, 128, 140, 32, 240, 33, 8, 137, 255, 255, 255, 255, 2, 160, 134, 1, 0, 0, 0, 0, 0, 24, 118, 169, 181, 51, 138, 19, 120, 118, 0, 187, 24, 163, 236, 151, 149, 117, 93, 82, 212, 10, 107, 236, 136, 172, 128, 209, 16, 0, 0, 0, 0, 0, 24, 118, 169, 100, 227, 171, 27, 188, 160, 210, 116, 110, 81, 97, 65, 97, 169, 21, 128, 49, 207, 184, 237, 136, 172, 0, 0, 0, 0]

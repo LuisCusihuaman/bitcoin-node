@@ -6,7 +6,7 @@ use std::io;
 use std::io::{Read, Write};
 
 // get pubkeyhash from an addr in base58Check
-pub fn pubkeyhash_from_addr(addr: &str) -> [u8; 20] {
+pub fn pk_hash_from_addr(addr: &str) -> [u8; 20] {
     let pub_addr_hashed = match bs58::decode(addr).with_check(None).into_vec() {
         Ok(v) => v,
         Err(_) => vec![0; 20],

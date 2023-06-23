@@ -253,7 +253,6 @@ pub struct PendingTx {
 pub struct User {
     pub name: String,
     pub pk_hash: [u8; 20],
-    pub secret_key_bytes: Vec<u8>,
     pub secret_key: SecretKey,
     pub public_key: [u8; 33],
     pub txns_hist: Vec<Tx>,
@@ -266,20 +265,23 @@ impl User {
         let secp = Secp256k1::new();
 
         // Secret Key
-        let secret_key_bytes = match is_anonymous {
+        let secret_key = match is_anonymous {
             true => {
                 let mut private_key_bytes: [u8; 32] = [0; 32];
                 rng.fill(&mut private_key_bytes);
 
-                private_key_bytes.to_vec()
+                SecretKey::from_slice(&private_key_bytes).unwrap()
             }
-            false => bs58::decode(priv_key_wif)
+            false => {
+                
+                let secret_key_bytes = bs58::decode(priv_key_wif)
                 .with_check(None)
                 .into_vec()
-                .unwrap(),
-        };
+                .unwrap();
 
-        let secret_key = SecretKey::from_slice(&secret_key_bytes[1..33]).unwrap();
+                SecretKey::from_slice(&secret_key_bytes[1..33]).unwrap()
+            }
+        };
 
         // Public key
         let public_key = secret_key.public_key(&secp).serialize();
@@ -290,7 +292,6 @@ impl User {
         User {
             name,
             pk_hash,
-            secret_key_bytes,
             secret_key,
             public_key,
             txns_hist: Vec::new(),
@@ -318,15 +319,12 @@ impl User {
 
 #[cfg(test)]
 mod tests {
-    use bitcoin_hashes::sha256;
-    use bs58::decode;
-    use secp256k1::ffi::{secp256k1_ecdsa_signature_serialize_der, PublicKey};
     use secp256k1::Message;
 
     use super::*;
     use crate::logger::Logger;
     use crate::net::message::ping_pong::PayloadPingPong;
-    use crate::net::message::tx::{decode_internal_tx, OutPoint, Tx, TxIn, TxOut};
+    use crate::net::message::tx::{OutPoint, Tx, TxIn, TxOut};
     use crate::utils::{double_sha256, get_address_base58};
 
     #[test]
@@ -336,12 +334,14 @@ mod tests {
             .map_err(|err| err.to_string())
             .unwrap();
 
-        let mut wallet = Wallet::new(config, logger.tx);
+        
 
         let user1 = User::new("Alice".to_string(), "".to_string(), true);
+
+        let mut wallet = Wallet::new(config, logger.tx, user1);
+
         let user2 = User::new("Bob".to_string(), "".to_string(), true);
 
-        wallet.add_user(user1);
         wallet.add_user(user2);
 
         assert_eq!(wallet.users.len(), 2);
@@ -354,11 +354,9 @@ mod tests {
             .map_err(|err| err.to_string())
             .unwrap();
 
-        let mut wallet = Wallet::new(config, logger.tx);
-
         let user = User::new("Alice".to_string(), "".to_string(), true);
 
-        wallet.add_user(user);
+        let _wallet = Wallet::new(config, logger.tx, user);
 
         // enviar get utxos
         // voy a enviar un msg Payload y quiero recibir una lista de UTXOs
@@ -441,7 +439,9 @@ mod tests {
             .map_err(|err| err.to_string())
             .unwrap();
 
-        let mut wallet = Wallet::new(config, logger.tx);
+        let user = User::new("Alice".to_string(), "".to_string(), true);
+
+        let mut wallet = Wallet::new(config, logger.tx, user);
 
         let ping_message = MessagePayload::Ping(PayloadPingPong::new());
 
@@ -458,14 +458,11 @@ mod tests {
             .map_err(|err| err.to_string())
             .unwrap();
 
-        let mut wallet = Wallet::new(config, logger.tx);
-
+        
         let priv_key_wif = "cVK6pF1sfsvvmF9vGyq4wFeMywy1SMFHNpXa3d4Hi2evKHRQyTbn".to_string();
         let messi = User::new("Messi".to_string(), priv_key_wif, false);
 
-        wallet.add_user(messi.clone());
-
-        wallet.create_pending_tx(messi.clone(), "mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb", 10.0);
+        let mut wallet = Wallet::new(config, logger.tx, messi);
 
         wallet.receive();
 
@@ -580,7 +577,6 @@ mod tests {
         tx.tx_in[0].script_length = script_sig.len();
 
         let final_tx_encode = tx.encode(&mut buffer);
-        println!("final_tx_encode: {:?}", final_tx_encode);
 
         Ok(())
     }

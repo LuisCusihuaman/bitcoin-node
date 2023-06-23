@@ -24,6 +24,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     });
 
     let mut node_manager = NodeManager::new(config, logger_tx);
+
     // let node_network_ips = node_manager.get_initial_nodes()?;
 
     // node_manager.connect(
@@ -35,7 +36,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // node_manager.handshake();
     // node_manager.initial_block_download()?;
-    node_manager.listen()?;
+    node_manager.listen();
 
     logger_thread.join().unwrap();
 

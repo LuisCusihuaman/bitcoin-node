@@ -80,6 +80,30 @@ impl OutPoint {
 }
 
 impl Tx {
+    pub fn new(
+        version: u32,
+        flag: u16,
+        tx_in: Vec<TxIn>,
+        tx_out: Vec<TxOut>,
+        lock_time: u32,
+    ) -> Tx {
+        let mut tx = Tx {
+            id: [0; 32],
+            version,
+            flag,
+            tx_in_count: tx_in.len(),
+            tx_in,
+            tx_out_count: tx_out.len(),
+            tx_out,
+            tx_witness: Vec::new(),
+            lock_time,
+        };
+
+        tx.id = [0u8; 32];
+
+        tx
+    }
+
     pub fn size(&self) -> usize {
         let mut size = 0;
 
@@ -146,7 +170,9 @@ impl Tx {
 
         encoded.extend(self.lock_time.to_le_bytes());
 
-        buffer[..].copy_from_slice(&encoded);
+        if !buffer.is_empty() {
+            buffer.copy_from_slice(&encoded);
+        }
 
         encoded
     }
@@ -169,11 +195,7 @@ pub fn decode_internal_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
     let (flag, flag_bytes) = check_flag(&buffer[*offset..]);
     *offset += flag_bytes;
 
-    if flag == 1 {
-        println!("flag: 1 LOL")
-    }
-
-    let tx_in_count = read_varint(&buffer[*offset..]); // Never zero, TODO calcular bien offset arriba
+    let tx_in_count = read_varint(&buffer[*offset..]); // Never zero
     *offset += get_offset(&buffer[*offset..]);
 
     let mut tx_in = Vec::new();

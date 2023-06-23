@@ -2,9 +2,13 @@ use crate::net::message::block::{decode_block, Block};
 use crate::net::message::get_blocks::PayloadGetBlocks;
 use crate::net::message::get_data_inv::{decode_data_inv, PayloadGetDataInv};
 use crate::net::message::get_headers::{decode_headers, PayloadGetHeaders};
+use crate::net::message::get_utxos::{decode_get_utxos, PayloadGetUtxos};
 use crate::net::message::ping_pong::{decode_ping, decode_pong, PayloadPingPong};
 use crate::net::message::tx::{decode_tx, Tx};
+use crate::net::message::utxos_msg::{decode_utxos, PayloadUtxosMsg};
 use crate::net::message::version::{decode_version, PayloadVersion};
+
+//use crate::net::message::send_tx::{decode_send_tx, PayloadSendTx};
 
 use crate::utils::read_le;
 use std::mem;
@@ -13,9 +17,13 @@ pub mod block;
 pub mod get_blocks;
 pub mod get_data_inv;
 pub mod get_headers;
+pub mod get_utxos;
 pub mod ping_pong;
 pub mod tx;
+pub mod utxos_msg;
 pub mod version;
+
+//pub mod send_tx;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum MessagePayload {
@@ -29,6 +37,8 @@ pub enum MessagePayload {
     Block(Block),
     Ping(PayloadPingPong),
     Pong(PayloadPingPong),
+    GetUTXOs(PayloadGetUtxos),
+    UTXOs(PayloadUtxosMsg),
     Tx(Tx),
 }
 
@@ -114,6 +124,8 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::GetData(get_data) => get_data.size(),
             MessagePayload::Ping(ping) => ping.size(),
             MessagePayload::Pong(pong) => pong.size(),
+            MessagePayload::GetUTXOs(get_utxos) => get_utxos.size(),
+            MessagePayload::UTXOs(utxos) => utxos.size(),
             MessagePayload::Tx(tx) => tx.size(),
             _ => no_payload,
         }
@@ -139,6 +151,12 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::Pong(pong) => {
                 pong.encode(buffer);
             }
+            MessagePayload::GetUTXOs(get_utxo) => {
+                get_utxo.encode(buffer);
+            }
+            MessagePayload::UTXOs(send_utxo) => {
+                send_utxo.encode(buffer);
+            }
             MessagePayload::Tx(tx) => {
                 tx.encode(buffer);
             }
@@ -159,6 +177,8 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::Block(_) => "block",
             MessagePayload::Ping(_) => "ping",
             MessagePayload::Pong(_) => "pong",
+            MessagePayload::GetUTXOs(_) => "getutxos",
+            MessagePayload::UTXOs(_) => "utxos",
             MessagePayload::Tx(_) => "tx",
         }
     }
@@ -172,6 +192,8 @@ impl Encoding<MessagePayload> for MessagePayload {
             "block" => decode_block(buffer),
             "ping" => decode_ping(buffer),
             "pong" => decode_pong(buffer),
+            "getutxos" => decode_get_utxos(buffer),
+            "utxos" => decode_utxos(buffer),
             "tx" => decode_tx(buffer),
             _ => Err("Unknown command: ".to_owned() + cmd),
         }

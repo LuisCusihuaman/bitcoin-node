@@ -5,12 +5,12 @@ use crate::net::message::tx::{OutPoint, Tx, TxIn, TxOut};
 use crate::net::message::MessagePayload;
 use crate::net::p2p_connection::P2PConnection;
 use crate::node::utxo::Utxo;
-use crate::utils::pk_hash_from_addr;
+use crate::utils::{pk_hash_from_addr, double_sha256};
 use bitcoin_hashes::hash160;
 use bitcoin_hashes::Hash;
 use rand::rngs::OsRng;
 use rand::Rng;
-use secp256k1::{Secp256k1, SecretKey};
+use secp256k1::{Secp256k1, SecretKey, Message};
 use std::sync::mpsc::Sender;
 use std::vec;
 
@@ -19,10 +19,11 @@ pub struct Wallet {
     logger_tx: Sender<String>,
     node_manager: P2PConnection,
     users: Vec<User>,
+    pending_tx: (String,f64)
 }
 
 impl Wallet {
-    pub fn new(config: Config, sender: Sender<String>) -> Wallet {
+    pub fn new(config: Config, sender: Sender<String>, user: User) -> Wallet {
         let logger_tx = sender.clone();
         let node_manager = P2PConnection::connect("127.0.0.1:8080", sender.clone()).unwrap();
 
@@ -30,7 +31,8 @@ impl Wallet {
             config,
             logger_tx,
             node_manager,
-            users: Vec::new(),
+            users: vec![user],
+            pending_tx: ("".to_string(),0.0)
         }
     }
 
@@ -46,28 +48,18 @@ impl Wallet {
         self.node_manager.send(&message).unwrap();
     }
 
-    // Wallet --> Nodo
-    // espero espero espero (bloqueante)
-    // Nodo --> Wallet
-    // va a hacer cosas
-
-    // Wallet --> Nodo, dame las utxos
-    // FIN
-    // Nodo --> Wallet utxos
-    // wallet crea tx con esas utxos (si puede)
-
     pub fn receive(&mut self) {
         let (_addrs, messages) = self.node_manager.receive();
         for message in messages {
             match message {
                 MessagePayload::UTXOs(payload) => {
-                    let tx = match self.create_tx(payload.utxos) {
+                    let tx = match self.create_tx(payload.utxos, self.users[0].clone(), self.pending_tx.0.clone(), self.pending_tx.1) {
                         Some(tx) => tx,
                         None => continue,
                     };
 
                     // sign the Tx
-                    let signed_tx = self.sign_tx(tx);
+                    let signed_tx = self.sign_tx(tx, self.users[0].clone());
 
                     // send the Tx to the node
                     self.send(MessagePayload::Tx(signed_tx));
@@ -78,7 +70,7 @@ impl Wallet {
         }
     }
 
-    fn create_tx(&mut self, utxos: Vec<Utxo>) -> Option<Tx> {
+    fn create_tx(&mut self, utxos: Vec<Utxo>, user:User, to_address:String, amount: f64) -> Option<Tx> {
         // Validating Transactions
 
         // 1. The inputs of the transaction are previously unspent. The fact that we ask the node for the UTXOs
@@ -87,16 +79,12 @@ impl Wallet {
         // The sum of the inputs is greater than or equal to the sum of the outputs.
         let mut available_money = 0;
         for i in utxos.iter() {
-            if !self.tx_verified(i) {
-                // Verify the sigScript
-                log(
-                    self.logger_tx.clone(),
-                    format!("Could not verify transaction {:?} ", i),
-                );
-                continue; // should return at this point
-            }
             available_money += i.value;
         }
+
+        //////////
+        // Tal vez hay que hacer aca
+        // utxo[i].tx_id.reverse();
 
         // Fix this numbers
         let amount = 10.0; // amount if the amount of money to send
@@ -113,17 +101,17 @@ impl Wallet {
 
         // Create the TxIns from UTXOs
         for i in utxos.iter() {
-            let sig_script = vec![];
-            // TODO: Create sig_script
+
+            let p2pkh_script = self.create_p2pkh_script(user.get_pk_hash());
 
             let tx_in = TxIn {
                 previous_output: OutPoint {
                     hash: i.transaction_id,
                     index: i.output_index,
                 },
-                script_length: sig_script.len() as usize,
-                signature_script: sig_script,
-                sequence: 0, // Verify this
+                script_length: p2pkh_script.len() as usize,
+                signature_script: p2pkh_script.to_vec(),
+                sequence: 0xffffffff, 
             };
             tx_ins.push(tx_in);
         }
@@ -134,10 +122,8 @@ impl Wallet {
         // create pk_script for each TxOut
 
         // Design choice. There's always going to be two TxOuts. One for the amount and one for the change.
-
-        let mut pk_script_amount = vec![]; // This is the pubHashKey of the receiver
-
-        // TODO: Create pk_script_amount
+       
+        let pk_script_amount = self.create_p2pkh_script(pk_hash_from_addr(&to_address)); // This is the pubHashKey of the receiver
 
         // This TxOut for the amount goes to the receiver
         // Here I need the pubHashKey of the receiver
@@ -150,7 +136,7 @@ impl Wallet {
         // This tx_out_change goes to the sender
         // Here I need the pubHashKey of the sender (The User that owns the wallet)
 
-        let mut pk_script_change = vec![]; // This is the pubHashKey of the sender
+        let mut pk_script_change = self.create_p2pkh_script(user.get_pk_hash()); // This is the pubHashKey of the sender
 
         let tx_out_change = TxOut {
             value: change as u64,
@@ -182,13 +168,47 @@ impl Wallet {
     // * Address to send
     // * UTXOs to spend
 
-    // Verify that the ScriptSig successfully unlocks the previous ScriptPubKey.
-    fn tx_verified(&mut self, utxo: &Utxo) -> bool {
-        true
+    fn sign_tx(&mut self, mut tx: Tx, user:User) -> Tx {
+        
+        let mut buffer = vec![];
+        let mut tx_bytes = tx.encode(&mut buffer);
+        tx_bytes.extend([1, 0, 0, 0]);
+
+        // firmar la transaccion
+        let signature_hash = double_sha256(&tx_bytes).to_byte_array();
+        let private_key = user.secret_key;
+
+        let message = Message::from_slice(&signature_hash).unwrap();
+        let signature = private_key.sign_ecdsa(message.clone());
+        let der = signature.clone().serialize_der().to_vec();
+        let sec = user.public_key;
+
+        let mut script_sig: Vec<u8> = Vec::new();
+        script_sig.extend(vec![(der.len() + 1) as u8]);
+        script_sig.extend(der);
+        script_sig.extend([1]); // SIGHASH_ALL
+        script_sig.extend(vec![sec.len() as u8]);
+        script_sig.extend(sec);
+
+        for tx_in in tx.tx_in.iter_mut() {
+            tx_in.signature_script = script_sig.clone();
+            tx_in.script_length = script_sig.len();
+        }
+
+        tx
     }
 
-    fn sign_tx(&mut self, tx: Tx) -> Tx {
-        tx
+    fn create_p2pkh_script(&self, pk_hash: [u8; 20]) -> Vec<u8> {
+        let mut p2pkh_script: Vec<u8> = Vec::new();
+
+        p2pkh_script.extend([118]); // 0x76 = OP_DUP
+        p2pkh_script.extend([169]); // 0xa9 = OP_HASH160
+        p2pkh_script.extend(vec![pk_hash.len() as u8]);
+        p2pkh_script.extend(pk_hash);
+        p2pkh_script.extend([136]); // 0x88 = OP_EQUALVERIFY
+        p2pkh_script.extend([172]); // 0xac = OP_CHECKSIG
+
+        p2pkh_script
     }
 
     // Raul quiere crear una transacción para Roberto, de 10 patacones.

@@ -534,8 +534,8 @@ mod tests {
 
         // firmar la transaccion
         let private_key = messi.secret_key;
-        let signature_hash = double_sha256(&tx_bytes).to_byte_array(); // signature hash
-                                                                       // let signature_hash = sha256::Hash::hash(&tx_bytes); // signature hash
+
+        let signature_hash = sha256::Hash::hash(&tx_bytes).to_byte_array(); // signature hash
 
         let secp = Secp256k1::new();
         let message = Message::from_slice(&signature_hash).unwrap();
@@ -600,39 +600,40 @@ mod tests {
         ];
         hash.reverse();
 
-        // let mut script_prev_hash = [
-        //     0x76, 0xa9, 0x14, 0xb0, 0x99, 0xbf, 0xf0, 0x65, 0x3d, 0x67, 0xaf, 0x61, 0xc1, 0x83,
-        //     0xfe, 0xb3, 0xee, 0xfe, 0x05, 0xeb, 0xf5, 0xcf, 0x4e, 0x88, 0xac,
-        // ];
-        // script_prev_hash.reverse();
+        let mut script_prev_hash = [
+            0x76, 0xa9, 0x14, 0xb0, 0x99, 0xbf, 0xf0, 0x65, 0x3d, 0x67, 0xaf, 0x61, 0xc1, 0x83,
+            0xfe, 0xb3, 0xee, 0xfe, 0x05, 0xeb, 0xf5, 0xcf, 0x4e, 0x88, 0xac,
+        ];
+        script_prev_hash.reverse();
 
         let tx_in_1 = TxIn {
             previous_output: OutPoint {
                 hash: hash,
                 index: 0,
             },
-            script_length: 0,         // script_prev_hash.len(),
-            signature_script: vec![], // script_prev_hash.to_vec(),
-            sequence: 0,
+            script_length: script_prev_hash.len(),
+            signature_script: script_prev_hash.to_vec(),
+            sequence: 0xffffffff,
         };
 
         // Target tx_out
         let value = (0.001 * 100_000_000.0) as u64;
 
         let pk_hash_target = pk_hash_from_addr("mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb");
+        let aux = hash160::Hash::hash(&pk_hash_target).to_byte_array();
 
-        let mut p2kh_script_target: Vec<u8> = Vec::new();
-        p2kh_script_target.extend([118]); // 0x76 = OP_DUP
-        p2kh_script_target.extend([169]); // 0xa9 = OP_HASH160
-        p2kh_script_target.extend(vec![pk_hash_target.len() as u8]);
-        p2kh_script_target.extend(pk_hash_target);
-        p2kh_script_target.extend([136]); // 0x88 = OP_EQUALVERIFY
-        p2kh_script_target.extend([172]); // 0xac = OP_CHECKSIG
+        let mut p2pkh_script_target: Vec<u8> = Vec::new();
+        p2pkh_script_target.extend([118]); // 0x76 = OP_DUP
+        p2pkh_script_target.extend([169]); // 0xa9 = OP_HASH160
+        p2pkh_script_target.extend(vec![aux.len() as u8]);
+        p2pkh_script_target.extend(aux);
+        p2pkh_script_target.extend([136]); // 0x88 = OP_EQUALVERIFY
+        p2pkh_script_target.extend([172]); // 0xac = OP_CHECKSIG
 
         let tx_out_target = TxOut {
             value: value,
-            pk_script_length: p2kh_script_target.len(),
-            pk_script: p2kh_script_target.clone(),
+            pk_script_length: p2pkh_script_target.len(),
+            pk_script: p2pkh_script_target.clone(),
         };
 
         // Change tx_out
@@ -664,32 +665,29 @@ mod tests {
             tx_out_count: 2,
             tx_out: vec![tx_out_target, tx_out_change],
             tx_witness: vec![],
-            lock_time: 0,
+            lock_time: 410393,
         };
 
         let mut buffer = [0u8; 1];
         let mut tx_bytes = tx.encode(&mut buffer);
-
         tx_bytes.extend([1, 0, 0, 0]);
 
-        let signature_hash = sha256::Hash::hash(&tx_bytes).to_byte_array(); // signature hash
-                                                                            // let signature_hash = double_sha256(&tx_bytes).to_byte_array(); // signature hash
+        let signature_hash = sha256::Hash::hash(&tx_bytes).to_byte_array();
 
         // firmar la transaccion
         let private_key = messi.secret_key;
 
         let message = Message::from_slice(&signature_hash).unwrap();
         let signature = private_key.sign_ecdsa(message.clone());
-        let der_signature = signature.clone().serialize_der().to_vec();
-
-        let sec_public_key = messi.public_key;
+        let der = signature.clone().serialize_der().to_vec();
+        let sec = messi.public_key;
 
         let mut script_sig: Vec<u8> = Vec::new();
-        script_sig.extend(vec![(der_signature.len() + 1) as u8]);
-        script_sig.extend(der_signature);
+        script_sig.extend(vec![(der.len() + 1) as u8]);
+        script_sig.extend(der);
         script_sig.extend([1]); // SIGHASH_ALL
-        script_sig.extend(vec![sec_public_key.len() as u8]);
-        script_sig.extend(sec_public_key);
+        script_sig.extend(vec![sec.len() as u8]);
+        script_sig.extend(sec);
 
         tx.tx_in[0].signature_script = script_sig.clone();
         tx.tx_in[0].script_length = script_sig.len();
@@ -700,6 +698,7 @@ mod tests {
         Ok(())
     }
 
+    #[test]
     fn decode_jimmy_song_raw_tx() {
         let buffer = [
             1, 0, 0, 0, 1, 129, 63, 121, 1, 26, 203, 128, 146, 93, 254, 105, 179, 222, 243, 85,
@@ -717,8 +716,141 @@ mod tests {
         ];
 
         let mut offset: usize = 0;
-        let tx = decode_internal_tx(&buffer, &mut offset);
+        let _tx = decode_internal_tx(&buffer, &mut offset);
 
-        println!("tx: {:?}", tx);
+        let _tx = Tx {
+            id: [
+                69, 44, 98, 157, 103, 228, 27, 174, 195, 172, 111, 4, 254, 116, 75, 75, 150, 23,
+                248, 248, 89, 198, 59, 48, 2, 248, 104, 78, 122, 79, 238, 3,
+            ],
+            version: 1,
+            flag: 0,
+            tx_in_count: 1,
+            tx_in: [TxIn {
+                previous_output: OutPoint {
+                    hash: [
+                        1, 0, 0, 0, 1, 129, 63, 121, 1, 26, 203, 128, 146, 93, 254, 105, 179, 222,
+                        243, 85, 254, 145, 75, 209, 217, 106, 63, 95, 113, 191, 131, 3,
+                    ],
+                    index: 3347687878,
+                },
+                script_length: 107,
+                signature_script: [
+                    72, 48, 69, 2, 33, 0, 237, 129, 255, 25, 46, 117, 163, 253, 35, 4, 0, 77, 202,
+                    219, 116, 111, 165, 226, 76, 80, 49, 204, 252, 242, 19, 32, 176, 39, 116, 87,
+                    201, 143, 2, 32, 122, 152, 109, 149, 92, 110, 12, 179, 93, 68, 106, 137, 211,
+                    245, 97, 0, 244, 215, 246, 120, 1, 195, 25, 103, 116, 58, 156, 142, 16, 97, 91,
+                    237, 1, 33, 3, 73, 252, 78, 99, 30, 54, 36, 165, 69, 222, 63, 137, 245, 216,
+                    104, 76, 123, 129, 56, 189, 148, 189, 213, 49, 210, 226, 19, 191, 1, 107, 39,
+                    138,
+                ]
+                .to_vec(),
+                sequence: 4294967294,
+            }]
+            .to_vec(),
+            tx_out_count: 2,
+            tx_out: [
+                TxOut {
+                    value: 32454049,
+                    pk_script_length: 25,
+                    pk_script: [
+                        118, 169, 20, 188, 59, 101, 77, 202, 126, 86, 176, 77, 202, 24, 242, 86,
+                        108, 218, 240, 46, 141, 154, 218, 136, 172,
+                    ]
+                    .to_vec(),
+                },
+                TxOut {
+                    value: 10011545,
+                    pk_script_length: 25,
+                    pk_script: [
+                        118, 169, 20, 28, 75, 199, 98, 221, 84, 35, 227, 50, 22, 103, 2, 203, 117,
+                        244, 13, 247, 159, 234, 18, 136, 172,
+                    ]
+                    .to_vec(),
+                },
+            ]
+            .to_vec(),
+            tx_witness: vec![],
+            lock_time: 410393,
+        };
+    }
+
+    #[test]
+    fn decode_raw_tx() {
+        let buffer = [
+            1, 0, 0, 0, 1, 123, 204, 137, 18, 138, 54, 143, 112, 41, 75, 105, 9, 20, 115, 168, 198,
+            197, 241, 39, 23, 24, 252, 55, 172, 80, 134, 255, 92, 89, 109, 230, 188, 0, 0, 0, 0,
+            107, 72, 48, 69, 2, 33, 0, 203, 253, 67, 149, 211, 148, 156, 140, 100, 15, 122, 117,
+            247, 249, 33, 236, 47, 140, 133, 58, 221, 62, 150, 10, 177, 115, 126, 64, 202, 57, 76,
+            34, 2, 32, 1, 204, 159, 233, 122, 6, 203, 175, 22, 6, 217, 125, 106, 91, 162, 199, 117,
+            104, 135, 14, 74, 240, 91, 3, 239, 161, 163, 163, 68, 92, 207, 179, 1, 33, 2, 20, 28,
+            142, 103, 244, 6, 181, 130, 126, 50, 140, 1, 132, 188, 50, 59, 67, 144, 104, 43, 227,
+            97, 153, 206, 105, 1, 12, 47, 189, 173, 128, 172, 255, 255, 255, 255, 2, 160, 134, 1,
+            0, 0, 0, 0, 0, 25, 118, 169, 20, 181, 51, 138, 19, 120, 118, 0, 187, 24, 163, 236, 151,
+            149, 117, 93, 82, 212, 10, 107, 236, 136, 172, 128, 209, 16, 0, 0, 0, 0, 0, 25, 118,
+            169, 20, 100, 227, 171, 27, 188, 160, 210, 116, 110, 81, 97, 65, 97, 169, 21, 128, 49,
+            207, 184, 237, 136, 172, 0, 0, 0, 0,
+        ];
+
+        let mut offset: usize = 0;
+        let tx = decode_internal_tx(&buffer, &mut offset).unwrap();
+
+        println!("{:?}", tx);
+
+        let _tx = Tx {
+            id: [
+                133, 217, 57, 200, 73, 106, 219, 243, 193, 21, 245, 3, 96, 166, 138, 170, 54, 70,
+                208, 0, 24, 11, 153, 161, 153, 188, 114, 199, 62, 224, 54, 204,
+            ],
+            version: 1,
+            flag: 0,
+            tx_in_count: 1,
+            tx_in: [TxIn {
+                previous_output: OutPoint {
+                    hash: [
+                        1, 0, 0, 0, 1, 123, 204, 137, 18, 138, 54, 143, 112, 41, 75, 105, 9, 20,
+                        115, 168, 198, 197, 241, 39, 23, 24, 252, 55, 172, 80, 134, 255,
+                    ],
+                    index: 3865925980,
+                },
+                script_length: 107,
+                signature_script: [
+                    72, 48, 69, 2, 33, 0, 203, 253, 67, 149, 211, 148, 156, 140, 100, 15, 122, 117,
+                    247, 249, 33, 236, 47, 140, 133, 58, 221, 62, 150, 10, 177, 115, 126, 64, 202,
+                    57, 76, 34, 2, 32, 1, 204, 159, 233, 122, 6, 203, 175, 22, 6, 217, 125, 106,
+                    91, 162, 199, 117, 104, 135, 14, 74, 240, 91, 3, 239, 161, 163, 163, 68, 92,
+                    207, 179, 1, 33, 2, 20, 28, 142, 103, 244, 6, 181, 130, 126, 50, 140, 1, 132,
+                    188, 50, 59, 67, 144, 104, 43, 227, 97, 153, 206, 105, 1, 12, 47, 189, 173,
+                    128, 172,
+                ]
+                .to_vec(),
+                sequence: 4294967295,
+            }]
+            .to_vec(),
+            tx_out_count: 2,
+            tx_out: [
+                TxOut {
+                    value: 100000,
+                    pk_script_length: 25,
+                    pk_script: [
+                        118, 169, 20, 181, 51, 138, 19, 120, 118, 0, 187, 24, 163, 236, 151, 149,
+                        117, 93, 82, 212, 10, 107, 236, 136, 172,
+                    ]
+                    .to_vec(),
+                },
+                TxOut {
+                    value: 1102208,
+                    pk_script_length: 25,
+                    pk_script: [
+                        118, 169, 20, 100, 227, 171, 27, 188, 160, 210, 116, 110, 81, 97, 65, 97,
+                        169, 21, 128, 49, 207, 184, 237, 136, 172,
+                    ]
+                    .to_vec(),
+                },
+            ]
+            .to_vec(),
+            tx_witness: vec![],
+            lock_time: 0,
+        };
     }
 }

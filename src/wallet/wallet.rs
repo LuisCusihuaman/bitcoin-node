@@ -19,7 +19,7 @@ pub struct Wallet {
     logger_tx: Sender<String>,
     node_manager: P2PConnection,
     users: Vec<User>,
-    pending_tx: (String,f64)
+    pending_tx: PendingTx
 }
 
 impl Wallet {
@@ -32,7 +32,7 @@ impl Wallet {
             logger_tx,
             node_manager,
             users: vec![user],
-            pending_tx: ("".to_string(),0.0)
+            pending_tx: PendingTx{receive_addr:"".to_string(), amount:0.0}
         }
     }
 
@@ -53,7 +53,9 @@ impl Wallet {
         for message in messages {
             match message {
                 MessagePayload::UTXOs(payload) => {
-                    let tx = match self.create_tx(payload.utxos, self.users[0].clone(), self.pending_tx.0.clone(), self.pending_tx.1) {
+                    let tx = match self.create_tx(payload.utxos, self.users[0].clone(), 
+                                            self.pending_tx.receive_addr.clone(), 
+                                                self.pending_tx.amount) {
                         Some(tx) => tx,
                         None => continue,
                     };
@@ -85,9 +87,7 @@ impl Wallet {
         //////////
         // Tal vez hay que hacer aca
         // utxo[i].tx_id.reverse();
-
-        // Fix this numbers
-        let amount = 10.0; // amount if the amount of money to send
+        
         let fee = 0.1; // fee for the Tx
 
         if (available_money as f64) < (amount + fee) {
@@ -218,35 +218,29 @@ impl Wallet {
     // Nodo le envía a Wallet las UTXOs de Raul
     // Wallet crea la transacción
 
-    fn create_pending_tx(&mut self, mut sender: User, receiver: &str, amount: f64) {
-        let addr_receiver = pk_hash_from_addr(receiver);
+    fn create_pending_tx(&mut self, receive_addr: String, amount: f64) {
 
         // Create send utxo message
         let get_utxo_message = MessagePayload::GetUTXOs(PayloadGetUtxos {
-            address: sender.get_pk_hash(),
+            address: self.users[0].get_pk_hash(),
         });
 
         // Send message to node
         self.send(get_utxo_message);
 
-        // Save the pending transaction
-        let pending = PendingTx {
-            from: sender.get_pk_hash(),
-            to: addr_receiver,
+        // Save the pending transaction in the wallet. When the UTXOs arrive, the wallet will create the transaction
+        self.pending_tx = PendingTx {
+            receive_addr: receive_addr,
             amount: amount,
-            created: false,
         };
-
-        sender.pending_tx.push(pending); // Otro nombre
     }
+    
 }
 
 #[derive(Clone, Debug)]
 pub struct PendingTx {
-    from: [u8; 20],
-    to: [u8; 20],
+    receive_addr: String,
     amount: f64,
-    created: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -256,7 +250,6 @@ pub struct User {
     pub secret_key: SecretKey,
     pub public_key: [u8; 33],
     pub txns_hist: Vec<Tx>,
-    pub pending_tx: Vec<PendingTx>, // TODO quizas alcanza solo con el vector de arriba
 }
 
 impl User {
@@ -295,7 +288,6 @@ impl User {
             secret_key,
             public_key,
             txns_hist: Vec::new(),
-            pending_tx: Vec::new(),
         }
     }
 
@@ -332,9 +324,7 @@ mod tests {
         let logger = Logger::mock_logger();
         let config = Config::from_file("nodo.config")
             .map_err(|err| err.to_string())
-            .unwrap();
-
-        
+            .unwrap();        
 
         let user1 = User::new("Alice".to_string(), "".to_string(), true);
 

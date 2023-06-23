@@ -170,7 +170,9 @@ impl Tx {
 
         encoded.extend(self.lock_time.to_le_bytes());
 
-        buffer[..].copy_from_slice(&encoded);
+        if !buffer.is_empty() {
+            buffer.copy_from_slice(&encoded);
+        }
 
         encoded
     }

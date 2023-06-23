@@ -4,7 +4,27 @@ use chrono::prelude::*;
 use chrono::NaiveDate;
 use std::io;
 use std::io::{Read, Write};
-use std::sync::mpsc::Sender;
+
+// get pubkeyhash from an addr in base58Check
+pub fn pk_hash_from_addr(addr: &str) -> [u8; 20] {
+    let pub_addr_hashed = match bs58::decode(addr).with_check(None).into_vec() {
+        Ok(v) => v,
+        Err(_) => vec![0; 20],
+    };
+
+    let mut address_bytes = [0; 20];
+    address_bytes.copy_from_slice(&pub_addr_hashed[1..]);
+
+    address_bytes
+}
+
+// Returns the address in base58Check (34 letras)
+pub fn get_address_base58(pub_hash_key: [u8; 20]) -> String {
+    let version = [0x6f];
+    let input = [&version[..], &pub_hash_key[..]].concat();
+
+    bs58::encode(input).with_check().into_string()
+}
 
 pub fn get_time() -> String {
     let local: DateTime<Local> = Local::now();

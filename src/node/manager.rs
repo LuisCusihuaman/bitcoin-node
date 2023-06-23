@@ -512,10 +512,12 @@ impl NodeManager {
     }
 
     fn blocks_download(&mut self) {
-        let timestamp = match date_to_timestamp("2023-04-11") {
+        let timestamp = match date_to_timestamp("2023-06-01") { 
             Some(timestamp) => timestamp,
             None => panic!("Error parsing date"),
         };
+
+        println!("timestamps: {:?}", timestamp);
 
         // TODO: Integrate date from self.config.download_blocks_since_date
         let blocks = self.get_blocks();

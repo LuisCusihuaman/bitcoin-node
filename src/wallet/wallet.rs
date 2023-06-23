@@ -421,7 +421,7 @@ mod tests {
     }
 
     #[test]
-    fn test_wallet_create_tx() -> Result<(), String> {
+    fn test_wallet_sends_utxo_msg_to_node_manager() -> Result<(), String> {
         let logger = Logger::mock_logger();
         let config = Config::from_file("nodo.config")
             .map_err(|err| err.to_string())
@@ -437,10 +437,27 @@ mod tests {
 
         wallet.create_pending_tx(receiver_addr, amount);
 
-        // Hacer algo asi
-        // loop {
-        //     wallet.wait_for(vec![]);
-        // }
+        wallet.receive();
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_wallet_create_tx() -> Result<(), String> {
+        let logger = Logger::mock_logger();
+        let config = Config::from_file("nodo.config")
+            .map_err(|err| err.to_string())
+            .unwrap();
+
+        let priv_key_wif = "cVK6pF1sfsvvmF9vGyq4wFeMywy1SMFHNpXa3d4Hi2evKHRQyTbn".to_string();
+        let messi = User::new("Messi".to_string(), priv_key_wif, false);
+
+        let receiver_addr = "mpiQbuypLNHoUCXeFtrS956jPSNhwmYwai".to_string();
+        let amount = 0.01;
+
+        let mut wallet = Wallet::new(config, logger.tx, messi);
+
+        wallet.create_pending_tx(receiver_addr, amount);
 
         wallet.receive();
 

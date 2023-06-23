@@ -458,16 +458,6 @@ mod tests {
 
         let messi = User::new("Messi".to_string(), priv_key_wif, false);
 
-        // p2pkh ScriptPubKey, or locking script
-        // let signature_script: Vec<u8> = vec![
-        //      0x76,
-        //      0xa9,
-        //      0x14,
-        //      0x64, 0xe3, 0xab, 0x1b, 0xbc, 0xa0, 0xd2, 0x74, 0x6e, 0x51, 0x61, 0x41, 0x61, 0xa9, 0x15, 0x80, 0x31, 0xcf, 0xb8, 0xed,
-        //      0x88,
-        //      0xac,
-        // ];
-
         let tx_in_1 = TxIn {
             previous_output: OutPoint {
                 hash: [
@@ -565,13 +555,10 @@ mod tests {
         let mut offset = 0;
         let expected_bytes = decode_internal_tx(&expected_bytes, &mut offset).unwrap();
 
-        // assert!(tx.id == expected_bytes.id);
         assert!(tx.version == expected_bytes.version);
         assert!(tx.flag == expected_bytes.flag);
         assert!(tx.tx_in_count == expected_bytes.tx_in_count);
-        // assert!(tx.tx_in == expected_bytes.tx_in);
         assert!(tx.tx_out_count == expected_bytes.tx_out_count);
-        // assert!(tx.tx_out == expected_bytes.tx_out);
         assert!(tx.tx_witness == expected_bytes.tx_witness);
         assert!(tx.lock_time == expected_bytes.lock_time);
 
@@ -581,8 +568,17 @@ mod tests {
     #[test]
     fn create_tx() -> Result<(), String> {
         let priv_key_wif = "cSM1NQcoCMDP8jy2AMQWHXTLc9d4HjSr7H4AqxKk2bD1ykbaRw59".to_string();
-
         let messi = User::new("Messi".to_string(), priv_key_wif, false);
+
+        let pk_hash = messi.get_pk_hash();
+
+        let mut p2pkh_script_change: Vec<u8> = Vec::new();
+        p2pkh_script_change.extend([118]); // 0x76 = OP_DUP
+        p2pkh_script_change.extend([169]); // 0xa9 = OP_HASH160
+        p2pkh_script_change.extend(vec![pk_hash.len() as u8]);
+        p2pkh_script_change.extend(pk_hash);
+        p2pkh_script_change.extend([136]); // 0x88 = OP_EQUALVERIFY
+        p2pkh_script_change.extend([172]); // 0xac = OP_CHECKSIG
 
         // In this example, we will pay 0.1 testnet bitcoins (tBTC) to mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb (nuestra otra cuenta)
         // we have an output denoted by a transaction ID and output index bce66d595cff8650ac37fc181727f1c5c6a8731409694b29708f368a1289cc7b:0
@@ -600,19 +596,13 @@ mod tests {
         ];
         hash.reverse();
 
-        let mut script_prev_hash = [
-            0x76, 0xa9, 0x14, 0xb0, 0x99, 0xbf, 0xf0, 0x65, 0x3d, 0x67, 0xaf, 0x61, 0xc1, 0x83,
-            0xfe, 0xb3, 0xee, 0xfe, 0x05, 0xeb, 0xf5, 0xcf, 0x4e, 0x88, 0xac,
-        ];
-        script_prev_hash.reverse();
-
         let tx_in_1 = TxIn {
             previous_output: OutPoint {
                 hash: hash,
                 index: 0,
             },
-            script_length: script_prev_hash.len(),
-            signature_script: script_prev_hash.to_vec(),
+            script_length: p2pkh_script_change.len(),
+            signature_script: p2pkh_script_change.to_vec(),
             sequence: 0xffffffff,
         };
 
@@ -620,13 +610,13 @@ mod tests {
         let value = (0.001 * 100_000_000.0) as u64;
 
         let pk_hash_target = pk_hash_from_addr("mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb");
-        let aux = hash160::Hash::hash(&pk_hash_target).to_byte_array();
+        //let aux = hash160::Hash::hash(&pk_hash_target).to_byte_array();
 
         let mut p2pkh_script_target: Vec<u8> = Vec::new();
         p2pkh_script_target.extend([118]); // 0x76 = OP_DUP
         p2pkh_script_target.extend([169]); // 0xa9 = OP_HASH160
-        p2pkh_script_target.extend(vec![aux.len() as u8]);
-        p2pkh_script_target.extend(aux);
+        p2pkh_script_target.extend(vec![pk_hash_target.len() as u8]); // Length pk_hash
+        p2pkh_script_target.extend(pk_hash_target);
         p2pkh_script_target.extend([136]); // 0x88 = OP_EQUALVERIFY
         p2pkh_script_target.extend([172]); // 0xac = OP_CHECKSIG
 
@@ -638,16 +628,6 @@ mod tests {
 
         // Change tx_out
         let change = (0.01102208 * 100_000_000.0) as u64;
-
-        let pk_hash = messi.get_pk_hash();
-
-        let mut p2pkh_script_change: Vec<u8> = Vec::new();
-        p2pkh_script_change.extend([118]); // 0x76 = OP_DUP
-        p2pkh_script_change.extend([169]); // 0xa9 = OP_HASH160
-        p2pkh_script_change.extend(vec![pk_hash.len() as u8]);
-        p2pkh_script_change.extend(pk_hash);
-        p2pkh_script_change.extend([136]); // 0x88 = OP_EQUALVERIFY
-        p2pkh_script_change.extend([172]); // 0xac = OP_CHECKSIG
 
         let tx_out_change = TxOut {
             value: change,
@@ -665,14 +645,14 @@ mod tests {
             tx_out_count: 2,
             tx_out: vec![tx_out_target, tx_out_change],
             tx_witness: vec![],
-            lock_time: 410393,
+            lock_time: 0,
         };
 
         let mut buffer = [0u8; 1];
         let mut tx_bytes = tx.encode(&mut buffer);
         tx_bytes.extend([1, 0, 0, 0]);
 
-        let signature_hash = sha256::Hash::hash(&tx_bytes).to_byte_array();
+        let signature_hash = double_sha256(&tx_bytes).to_byte_array();
 
         // firmar la transaccion
         let private_key = messi.secret_key;

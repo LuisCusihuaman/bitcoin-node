@@ -27,15 +27,15 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // let node_network_ips = node_manager.get_initial_nodes()?;
 
-    node_manager.connect(
-        node_network_ips
-            .iter()
-            .map(|ip| format!("{}:18333", ip))
-            .collect(),
-    )?;
+    // node_manager.connect(
+    //     node_network_ips
+    //         .iter()
+    //         .map(|ip| format!("{}:18333", ip))
+    //         .collect(),
+    // )?;
 
-    node_manager.handshake();
-    // node_manager.initial_block_download()?;
+    // node_manager.handshake();
+    // // node_manager.initial_block_download()?;
     node_manager.listen();
 
     logger_thread.join().unwrap();

@@ -55,6 +55,7 @@ impl Wallet {
     // Handler when the wallet receives messages from the node
     pub fn receive(&mut self) {
         let (_addrs, messages) = self.node_manager.receive();
+
         for message in messages {
             match message {
                 MessagePayload::UTXOs(payload) => {
@@ -200,8 +201,7 @@ impl Wallet {
         p2pkh_script
     }
 
-    fn create_pending_tx(&mut self, receive_addr: String, amount: f64) {
-        
+    fn create_pending_tx(&mut self, receiver_addr: String, amount: f64) {
         let get_utxo_message = MessagePayload::GetUTXOs(PayloadGetUtxos {
             address: self.users[0].get_pk_hash(),
         });
@@ -211,7 +211,7 @@ impl Wallet {
 
         // Save the pending transaction in the wallet. When the UTXOs arrive, the wallet will create the transaction
         self.pending_tx = PendingTx {
-            receive_addr: receive_addr,
+            receive_addr: receiver_addr,
             amount: amount,
         };
     }
@@ -430,7 +430,17 @@ mod tests {
         let priv_key_wif = "cVK6pF1sfsvvmF9vGyq4wFeMywy1SMFHNpXa3d4Hi2evKHRQyTbn".to_string();
         let messi = User::new("Messi".to_string(), priv_key_wif, false);
 
+        let receiver_addr = "mpiQbuypLNHoUCXeFtrS956jPSNhwmYwai".to_string();
+        let amount = 0.01;
+
         let mut wallet = Wallet::new(config, logger.tx, messi);
+
+        wallet.create_pending_tx(receiver_addr, amount);
+
+        // Hacer algo asi
+        // loop {
+        //     wallet.wait_for(vec![]);
+        // }
 
         wallet.receive();
 

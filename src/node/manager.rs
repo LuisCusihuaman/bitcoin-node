@@ -51,6 +51,8 @@ impl NodeManager {
         // Wait for a connection.
         match listener.accept() {
             Ok((stream, addr)) => {
+                stream.set_nonblocking(true).unwrap();
+
                 log(
                     self.logger_tx.clone(),
                     format!("Wallet connected successfully: {addr}"),
@@ -288,7 +290,7 @@ impl NodeManager {
                             }),
                         );
                     }
-                    MessagePayload::Tx(_tx) => {
+                    MessagePayload::Tx(tx) => {
                         log(
                             self.logger_tx.clone(),
                             format!("Received tx from {}", peer_address),

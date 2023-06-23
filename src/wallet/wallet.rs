@@ -5,12 +5,12 @@ use crate::net::message::tx::{OutPoint, Tx, TxIn, TxOut};
 use crate::net::message::MessagePayload;
 use crate::net::p2p_connection::P2PConnection;
 use crate::node::utxo::Utxo;
-use crate::utils::pk_hash_from_addr;
+use crate::utils::{double_sha256, pk_hash_from_addr};
 use bitcoin_hashes::hash160;
 use bitcoin_hashes::Hash;
 use rand::rngs::OsRng;
 use rand::Rng;
-use secp256k1::{Secp256k1, SecretKey};
+use secp256k1::{Message, Secp256k1, SecretKey};
 use std::sync::mpsc::Sender;
 use std::vec;
 
@@ -19,10 +19,11 @@ pub struct Wallet {
     logger_tx: Sender<String>,
     node_manager: P2PConnection,
     users: Vec<User>,
+    pending_tx: PendingTx,
 }
 
 impl Wallet {
-    pub fn new(config: Config, sender: Sender<String>) -> Wallet {
+    pub fn new(config: Config, sender: Sender<String>, user: User) -> Wallet {
         let logger_tx = sender.clone();
         let node_manager = P2PConnection::connect("127.0.0.1:8080", sender.clone()).unwrap();
 
@@ -30,7 +31,11 @@ impl Wallet {
             config,
             logger_tx,
             node_manager,
-            users: Vec::new(),
+            users: vec![user],
+            pending_tx: PendingTx {
+                receive_addr: "".to_string(),
+                amount: 0.0,
+            },
         }
     }
 
@@ -38,6 +43,7 @@ impl Wallet {
         self.users.push(user);
     }
 
+    // Sends the Tx to the node
     pub fn send(&mut self, message: MessagePayload) {
         log(
             self.logger_tx.clone(),
@@ -46,28 +52,24 @@ impl Wallet {
         self.node_manager.send(&message).unwrap();
     }
 
-    // Wallet --> Nodo
-    // espero espero espero (bloqueante)
-    // Nodo --> Wallet
-    // va a hacer cosas
-
-    // Wallet --> Nodo, dame las utxos
-    // FIN
-    // Nodo --> Wallet utxos
-    // wallet crea tx con esas utxos (si puede)
-
+    // Handler when the wallet receives messages from the node
     pub fn receive(&mut self) {
         let (_addrs, messages) = self.node_manager.receive();
         for message in messages {
             match message {
                 MessagePayload::UTXOs(payload) => {
-                    let tx = match self.create_tx(payload.utxos) {
+                    let tx = match self.create_tx(
+                        payload.utxos,
+                        self.users[0].clone(),
+                        self.pending_tx.receive_addr.clone(),
+                        self.pending_tx.amount,
+                    ) {
                         Some(tx) => tx,
                         None => continue,
                     };
 
                     // sign the Tx
-                    let signed_tx = self.sign_tx(tx);
+                    let signed_tx = self.sign_tx(tx, self.users[0].clone());
 
                     // send the Tx to the node
                     self.send(MessagePayload::Tx(signed_tx));
@@ -78,28 +80,23 @@ impl Wallet {
         }
     }
 
-    fn create_tx(&mut self, utxos: Vec<Utxo>) -> Option<Tx> {
-        // Validating Transactions
-
-        // 1. The inputs of the transaction are previously unspent. The fact that we ask the node for the UTXOs
-        //  associated with the address means that they are unspent.
-
-        // The sum of the inputs is greater than or equal to the sum of the outputs.
+    // Returns a Tx (not yet signed)
+    fn create_tx(
+        &mut self,
+        utxos: Vec<Utxo>,
+        user: User,
+        to_address: String,
+        amount: f64,
+    ) -> Option<Tx> {
         let mut available_money = 0;
         for i in utxos.iter() {
-            if !self.tx_verified(i) {
-                // Verify the sigScript
-                log(
-                    self.logger_tx.clone(),
-                    format!("Could not verify transaction {:?} ", i),
-                );
-                continue; // should return at this point
-            }
             available_money += i.value;
         }
 
-        // Fix this numbers
-        let amount = 10.0; // amount if the amount of money to send
+        //////////
+        // Tal vez hay que hacer aca
+        // utxo[i].tx_id.reverse();
+
         let fee = 0.1; // fee for the Tx
 
         if (available_money as f64) < (amount + fee) {
@@ -107,50 +104,36 @@ impl Wallet {
             return None;
         }
 
-        // Utxos have been verified at this point. We create the Tx_in for each Utxo
-
         let mut tx_ins: Vec<TxIn> = vec![];
 
-        // Create the TxIns from UTXOs
         for i in utxos.iter() {
-            let sig_script = vec![];
-            // TODO: Create sig_script
+            let p2pkh_script = self.create_p2pkh_script(user.get_pk_hash());
 
             let tx_in = TxIn {
                 previous_output: OutPoint {
                     hash: i.transaction_id,
                     index: i.output_index,
                 },
-                script_length: sig_script.len() as usize,
-                signature_script: sig_script,
-                sequence: 0, // Verify this
+                script_length: p2pkh_script.len() as usize,
+                signature_script: p2pkh_script.to_vec(),
+                sequence: 0xffffffff,
             };
             tx_ins.push(tx_in);
         }
 
-        // Create the TxOuts
         let change = (available_money as f64) - amount - fee;
 
-        // create pk_script for each TxOut
+        // Design choice.
+        // There's always going to be two TxOuts. One for the amount and one for the change.
+        let pk_script_amount = self.create_p2pkh_script(pk_hash_from_addr(&to_address)); // This is the pubHashKey of the receiver
 
-        // Design choice. There's always going to be two TxOuts. One for the amount and one for the change.
-
-        let mut pk_script_amount = vec![]; // This is the pubHashKey of the receiver
-
-        // TODO: Create pk_script_amount
-
-        // This TxOut for the amount goes to the receiver
-        // Here I need the pubHashKey of the receiver
         let tx_out_amount = TxOut {
             value: amount as u64,
             pk_script_length: pk_script_amount.len(),
             pk_script: pk_script_amount,
         };
 
-        // This tx_out_change goes to the sender
-        // Here I need the pubHashKey of the sender (The User that owns the wallet)
-
-        let mut pk_script_change = vec![]; // This is the pubHashKey of the sender
+        let pk_script_change = self.create_p2pkh_script(user.get_pk_hash()); // This is the pubHashKey of the sender
 
         let tx_out_change = TxOut {
             value: change as u64,
@@ -158,10 +141,8 @@ impl Wallet {
             pk_script: pk_script_change,
         };
 
-        // list of tx_outs for the Tx
         let tx_outs: Vec<TxOut> = vec![tx_out_amount, tx_out_change];
 
-        // Create the Tx to send to the node
         let tx = Tx {
             id: [0; 32],
             version: 1,
@@ -176,68 +157,79 @@ impl Wallet {
         Some(tx)
     }
 
-    // Necesito recibir aca
+    // Returns a signed transaction
+    fn sign_tx(&mut self, mut tx: Tx, user: User) -> Tx {
+        let mut buffer = vec![];
+        let mut tx_bytes = tx.encode(&mut buffer);
+        tx_bytes.extend([1, 0, 0, 0]);
 
-    // * Amount to spend
-    // * Address to send
-    // * UTXOs to spend
+        let signature_hash = double_sha256(&tx_bytes).to_byte_array();
+        let private_key = user.secret_key;
 
-    // Verify that the ScriptSig successfully unlocks the previous ScriptPubKey.
-    fn tx_verified(&mut self, utxo: &Utxo) -> bool {
-        true
-    }
+        let message = Message::from_slice(&signature_hash).unwrap();
+        let signature = private_key.sign_ecdsa(message.clone());
+        let der = signature.clone().serialize_der().to_vec();
+        let sec = user.public_key;
 
-    fn sign_tx(&mut self, tx: Tx) -> Tx {
+        let mut script_sig: Vec<u8> = Vec::new();
+        script_sig.extend(vec![(der.len() + 1) as u8]);
+        script_sig.extend(der);
+        script_sig.extend([1]); // SIGHASH_ALL
+        script_sig.extend(vec![sec.len() as u8]);
+        script_sig.extend(sec);
+
+        for tx_in in tx.tx_in.iter_mut() {
+            tx_in.signature_script = script_sig.clone();
+            tx_in.script_length = script_sig.len();
+        }
+
         tx
     }
 
-    // Raul quiere crear una transacción para Roberto, de 10 patacones.
-    // wallet.create_tx(from, to, amount); Termina lo que ve Raul
+    // Returns a p2pkh script from a public key hash
+    fn create_p2pkh_script(&self, pk_hash: [u8; 20]) -> Vec<u8> {
+        let mut p2pkh_script: Vec<u8> = Vec::new();
 
-    // Wallet le pide al nodo las UTXOs de Raul
-    // Nodo le envía a Wallet las UTXOs de Raul
-    // Wallet crea la transacción
+        p2pkh_script.extend([118]); // 0x76 = OP_DUP
+        p2pkh_script.extend([169]); // 0xa9 = OP_HASH160
+        p2pkh_script.extend(vec![pk_hash.len() as u8]);
+        p2pkh_script.extend(pk_hash);
+        p2pkh_script.extend([136]); // 0x88 = OP_EQUALVERIFY
+        p2pkh_script.extend([172]); // 0xac = OP_CHECKSIG
 
-    fn create_pending_tx(&mut self, mut sender: User, receiver: &str, amount: f64) {
-        let addr_receiver = pk_hash_from_addr(receiver);
+        p2pkh_script
+    }
 
-        // Create send utxo message
+    fn create_pending_tx(&mut self, receive_addr: String, amount: f64) {
+        
         let get_utxo_message = MessagePayload::GetUTXOs(PayloadGetUtxos {
-            address: sender.get_pk_hash(),
+            address: self.users[0].get_pk_hash(),
         });
 
         // Send message to node
         self.send(get_utxo_message);
 
-        // Save the pending transaction
-        let pending = PendingTx {
-            from: sender.get_pk_hash(),
-            to: addr_receiver,
+        // Save the pending transaction in the wallet. When the UTXOs arrive, the wallet will create the transaction
+        self.pending_tx = PendingTx {
+            receive_addr: receive_addr,
             amount: amount,
-            created: false,
         };
-
-        sender.pending_tx.push(pending); // Otro nombre
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct PendingTx {
-    from: [u8; 20],
-    to: [u8; 20],
+    receive_addr: String,
     amount: f64,
-    created: bool,
 }
 
 #[derive(Clone, Debug)]
 pub struct User {
     pub name: String,
     pub pk_hash: [u8; 20],
-    pub secret_key_bytes: Vec<u8>,
     pub secret_key: SecretKey,
     pub public_key: [u8; 33],
     pub txns_hist: Vec<Tx>,
-    pub pending_tx: Vec<PendingTx>, // TODO quizas alcanza solo con el vector de arriba
 }
 
 impl User {
@@ -246,20 +238,22 @@ impl User {
         let secp = Secp256k1::new();
 
         // Secret Key
-        let secret_key_bytes = match is_anonymous {
+        let secret_key = match is_anonymous {
             true => {
                 let mut private_key_bytes: [u8; 32] = [0; 32];
                 rng.fill(&mut private_key_bytes);
 
-                private_key_bytes.to_vec()
+                SecretKey::from_slice(&private_key_bytes).unwrap()
             }
-            false => bs58::decode(priv_key_wif)
-                .with_check(None)
-                .into_vec()
-                .unwrap(),
-        };
+            false => {
+                let secret_key_bytes = bs58::decode(priv_key_wif)
+                    .with_check(None)
+                    .into_vec()
+                    .unwrap();
 
-        let secret_key = SecretKey::from_slice(&secret_key_bytes[1..33]).unwrap();
+                SecretKey::from_slice(&secret_key_bytes[1..33]).unwrap()
+            }
+        };
 
         // Public key
         let public_key = secret_key.public_key(&secp).serialize();
@@ -270,11 +264,9 @@ impl User {
         User {
             name,
             pk_hash,
-            secret_key_bytes,
             secret_key,
             public_key,
             txns_hist: Vec::new(),
-            pending_tx: Vec::new(),
         }
     }
 
@@ -298,15 +290,12 @@ impl User {
 
 #[cfg(test)]
 mod tests {
-    use bitcoin_hashes::sha256;
-    use bs58::decode;
-    use secp256k1::ffi::{secp256k1_ecdsa_signature_serialize_der, PublicKey};
     use secp256k1::Message;
 
     use super::*;
     use crate::logger::Logger;
     use crate::net::message::ping_pong::PayloadPingPong;
-    use crate::net::message::tx::{decode_internal_tx, OutPoint, Tx, TxIn, TxOut};
+    use crate::net::message::tx::{OutPoint, Tx, TxIn, TxOut};
     use crate::utils::{double_sha256, get_address_base58};
 
     #[test]
@@ -316,12 +305,12 @@ mod tests {
             .map_err(|err| err.to_string())
             .unwrap();
 
-        let mut wallet = Wallet::new(config, logger.tx);
-
         let user1 = User::new("Alice".to_string(), "".to_string(), true);
+
+        let mut wallet = Wallet::new(config, logger.tx, user1);
+
         let user2 = User::new("Bob".to_string(), "".to_string(), true);
 
-        wallet.add_user(user1);
         wallet.add_user(user2);
 
         assert_eq!(wallet.users.len(), 2);
@@ -334,11 +323,9 @@ mod tests {
             .map_err(|err| err.to_string())
             .unwrap();
 
-        let mut wallet = Wallet::new(config, logger.tx);
-
         let user = User::new("Alice".to_string(), "".to_string(), true);
 
-        wallet.add_user(user);
+        let _wallet = Wallet::new(config, logger.tx, user);
 
         // enviar get utxos
         // voy a enviar un msg Payload y quiero recibir una lista de UTXOs
@@ -421,7 +408,9 @@ mod tests {
             .map_err(|err| err.to_string())
             .unwrap();
 
-        let mut wallet = Wallet::new(config, logger.tx);
+        let user = User::new("Alice".to_string(), "".to_string(), true);
+
+        let mut wallet = Wallet::new(config, logger.tx, user);
 
         let ping_message = MessagePayload::Ping(PayloadPingPong::new());
 
@@ -438,14 +427,10 @@ mod tests {
             .map_err(|err| err.to_string())
             .unwrap();
 
-        let mut wallet = Wallet::new(config, logger.tx);
-
         let priv_key_wif = "cVK6pF1sfsvvmF9vGyq4wFeMywy1SMFHNpXa3d4Hi2evKHRQyTbn".to_string();
         let messi = User::new("Messi".to_string(), priv_key_wif, false);
 
-        wallet.add_user(messi.clone());
-
-        wallet.create_pending_tx(messi.clone(), "mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb", 10.0);
+        let mut wallet = Wallet::new(config, logger.tx, messi);
 
         wallet.receive();
 
@@ -560,7 +545,6 @@ mod tests {
         tx.tx_in[0].script_length = script_sig.len();
 
         let final_tx_encode = tx.encode(&mut buffer);
-        println!("final_tx_encode: {:?}", final_tx_encode);
 
         Ok(())
     }

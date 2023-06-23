@@ -598,24 +598,22 @@ mod tests {
             0xf1, 0xc5, 0xc6, 0xa8, 0x73, 0x14, 0x09, 0x69, 0x4b, 0x29, 0x70, 0x8f, 0x36, 0x8a,
             0x12, 0x89, 0xcc, 0x7b,
         ];
-
         hash.reverse();
 
-        let mut script_prev_hash = [
-            0x76, 0xa9, 0x14, 0xb0, 0x99, 0xbf, 0xf0, 0x65, 0x3d, 0x67, 0xaf, 0x61, 0xc1, 0x83,
-            0xfe, 0xb3, 0xee, 0xfe, 0x05, 0xeb, 0xf5, 0xcf, 0x4e, 0x88, 0xac,
-        ];
-
-        script_prev_hash.reverse();
+        // let mut script_prev_hash = [
+        //     0x76, 0xa9, 0x14, 0xb0, 0x99, 0xbf, 0xf0, 0x65, 0x3d, 0x67, 0xaf, 0x61, 0xc1, 0x83,
+        //     0xfe, 0xb3, 0xee, 0xfe, 0x05, 0xeb, 0xf5, 0xcf, 0x4e, 0x88, 0xac,
+        // ];
+        // script_prev_hash.reverse();
 
         let tx_in_1 = TxIn {
             previous_output: OutPoint {
                 hash: hash,
                 index: 0,
             },
-            script_length: script_prev_hash.len(),
-            signature_script: script_prev_hash.to_vec(),
-            sequence: 0xffffffff,
+            script_length: 0,         // script_prev_hash.len(),
+            signature_script: vec![], // script_prev_hash.to_vec(),
+            sequence: 0,
         };
 
         // Target tx_out
@@ -674,25 +672,24 @@ mod tests {
 
         tx_bytes.extend([1, 0, 0, 0]);
 
-        // let signature_hash = sha256::Hash::hash(&tx_bytes); // signature hash
-        let signature_hash = double_sha256(&tx_bytes).to_byte_array(); // signature hash
+        let signature_hash = sha256::Hash::hash(&tx_bytes).to_byte_array(); // signature hash
+                                                                            // let signature_hash = double_sha256(&tx_bytes).to_byte_array(); // signature hash
 
         // firmar la transaccion
-        let secp = Secp256k1::new();
         let private_key = messi.secret_key;
+
         let message = Message::from_slice(&signature_hash).unwrap();
-        let signature = secp.sign_ecdsa(&message.clone(), &private_key);
+        let signature = private_key.sign_ecdsa(message.clone());
         let der_signature = signature.clone().serialize_der().to_vec();
 
-        // Agregar el tipo de hash (SIGHASH_ALL) al final de la firma
-        let signature_with_hash_type = [&der_signature[..], &[0x01]].concat();
+        let sec_public_key = messi.public_key;
 
-        // Obtener la representación comprimida de la clave pública
-        let public_key = messi.public_key;
-
-        let script_sig = [&signature_with_hash_type[..], &public_key[..]].concat();
-
-        println!("script_sig: {:?}", script_sig);
+        let mut script_sig: Vec<u8> = Vec::new();
+        script_sig.extend(vec![(der_signature.len() + 1) as u8]);
+        script_sig.extend(der_signature);
+        script_sig.extend([1]); // SIGHASH_ALL
+        script_sig.extend(vec![sec_public_key.len() as u8]);
+        script_sig.extend(sec_public_key);
 
         tx.tx_in[0].signature_script = script_sig.clone();
         tx.tx_in[0].script_length = script_sig.len();
@@ -700,12 +697,28 @@ mod tests {
         let final_tx_encode = tx.encode(&mut buffer);
         println!("final_tx_encode: {:?}", final_tx_encode);
 
-        // Verifica la firma usando la clave pública correspondiente
-        // let public_key = messi.secret_key.public_key(&secp);
-        // let verification_result =
-        //     secp.verify_ecdsa(&message.clone(), &signature.clone(), &public_key.clone()); // Devuelve OK(()) es que está verificada, es horrible esto
-        // println!("verification_result: {:?}", verification_result);
-
         Ok(())
+    }
+
+    fn decode_jimmy_song_raw_tx() {
+        let buffer = [
+            1, 0, 0, 0, 1, 129, 63, 121, 1, 26, 203, 128, 146, 93, 254, 105, 179, 222, 243, 85,
+            254, 145, 75, 209, 217, 106, 63, 95, 113, 191, 131, 3, 198, 169, 137, 199, 209, 0, 0,
+            0, 0, 107, 72, 48, 69, 2, 33, 0, 237, 129, 255, 25, 46, 117, 163, 253, 35, 4, 0, 77,
+            202, 219, 116, 111, 165, 226, 76, 80, 49, 204, 252, 242, 19, 32, 176, 39, 116, 87, 201,
+            143, 2, 32, 122, 152, 109, 149, 92, 110, 12, 179, 93, 68, 106, 137, 211, 245, 97, 0,
+            244, 215, 246, 120, 1, 195, 25, 103, 116, 58, 156, 142, 16, 97, 91, 237, 1, 33, 3, 73,
+            252, 78, 99, 30, 54, 36, 165, 69, 222, 63, 137, 245, 216, 104, 76, 123, 129, 56, 189,
+            148, 189, 213, 49, 210, 226, 19, 191, 1, 107, 39, 138, 254, 255, 255, 255, 2, 161, 53,
+            239, 1, 0, 0, 0, 0, 25, 118, 169, 20, 188, 59, 101, 77, 202, 126, 86, 176, 77, 202, 24,
+            242, 86, 108, 218, 240, 46, 141, 154, 218, 136, 172, 153, 195, 152, 0, 0, 0, 0, 0, 25,
+            118, 169, 20, 28, 75, 199, 98, 221, 84, 35, 227, 50, 22, 103, 2, 203, 117, 244, 13,
+            247, 159, 234, 18, 136, 172, 25, 67, 6, 0,
+        ];
+
+        let mut offset: usize = 0;
+        let tx = decode_internal_tx(&buffer, &mut offset);
+
+        println!("tx: {:?}", tx);
     }
 }

@@ -309,10 +309,6 @@ impl User {
     pub fn get_name(&self) -> String {
         self.name.clone()
     }
-
-    // pub fn get_tx_hist(&self) -> Vec<Tx> {
-    //     self.txns_hist.clone()
-    // }
 }
 
 #[cfg(test)]

@@ -1,8 +1,7 @@
 use crate::net::message::tx::Tx;
-use crate::net::message::tx::TxIn;
-use crate::utils::*;
+use bitcoin_hashes::hash160;
+use bitcoin_hashes::Hash;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Utxo {
@@ -29,7 +28,17 @@ pub fn update_utxo_set(utxo_set: &mut BTreeMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
         let mut sig_script_inv = tx_in.signature_script.clone();
         sig_script_inv.reverse();
 
+        // HOLA
+        let sig_length = tx_in.signature_script[0] as usize;
+        let sig_pk = tx_in.signature_script[sig_length + 1..].to_vec();
+        let pk_hash = hash160::Hash::hash(&sig_pk);
+
         if sig_script_inv.len() < 22 {
+            return;
+        }
+
+        if tx_in.script_length == 30 {
+            // Esto es una coinbase
             return;
         }
 
@@ -39,7 +48,7 @@ pub fn update_utxo_set(utxo_set: &mut BTreeMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
         let hash_tx = tx_in.previous_output.hash;
         let index = tx_in.previous_output.index;
 
-        if let Some(utxos) = utxo_set.get_mut(&pk_hash) {
+        if let Some(utxos) = utxo_set.get(&pk_hash) {
             let mut utxos = utxos.clone();
 
             for i in 0..utxos.len() {
@@ -53,22 +62,6 @@ pub fn update_utxo_set(utxo_set: &mut BTreeMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
             utxo_set.insert(pk_hash, utxos);
         }
     }
-}
-
-pub fn is_tx_spent(utxo_set: &HashMap<[u8; 20], Vec<Utxo>>, tx_in: &TxIn) -> bool {
-    // recorrer todos los hashes y ver si tiene el outpoint que apunta al tx_in que quiero
-    let tx_hash = tx_in.previous_output.hash;
-
-    // para cada address, preguntar si UTXO.transaction_id == hash_interes
-    for (address, utxos) in utxo_set {
-        for utxo in utxos {
-            if utxo.transaction_id == tx_hash {
-                return false;
-            }
-        }
-    }
-
-    true // If we can't find the Tx then it's spent
 }
 
 // Add UTXO to each UTXO

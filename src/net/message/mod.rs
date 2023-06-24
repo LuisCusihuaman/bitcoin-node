@@ -1,11 +1,13 @@
+use self::get_data_inv::{decode_get_data, decode_inv, PayloadGetDataInv};
+use self::tx_status::{decode_tx_status, PayloadTxStatus};
 use crate::net::message::block::{decode_block, Block};
 use crate::net::message::get_blocks::PayloadGetBlocks;
-use crate::net::message::get_data_inv::{decode_data_inv, PayloadGetDataInv};
 use crate::net::message::get_headers::{decode_headers, PayloadGetHeaders};
+use crate::net::message::get_utxos::{decode_get_utxos, PayloadGetUtxos};
 use crate::net::message::ping_pong::{decode_ping, decode_pong, PayloadPingPong};
 use crate::net::message::tx::{decode_tx, Tx};
+use crate::net::message::utxos_msg::{decode_utxos, PayloadUtxosMsg};
 use crate::net::message::version::{decode_version, PayloadVersion};
-
 use crate::utils::read_le;
 use std::mem;
 
@@ -13,9 +15,19 @@ pub mod block;
 pub mod get_blocks;
 pub mod get_data_inv;
 pub mod get_headers;
+pub mod get_utxos;
 pub mod ping_pong;
 pub mod tx;
+pub mod tx_status;
+pub mod utxos_msg;
 pub mod version;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TxStatus {
+    Confirmed,
+    Unconfirmed,
+    Unknown,
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum MessagePayload {
@@ -29,7 +41,11 @@ pub enum MessagePayload {
     Block(Block),
     Ping(PayloadPingPong),
     Pong(PayloadPingPong),
+    GetUTXOs(PayloadGetUtxos),
+    UTXOs(PayloadUtxosMsg),
     Tx(Tx),
+    GetTxStatus(Tx),           // Wallet -> Node
+    TxStatus(PayloadTxStatus), // Node -> Wallet
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -114,7 +130,11 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::GetData(get_data) => get_data.size(),
             MessagePayload::Ping(ping) => ping.size(),
             MessagePayload::Pong(pong) => pong.size(),
+            MessagePayload::GetUTXOs(get_utxos) => get_utxos.size(),
+            MessagePayload::UTXOs(utxos) => utxos.size(),
             MessagePayload::Tx(tx) => tx.size(),
+            MessagePayload::GetTxStatus(tx) => tx.size(),
+            MessagePayload::TxStatus(tx_status) => tx_status.size(),
             _ => no_payload,
         }
     }
@@ -139,8 +159,20 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::Pong(pong) => {
                 pong.encode(buffer);
             }
+            MessagePayload::GetUTXOs(get_utxo) => {
+                get_utxo.encode(buffer);
+            }
+            MessagePayload::UTXOs(utxos) => {
+                utxos.encode(buffer);
+            }
             MessagePayload::Tx(tx) => {
                 tx.encode(buffer);
+            }
+            MessagePayload::TxStatus(tx_status) => {
+                tx_status.encode(buffer);
+            }
+            MessagePayload::GetTxStatus(get_tx_status) => {
+                get_tx_status.encode(buffer);
             }
             _ => {}
         }
@@ -159,7 +191,11 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::Block(_) => "block",
             MessagePayload::Ping(_) => "ping",
             MessagePayload::Pong(_) => "pong",
+            MessagePayload::GetUTXOs(_) => "getutxos",
+            MessagePayload::UTXOs(_) => "utxos",
             MessagePayload::Tx(_) => "tx",
+            MessagePayload::GetTxStatus(_) => "gettxstatus",
+            MessagePayload::TxStatus(_) => "txstatus",
         }
     }
 
@@ -167,12 +203,18 @@ impl Encoding<MessagePayload> for MessagePayload {
         match cmd {
             "version" => decode_version(buffer),
             "headers" => decode_headers(buffer),
-            "inv" => decode_data_inv(buffer),
+            "inv" => decode_inv(buffer),
             "verack" => Ok(MessagePayload::Verack),
             "block" => decode_block(buffer),
             "ping" => decode_ping(buffer),
             "pong" => decode_pong(buffer),
+            "getutxos" => decode_get_utxos(buffer),
+            "utxos" => decode_utxos(buffer),
             "tx" => decode_tx(buffer),
+            "getdata" => decode_get_data(buffer),
+            "txconfirmed" => decode_tx(buffer),
+            "gettxstatus" => decode_tx(buffer),
+            "txstatus" => decode_tx_status(buffer),
             _ => Err("Unknown command: ".to_owned() + cmd),
         }
     }

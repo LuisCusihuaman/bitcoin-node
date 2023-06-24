@@ -55,7 +55,7 @@ impl PayloadGetDataInv {
     }
 }
 
-pub fn decode_data_inv(buffer: &[u8]) -> Result<MessagePayload, String> {
+pub fn decode_internal_data_inv(buffer: &[u8]) -> PayloadGetDataInv {
     let count = read_varint(&buffer[0..]);
     let offset = get_offset(buffer);
 
@@ -64,20 +64,28 @@ pub fn decode_data_inv(buffer: &[u8]) -> Result<MessagePayload, String> {
     for i in 0..count {
         let inv = decode_inventory(&buffer[offset + i * 36..offset + (i + 1) * 36]);
 
-        if inv.is_none() {
-            return Err("Error decoding inventory".to_string());
-        }
+        // if inv.is_none() {
+        //     return Err("Error decoding inventory".to_string());
+        // }
 
         inventories.push(inv.unwrap());
     }
 
-    let inv = PayloadGetDataInv {
+    PayloadGetDataInv {
         count,
         inv_type: inventories[0].inv_type,
         inventories,
-    };
+    }
+}
 
-    Ok(MessagePayload::Inv(inv))
+pub fn decode_get_data(buffer: &[u8]) -> Result<MessagePayload, String> {
+    let get_data_inv = decode_internal_data_inv(buffer);
+    Ok(MessagePayload::GetData(get_data_inv))
+}
+
+pub fn decode_inv(buffer: &[u8]) -> Result<MessagePayload, String> {
+    let get_data_inv = decode_internal_data_inv(buffer);
+    Ok(MessagePayload::Inv(get_data_inv))
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

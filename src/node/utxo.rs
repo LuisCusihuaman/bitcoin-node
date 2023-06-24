@@ -1,14 +1,54 @@
 use crate::net::message::tx::Tx;
-use crate::net::message::tx::TxIn;
-use crate::utils::*;
+use crate::utils::read_be;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
+use std::mem;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Utxo {
     pub transaction_id: [u8; 32],
-    pub output_index: u32, // this is a transaction tx_in outpoint index?
+    pub output_index: u32, // this is a transaction tx/_in outpoint index?
     pub value: u64,
+}
+
+impl Utxo {
+    pub fn size(&self) -> usize {
+        let mut size = 0;
+
+        size += 32;
+        size += mem::size_of::<u32>();
+        size += mem::size_of::<u64>();
+
+        size
+    }
+
+    pub fn encode(&self) -> Vec<u8> {
+        let mut encoded = Vec::new();
+
+        encoded.extend(&self.transaction_id);
+        encoded.extend(&self.output_index.to_be_bytes());
+        encoded.extend(&self.value.to_be_bytes());
+
+        encoded
+    }
+}
+
+pub fn decode(buffer: &[u8]) -> Option<Utxo> {
+    if buffer.len() != 44 {
+        return None;
+    }
+
+    let mut transaction_id = [0u8; 32];
+    transaction_id.copy_from_slice(&buffer[0..32]);
+
+    let output_index = read_be(&buffer[32..36]) as u32;
+
+    let value = read_be(&buffer[36..44]) as u64;
+
+    Some(Utxo {
+        transaction_id,
+        output_index,
+        value,
+    })
 }
 
 // Get UTXOs of a specific address
@@ -29,7 +69,17 @@ pub fn update_utxo_set(utxo_set: &mut BTreeMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
         let mut sig_script_inv = tx_in.signature_script.clone();
         sig_script_inv.reverse();
 
+        // HOLA
+        // let sig_length = tx_in.signature_script[0] as usize;
+        // let sig_pk = tx_in.signature_script[sig_length + 1..].to_vec();
+        // let pk_hash = hash160::Hash::hash(&sig_pk);
+
         if sig_script_inv.len() < 22 {
+            return;
+        }
+
+        if tx_in.script_length == 30 {
+            // Esto es una coinbase
             return;
         }
 
@@ -39,7 +89,7 @@ pub fn update_utxo_set(utxo_set: &mut BTreeMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
         let hash_tx = tx_in.previous_output.hash;
         let index = tx_in.previous_output.index;
 
-        if let Some(utxos) = utxo_set.get_mut(&pk_hash) {
+        if let Some(utxos) = utxo_set.get(&pk_hash) {
             let mut utxos = utxos.clone();
 
             for i in 0..utxos.len() {
@@ -53,22 +103,6 @@ pub fn update_utxo_set(utxo_set: &mut BTreeMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
             utxo_set.insert(pk_hash, utxos);
         }
     }
-}
-
-pub fn is_tx_spent(utxo_set: &HashMap<[u8; 20], Vec<Utxo>>, tx_in: &TxIn) -> bool {
-    // recorrer todos los hashes y ver si tiene el outpoint que apunta al tx_in que quiero
-    let tx_hash = tx_in.previous_output.hash;
-
-    // para cada address, preguntar si UTXO.transaction_id == hash_interes
-    for (address, utxos) in utxo_set {
-        for utxo in utxos {
-            if utxo.transaction_id == tx_hash {
-                return false;
-            }
-        }
-    }
-
-    true // If we can't find the Tx then it's spent
 }
 
 // Add UTXO to each UTXO

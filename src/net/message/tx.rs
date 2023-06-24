@@ -188,7 +188,7 @@ pub fn decode_tx(buffer: &[u8]) -> Result<MessagePayload, String> {
 
 pub fn decode_internal_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
     let old_offset = *offset;
-    let version = read_u32_le(buffer, 0);
+    let version = read_u32_le(buffer, *offset);
     *offset += 4;
 
     // If present, always 0x0001 , and indicates the presence of witness data

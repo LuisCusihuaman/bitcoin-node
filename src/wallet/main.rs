@@ -21,7 +21,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         logger.run();
     });
 
-    let mut _wallet = Wallet::new(config, logger_tx);
+    // let mut _wallet = Wallet::new(config, logger_tx);
 
     // TODO inicializar interface
 

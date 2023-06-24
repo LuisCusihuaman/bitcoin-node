@@ -5,6 +5,7 @@ use crate::net::message::get_data_inv::Inventory;
 use crate::net::message::get_data_inv::PayloadGetDataInv;
 use crate::net::message::get_headers::PayloadGetHeaders;
 use crate::net::message::ping_pong::PayloadPingPong;
+use crate::net::message::tx::Tx;
 use crate::net::message::utxos_msg::PayloadUtxosMsg;
 use crate::net::message::version::PayloadVersion;
 use crate::net::message::MessagePayload;
@@ -18,7 +19,9 @@ use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::net::TcpListener;
 use std::net::{IpAddr, ToSocketAddrs};
+use std::sync::mpsc::channel;
 use std::sync::mpsc::Sender;
+use std::thread::spawn;
 
 use super::utxo::get_utxos_by_address;
 
@@ -29,45 +32,10 @@ pub struct NodeManager {
     blocks: Vec<Block>,
     utxo_set: BTreeMap<[u8; 20], Vec<Utxo>>, // utxo_set is a Hash with key <address> and value <OutPoint>
     blocks_btreemap: BTreeMap<[u8; 32], usize>,
+    unconfirm_txns: HashMap<Vec<u8>, Tx>,
 }
 
 impl NodeManager {
-    pub fn run(&mut self) -> Result<(), String> {
-        loop {
-            self.wait_for(vec![]);
-        }
-    }
-
-    pub fn listen(&mut self) {
-        let listener = TcpListener::bind("127.0.0.1:8080").unwrap();
-
-        // Wait for a connection.
-        match listener.accept() {
-            Ok((stream, addr)) => {
-                log(
-                    self.logger_tx.clone(),
-                    format!("Wallet connected successfully: {addr}"),
-                );
-
-                let connection = P2PConnection {
-                    logger_tx: self.logger_tx.clone(),
-                    handshaked: true,
-                    tcp_stream: stream,
-                    peer_address: addr.to_string(),
-                };
-
-                self.node_network.peer_connections.push(connection);
-            }
-            Err(e) => println!("couldn't connect to wallet: {e:?}"),
-        }
-
-        log(self.logger_tx.clone(), format!("Listening on port 8080..."));
-
-        loop {
-            self.wait_for(vec![]);
-        }
-    }
-
     pub fn new(config: Config, logger_tx: Sender<String>) -> NodeManager {
         let logger_tx_cloned = logger_tx.clone();
         NodeManager {
@@ -77,6 +45,7 @@ impl NodeManager {
             blocks: vec![], // inicializar el block genesis (con el config)
             utxo_set: BTreeMap::new(),
             blocks_btreemap: BTreeMap::new(),
+            unconfirm_txns: HashMap::new(),
         }
     }
 
@@ -282,12 +251,16 @@ impl NodeManager {
                             }),
                         );
                     }
-                    MessagePayload::Tx(_tx) => {
+                    MessagePayload::Tx(tx) => {
                         log(
                             self.logger_tx.clone(),
                             format!("Received tx from {}", peer_address),
                         );
-                        // TODO Broadcasting de la tx
+
+                        let tx_message = MessagePayload::Tx(tx.clone());
+
+                        self.unconfirm_txns.insert(tx.id.to_vec(), tx.clone());
+                        self.broadcast(&tx_message);
                     }
                     _ => {
                         log(
@@ -460,7 +433,7 @@ impl NodeManager {
     }
 
     fn blocks_download(&mut self) {
-        let timestamp = match date_to_timestamp("2023-04-11") {
+        let timestamp = match date_to_timestamp("2023-06-24") {
             Some(timestamp) => timestamp,
             None => panic!("Error parsing date"),
         };
@@ -541,6 +514,66 @@ impl NodeManager {
 
     fn get_random_peer_address(&self) -> String {
         self.node_network.get_one_peer_address()
+    }
+
+    pub fn run(&mut self) {
+        let (sender, rx) = channel();
+        let listener = TcpListener::bind("127.0.0.1:18333").unwrap();
+        let logger_tx = self.logger_tx.clone();
+
+        log(
+            self.logger_tx.clone(),
+            format!("Listening on port 18333..."),
+        );
+
+        spawn(move || {
+            listen_for_conn(logger_tx, listener, sender);
+        });
+
+        loop {
+            self.wait_for(vec![]);
+
+            match rx.try_recv() {
+                Ok(conn) => {
+                    self.node_network.peer_connections.push(conn);
+                }
+                Err(_) => {}
+            }
+        }
+    }
+}
+
+fn listen_for_conn(
+    logger_tx: Sender<String>,
+    listener: TcpListener,
+    sender: Sender<P2PConnection>,
+) {
+    loop {
+        match listener.accept() {
+            Ok((stream, addr)) => {
+                stream.set_nonblocking(true).unwrap();
+
+                log(
+                    logger_tx.clone(),
+                    format!("Wallet connected successfully: {addr}"),
+                );
+
+                let connection = P2PConnection {
+                    logger_tx: logger_tx.clone(),
+                    handshaked: true,
+                    tcp_stream: stream,
+                    peer_address: addr.to_string(),
+                };
+
+                sender.send(connection).unwrap();
+            }
+            Err(e) => {
+                log(
+                    logger_tx.clone(),
+                    format!("couldn't connect to wallet: {e:?}"),
+                );
+            }
+        }
     }
 }
 

@@ -1,6 +1,6 @@
+use self::get_data_inv::{decode_get_data, decode_inv, PayloadGetDataInv};
 use crate::net::message::block::{decode_block, Block};
 use crate::net::message::get_blocks::PayloadGetBlocks;
-use crate::net::message::get_data_inv::{decode_data_inv, PayloadGetDataInv};
 use crate::net::message::get_headers::{decode_headers, PayloadGetHeaders};
 use crate::net::message::get_utxos::{decode_get_utxos, PayloadGetUtxos};
 use crate::net::message::ping_pong::{decode_ping, decode_pong, PayloadPingPong};
@@ -40,6 +40,7 @@ pub enum MessagePayload {
     GetUTXOs(PayloadGetUtxos),
     UTXOs(PayloadUtxosMsg),
     Tx(Tx),
+    TxConfirmed(Tx),
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -154,8 +155,8 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::GetUTXOs(get_utxo) => {
                 get_utxo.encode(buffer);
             }
-            MessagePayload::UTXOs(send_utxo) => {
-                send_utxo.encode(buffer);
+            MessagePayload::UTXOs(utxos) => {
+                utxos.encode(buffer);
             }
             MessagePayload::Tx(tx) => {
                 tx.encode(buffer);
@@ -187,7 +188,7 @@ impl Encoding<MessagePayload> for MessagePayload {
         match cmd {
             "version" => decode_version(buffer),
             "headers" => decode_headers(buffer),
-            "inv" => decode_data_inv(buffer),
+            "inv" => decode_inv(buffer),
             "verack" => Ok(MessagePayload::Verack),
             "block" => decode_block(buffer),
             "ping" => decode_ping(buffer),
@@ -195,6 +196,7 @@ impl Encoding<MessagePayload> for MessagePayload {
             "getutxos" => decode_get_utxos(buffer),
             "utxos" => decode_utxos(buffer),
             "tx" => decode_tx(buffer),
+            "getdata" => decode_get_data(buffer),
             _ => Err("Unknown command: ".to_owned() + cmd),
         }
     }

@@ -154,8 +154,8 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::GetUTXOs(get_utxo) => {
                 get_utxo.encode(buffer);
             }
-            MessagePayload::UTXOs(send_utxo) => {
-                send_utxo.encode(buffer);
+            MessagePayload::UTXOs(utxos) => {
+                utxos.encode(buffer);
             }
             MessagePayload::Tx(tx) => {
                 tx.encode(buffer);

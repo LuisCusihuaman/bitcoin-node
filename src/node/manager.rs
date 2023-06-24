@@ -30,7 +30,7 @@ pub struct NodeManager {
     blocks: Vec<Block>,
     utxo_set: BTreeMap<[u8; 20], Vec<Utxo>>, // utxo_set is a Hash with key <address> and value <OutPoint>
     blocks_btreemap: BTreeMap<[u8; 32], usize>,
-    pending_txns: HashMap<Vec<u8>, Tx>,
+    wallet_txns: HashMap<Vec<u8>, Tx>,
 }
 
 impl NodeManager {
@@ -84,7 +84,7 @@ impl NodeManager {
             blocks: vec![], // inicializar el block genesis (con el config)
             utxo_set: BTreeMap::new(),
             blocks_btreemap: BTreeMap::new(),
-            pending_txns: HashMap::new(),
+            wallet_txns: HashMap::new(),
         }
     }
 
@@ -296,50 +296,10 @@ impl NodeManager {
                             format!("Received tx from {}", peer_address),
                         );
 
-                        // TODO: Validations
-                        // 1. The inputs are previously unspent.
-                        // 2. The sum of the inputs is greater than or equal to the sum of the outputs.
-                        // 3. The ScriptSig successfully unlocks the previous ScriptPubKey.
-
-                        self.pending_txns.insert(tx.id.clone().to_vec(), tx.clone());
-
                         let tx_message = MessagePayload::Tx(tx.clone());
 
+                        self.wallet_txns.insert(tx.id.to_vec(), tx.clone());
                         self.broadcast(&tx_message);
-                    }
-                    MessagePayload::GetData(get_data) => {
-                        log(
-                            self.logger_tx.clone(),
-                            format!("Received getdata from {}", peer_address),
-                        );
-
-                        for inv in get_data.inventories.clone() {
-                            if inv.inv_type != 1 {
-                                continue;
-                            };
-
-                            let tx_pending = match self.pending_txns.get(&inv.hash) {
-                                Some(tx_pending) => {
-                                    log(
-                                        self.logger_tx.clone(),
-                                        format!("Tx found in pending txns"),
-                                    );
-                                    tx_pending
-                                }
-                                None => {
-                                    log(
-                                        self.logger_tx.clone(),
-                                        format!("Tx not found in pending txns"),
-                                    );
-                                    continue;
-                                }
-                            };
-
-                            self.send_to(
-                                peer_address.clone(),
-                                &MessagePayload::Tx(tx_pending.clone()),
-                            );
-                        }
                     }
                     _ => {
                         log(
@@ -512,12 +472,10 @@ impl NodeManager {
     }
 
     fn blocks_download(&mut self) {
-        let timestamp = match date_to_timestamp("2023-06-01") { 
+        let timestamp = match date_to_timestamp("2023-06-24") {
             Some(timestamp) => timestamp,
             None => panic!("Error parsing date"),
         };
-
-        println!("timestamps: {:?}", timestamp);
 
         // TODO: Integrate date from self.config.download_blocks_since_date
         let blocks = self.get_blocks();

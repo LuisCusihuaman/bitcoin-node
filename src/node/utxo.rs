@@ -1,13 +1,54 @@
 use crate::net::message::tx::Tx;
-use bitcoin_hashes::hash160;
-use bitcoin_hashes::Hash;
+use crate::utils::read_be;
 use std::collections::BTreeMap;
+use std::mem;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Utxo {
     pub transaction_id: [u8; 32],
-    pub output_index: u32, // this is a transaction tx_in outpoint index?
+    pub output_index: u32, // this is a transaction tx/_in outpoint index?
     pub value: u64,
+}
+
+impl Utxo {
+    pub fn size(&self) -> usize {
+        let mut size = 0;
+
+        size += 32;
+        size += mem::size_of::<u32>();
+        size += mem::size_of::<u64>();
+
+        size
+    }
+
+    pub fn encode(&self) -> Vec<u8> {
+        let mut encoded = Vec::new();
+
+        encoded.extend(&self.transaction_id);
+        encoded.extend(&self.output_index.to_be_bytes());
+        encoded.extend(&self.value.to_be_bytes());
+
+        encoded
+    }
+}
+
+pub fn decode(buffer: &[u8]) -> Option<Utxo> {
+    if buffer.len() != 44 {
+        return None;
+    }
+
+    let mut transaction_id = [0u8; 32];
+    transaction_id.copy_from_slice(&buffer[0..32]);
+
+    let output_index = read_be(&buffer[32..36]) as u32;
+
+    let value = read_be(&buffer[36..44]) as u64;
+
+    Some(Utxo {
+        transaction_id,
+        output_index,
+        value,
+    })
 }
 
 // Get UTXOs of a specific address
@@ -29,9 +70,9 @@ pub fn update_utxo_set(utxo_set: &mut BTreeMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
         sig_script_inv.reverse();
 
         // HOLA
-        let sig_length = tx_in.signature_script[0] as usize;
-        let sig_pk = tx_in.signature_script[sig_length + 1..].to_vec();
-        let pk_hash = hash160::Hash::hash(&sig_pk);
+        // let sig_length = tx_in.signature_script[0] as usize;
+        // let sig_pk = tx_in.signature_script[sig_length + 1..].to_vec();
+        // let pk_hash = hash160::Hash::hash(&sig_pk);
 
         if sig_script_inv.len() < 22 {
             return;

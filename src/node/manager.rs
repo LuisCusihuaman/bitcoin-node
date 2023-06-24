@@ -19,7 +19,9 @@ use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::net::TcpListener;
 use std::net::{IpAddr, ToSocketAddrs};
+use std::sync::mpsc::channel;
 use std::sync::mpsc::Sender;
+use std::thread::spawn;
 
 use super::utxo::get_utxos_by_address;
 
@@ -34,47 +36,6 @@ pub struct NodeManager {
 }
 
 impl NodeManager {
-    pub fn run(&mut self) -> Result<(), String> {
-        loop {
-            self.wait_for(vec![]);
-        }
-    }
-
-    pub fn listen(&mut self) {
-        let listener = TcpListener::bind("127.0.0.1:18333").unwrap();
-
-        log(
-            self.logger_tx.clone(),
-            format!("Listening on port 18333..."),
-        );
-
-        // Wait for a connection.
-        match listener.accept() {
-            Ok((stream, addr)) => {
-                stream.set_nonblocking(true).unwrap();
-
-                log(
-                    self.logger_tx.clone(),
-                    format!("Wallet connected successfully: {addr}"),
-                );
-
-                let connection = P2PConnection {
-                    logger_tx: self.logger_tx.clone(),
-                    handshaked: true,
-                    tcp_stream: stream,
-                    peer_address: addr.to_string(),
-                };
-
-                self.node_network.peer_connections.push(connection);
-            }
-            Err(e) => println!("couldn't connect to wallet: {e:?}"),
-        }
-
-        loop {
-            self.wait_for(vec![]);
-        }
-    }
-
     pub fn new(config: Config, logger_tx: Sender<String>) -> NodeManager {
         let logger_tx_cloned = logger_tx.clone();
         NodeManager {
@@ -553,6 +514,66 @@ impl NodeManager {
 
     fn get_random_peer_address(&self) -> String {
         self.node_network.get_one_peer_address()
+    }
+
+    pub fn run(&mut self) {
+        let (sender, rx) = channel();
+        let listener = TcpListener::bind("127.0.0.1:18333").unwrap();
+        let logger_tx = self.logger_tx.clone();
+
+        log(
+            self.logger_tx.clone(),
+            format!("Listening on port 18333..."),
+        );
+
+        spawn(move || {
+            listen_for_conn(logger_tx, listener, sender);
+        });
+
+        loop {
+            self.wait_for(vec![]);
+
+            match rx.try_recv() {
+                Ok(conn) => {
+                    self.node_network.peer_connections.push(conn);
+                }
+                Err(_) => {}
+            }
+        }
+    }
+}
+
+fn listen_for_conn(
+    logger_tx: Sender<String>,
+    listener: TcpListener,
+    sender: Sender<P2PConnection>,
+) {
+    loop {
+        match listener.accept() {
+            Ok((stream, addr)) => {
+                stream.set_nonblocking(true).unwrap();
+
+                log(
+                    logger_tx.clone(),
+                    format!("Wallet connected successfully: {addr}"),
+                );
+
+                let connection = P2PConnection {
+                    logger_tx: logger_tx.clone(),
+                    handshaked: true,
+                    tcp_stream: stream,
+                    peer_address: addr.to_string(),
+                };
+
+                sender.send(connection).unwrap();
+            }
+            Err(e) => {
+                log(
+                    logger_tx.clone(),
+                    format!("couldn't connect to wallet: {e:?}"),
+                );
+            }
+        }
     }
 }
 

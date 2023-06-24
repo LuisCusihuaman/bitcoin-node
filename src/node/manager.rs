@@ -32,7 +32,7 @@ pub struct NodeManager {
     blocks: Vec<Block>,
     utxo_set: BTreeMap<[u8; 20], Vec<Utxo>>, // utxo_set is a Hash with key <address> and value <OutPoint>
     blocks_btreemap: BTreeMap<[u8; 32], usize>,
-    wallet_txns: HashMap<Vec<u8>, Tx>,
+    unconfirm_txns: HashMap<Vec<u8>, Tx>,
 }
 
 impl NodeManager {
@@ -45,7 +45,7 @@ impl NodeManager {
             blocks: vec![], // inicializar el block genesis (con el config)
             utxo_set: BTreeMap::new(),
             blocks_btreemap: BTreeMap::new(),
-            wallet_txns: HashMap::new(),
+            unconfirm_txns: HashMap::new(),
         }
     }
 
@@ -259,7 +259,7 @@ impl NodeManager {
 
                         let tx_message = MessagePayload::Tx(tx.clone());
 
-                        self.wallet_txns.insert(tx.id.to_vec(), tx.clone());
+                        self.unconfirm_txns.insert(tx.id.to_vec(), tx.clone());
                         self.broadcast(&tx_message);
                     }
                     _ => {

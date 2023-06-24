@@ -14,12 +14,18 @@ use secp256k1::{Message, Secp256k1, SecretKey};
 use std::sync::mpsc::Sender;
 use std::vec;
 
+pub enum TxStatus {
+    Confirmed,
+    Unconfirmed,
+}
+
 pub struct Wallet {
     config: Config,
     logger_tx: Sender<String>,
     node_manager: P2PConnection,
     users: Vec<User>,
     pending_tx: PendingTx,
+    tnxs_history: Vec<(TxStatus, Tx)>, // puede ser un struct
 }
 
 impl Wallet {
@@ -36,6 +42,7 @@ impl Wallet {
                 receive_addr: "".to_string(),
                 amount: 0.0,
             },
+            tnxs_history: vec![],
         }
     }
 
@@ -229,7 +236,7 @@ pub struct User {
     pub pk_hash: [u8; 20],
     pub secret_key: SecretKey,
     pub public_key: [u8; 33],
-    pub txns_hist: Vec<Tx>,
+    // pub txns_hist: Vec<Tx>,
 }
 
 impl User {
@@ -266,7 +273,7 @@ impl User {
             pk_hash,
             secret_key,
             public_key,
-            txns_hist: Vec::new(),
+            // txns_hist: Vec::new(),
         }
     }
 
@@ -283,9 +290,9 @@ impl User {
         self.name.clone()
     }
 
-    pub fn get_tx_hist(&self) -> Vec<Tx> {
-        self.txns_hist.clone()
-    }
+    // pub fn get_tx_hist(&self) -> Vec<Tx> {
+    //     self.txns_hist.clone()
+    // }
 }
 
 #[cfg(test)]
@@ -340,7 +347,7 @@ mod tests {
         assert_eq!(user.get_name(), "Alice");
         assert!(!user.get_pk_hash().is_empty());
         assert!(!user.get_pub_key().is_empty());
-        assert!(user.get_tx_hist().is_empty());
+        // assert!(user.get_tx_hist().is_empty());
     }
 
     #[test]
@@ -361,7 +368,7 @@ mod tests {
         assert_eq!(user.get_pk_hash(), address_bytes[..]);
         assert_eq!(get_address_base58(user.get_pk_hash()), address_wif);
         assert_eq!(user.get_name(), "bob");
-        assert!(user.get_tx_hist().is_empty());
+        // assert!(user.get_tx_hist().is_empty());
     }
 
     #[test]

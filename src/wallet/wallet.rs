@@ -80,7 +80,17 @@ impl Wallet {
                     let signed_tx = self.sign_tx(tx, self.users[0].clone());
 
                     // send the Tx to the node
+                    self.tnxs_history
+                        .push((TxStatus::Unconfirmed, signed_tx.clone()));
                     self.send(MessagePayload::Tx(signed_tx));
+                }
+                MessagePayload::TxConfirmed(payload) => {
+                    // update the status of the Tx
+                    for (status, tx) in self.tnxs_history.iter_mut() {
+                        if tx.id == payload.id {
+                            *status = TxStatus::Confirmed;
+                        }
+                    }
                 }
 
                 _ => continue,

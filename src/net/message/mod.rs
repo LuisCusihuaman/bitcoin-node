@@ -40,6 +40,7 @@ pub enum MessagePayload {
     GetUTXOs(PayloadGetUtxos),
     UTXOs(PayloadUtxosMsg),
     Tx(Tx),
+    TxConfirmed(Tx),
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]

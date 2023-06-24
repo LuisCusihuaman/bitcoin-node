@@ -2,7 +2,7 @@ use crate::config::Config;
 use crate::logger::log;
 use crate::net::message::get_utxos::PayloadGetUtxos;
 use crate::net::message::tx::{OutPoint, Tx, TxIn, TxOut};
-use crate::net::message::MessagePayload;
+use crate::net::message::{MessagePayload, TxStatus};
 use crate::net::p2p_connection::P2PConnection;
 use crate::node::utxo::Utxo;
 use crate::utils::{double_sha256, pk_hash_from_addr};
@@ -11,13 +11,9 @@ use bitcoin_hashes::Hash;
 use rand::rngs::OsRng;
 use rand::Rng;
 use secp256k1::{Message, Secp256k1, SecretKey};
+use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 use std::vec;
-
-pub enum TxStatus {
-    Confirmed,
-    Unconfirmed,
-}
 
 pub struct Wallet {
     config: Config,
@@ -25,7 +21,7 @@ pub struct Wallet {
     node_manager: P2PConnection,
     users: Vec<User>,
     pending_tx: PendingTx,
-    tnxs_history: Vec<(TxStatus, Tx)>, // puede ser un struct
+    tnxs_history: HashMap<[u8; 32], (Tx, TxStatus)>, //tnxs_history: Vec<(TxStatus, Tx)>, // puede ser un struct
 }
 
 impl Wallet {
@@ -42,7 +38,7 @@ impl Wallet {
                 receive_addr: "".to_string(),
                 amount: 0.0,
             },
-            tnxs_history: vec![],
+            tnxs_history: HashMap::new(),
         }
     }
 
@@ -77,22 +73,36 @@ impl Wallet {
                     };
 
                     // sign the Tx
-                    let signed_tx = self.sign_tx(tx, self.users[0].clone());
+                    let signed_tx = self.sign_tx(tx.clone(), self.users[0].clone());
 
                     // send the Tx to the node
-                    self.tnxs_history
-                        .push((TxStatus::Unconfirmed, signed_tx.clone()));
+                    self.tnxs_history.insert(tx.id, (tx, TxStatus::Unconfirmed));
                     self.send(MessagePayload::Tx(signed_tx));
                 }
-                MessagePayload::TxConfirmed(payload) => {
+                MessagePayload::TxStatus(payload) => {
                     // update the status of the Tx
-                    for (status, tx) in self.tnxs_history.iter_mut() {
-                        if tx.id == payload.id {
-                            *status = TxStatus::Confirmed;
-                        }
-                    }
-                }
+                    if payload.status.clone() == TxStatus::Unknown {
+                        log(
+                            self.logger_tx.clone(),
+                            format!("Transaction Error. Unknown transaction status"),
+                        );
 
+                        continue;
+                    }
+
+                    match self.tnxs_history.get(&payload.tx_id) {
+                        Some(tx) => {
+                            self.tnxs_history
+                                .insert(payload.tx_id, (tx.0.clone(), payload.status));
+                        }
+                        None => {
+                            log(
+                                self.logger_tx.clone(),
+                                format!("Transaction id not found in transaction history"),
+                            );
+                        }
+                    };
+                }
                 _ => continue,
             }
         }

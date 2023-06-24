@@ -6,16 +6,19 @@ use crate::net::message::get_data_inv::PayloadGetDataInv;
 use crate::net::message::get_headers::PayloadGetHeaders;
 use crate::net::message::ping_pong::PayloadPingPong;
 use crate::net::message::tx::Tx;
+use crate::net::message::tx_status::PayloadTxStatus;
 use crate::net::message::utxos_msg::PayloadUtxosMsg;
 use crate::net::message::version::PayloadVersion;
 use crate::net::message::MessagePayload;
+use crate::net::message::TxStatus;
 use crate::net::p2p_connection::P2PConnection;
 use crate::node::network::NodeNetwork;
 use crate::node::utxo::generate_utxos;
 use crate::node::utxo::update_utxo_set;
 use crate::node::utxo::Utxo;
 use crate::utils::*;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::fs;
 use std::net::TcpListener;
 use std::net::{IpAddr, ToSocketAddrs};
@@ -32,7 +35,7 @@ pub struct NodeManager {
     blocks: Vec<Block>,
     utxo_set: BTreeMap<[u8; 20], Vec<Utxo>>, // utxo_set is a Hash with key <address> and value <OutPoint>
     blocks_btreemap: BTreeMap<[u8; 32], usize>,
-    unconfirm_txns: HashMap<Vec<u8>, Tx>,
+    wallet_tnxs: HashMap<[u8; 32], TxStatus>,
 }
 
 impl NodeManager {
@@ -45,7 +48,7 @@ impl NodeManager {
             blocks: vec![], // inicializar el block genesis (con el config)
             utxo_set: BTreeMap::new(),
             blocks_btreemap: BTreeMap::new(),
-            unconfirm_txns: HashMap::new(),
+            wallet_tnxs: HashMap::new(),
         }
     }
 
@@ -147,6 +150,7 @@ impl NodeManager {
                         };
 
                         self.update_utxo_set(block.clone());
+                        self.update_unconfirm_txns(block.clone().txns);
 
                         // For genesis block
                         if block.get_prev()
@@ -259,8 +263,27 @@ impl NodeManager {
 
                         let tx_message = MessagePayload::Tx(tx.clone());
 
-                        self.unconfirm_txns.insert(tx.id.to_vec(), tx.clone());
+                        self.wallet_tnxs.insert(tx.id, TxStatus::Unconfirmed);
                         self.broadcast(&tx_message);
+                    }
+                    MessagePayload::GetTxStatus(tx) => {
+                        log(
+                            self.logger_tx.clone(),
+                            format!("Received gettxstatus from {}", peer_address),
+                        );
+
+                        let tx_status = match self.wallet_tnxs.get(&tx.id) {
+                            Some(status) => status.clone(),
+                            None => continue,
+                        };
+
+                        self.send_to(
+                            peer_address.clone(),
+                            &MessagePayload::TxStatus(PayloadTxStatus {
+                                tx_id: tx.id.clone(),
+                                status: tx_status,
+                            }),
+                        );
                     }
                     _ => {
                         log(
@@ -273,6 +296,14 @@ impl NodeManager {
             matched_messages.push((peer_address.clone(), matched_peer_messages));
         }
         matched_messages
+    }
+
+    fn update_unconfirm_txns(&mut self, tnxs: Vec<Tx>) {
+        for tx in tnxs {
+            if self.wallet_tnxs.contains_key(&tx.id) {
+                self.wallet_tnxs.insert(tx.id, TxStatus::Confirmed);
+            }
+        }
     }
 
     fn update_utxo_set(&mut self, block: Block) {

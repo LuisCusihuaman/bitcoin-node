@@ -2,7 +2,7 @@ use bitcoin_hashes::{hash160, Hash};
 
 use crate::net::message::tx::Tx;
 use crate::utils::{get_address_base58, read_be};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::mem;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -55,7 +55,7 @@ pub fn decode(buffer: &[u8]) -> Option<Utxo> {
 
 // Get UTXOs of a specific address
 pub fn get_utxos_by_address(
-    utxo_set: &BTreeMap<[u8; 20], Vec<Utxo>>,
+    utxo_set: &HashMap<[u8; 20], Vec<Utxo>>,
     pk_hash: [u8; 20],
 ) -> Vec<Utxo> {
     match utxo_set.get(&pk_hash) {
@@ -65,9 +65,8 @@ pub fn get_utxos_by_address(
 }
 
 // Deletes the outpoints from the UTXO set that each Tx_in points to
-pub fn update_utxo_set(utxo_set: &mut BTreeMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
+pub fn update_utxo_set(utxo_set: &mut HashMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
     for tx_in in &tx.tx_in {
-        // <Sig> <PubKey> OP_DUP OP_HASH160 <PubkeyHash> OP_EQUALVERIFY OP_CHECKSIG
         let mut sig_script_inv = tx_in.signature_script.clone();
         sig_script_inv.reverse();
 
@@ -77,13 +76,10 @@ pub fn update_utxo_set(utxo_set: &mut BTreeMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
         }
 
         // Public Key
-        let sec_pk = sig_script_inv[0..33].to_vec();
-        let pk_hash = hash160::Hash::hash(&sec_pk).to_byte_array();
+        let mut sec_pk = sig_script_inv[0..33].to_vec();
+        sec_pk.reverse();
 
-        let address = get_address_base58(pk_hash.clone());
-        print!("{:?}", tx);
-        print!("{:?}", address);
-        print!("{:?}", pk_hash);
+        let pk_hash = hash160::Hash::hash(&sec_pk).to_byte_array();
 
         let hash_tx = tx_in.previous_output.hash;
         let index = tx_in.previous_output.index;
@@ -105,7 +101,7 @@ pub fn update_utxo_set(utxo_set: &mut BTreeMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
 }
 
 // Add UTXO to each UTXO
-pub fn generate_utxos(utxo_set: &mut BTreeMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
+pub fn generate_utxos(utxo_set: &mut HashMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
     for (index, tx_out) in tx.tx_out.iter().enumerate() {
         //  Creo un outpoint a partir de la TxOut
         let utxo = Utxo {
@@ -114,7 +110,6 @@ pub fn generate_utxos(utxo_set: &mut BTreeMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
             value: tx_out.value,
         };
 
-        // OP_DUP OP_HASH160 <PubkeyHash> OP_EQUALVERIFY OP_CHECKSIG
         let pk_script = &tx_out.pk_script;
 
         // From pk_script obtain the address and encode it into base58Check

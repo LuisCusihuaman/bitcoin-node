@@ -33,7 +33,7 @@ pub struct NodeManager {
     config: Config,
     logger_tx: Sender<String>,
     blocks: Vec<Block>,
-    utxo_set: BTreeMap<[u8; 20], Vec<Utxo>>, // utxo_set is a Hash with key <address> and value <OutPoint>
+    utxo_set: HashMap<[u8; 20], Vec<Utxo>>, // utxo_set is a Hash with key <address> and value <OutPoint>
     blocks_btreemap: BTreeMap<[u8; 32], usize>,
     wallet_tnxs: HashMap<[u8; 32], TxStatus>,
 }
@@ -46,7 +46,7 @@ impl NodeManager {
             node_network: NodeNetwork::new(logger_tx),
             logger_tx: logger_tx_cloned,
             blocks: vec![], // inicializar el block genesis (con el config)
-            utxo_set: BTreeMap::new(),
+            utxo_set: HashMap::new(),
             blocks_btreemap: BTreeMap::new(),
             wallet_tnxs: HashMap::new(),
         }
@@ -464,7 +464,7 @@ impl NodeManager {
     }
 
     fn blocks_download(&mut self) {
-        let timestamp = match date_to_timestamp("2023-06-24") {
+        let timestamp = match date_to_timestamp("2023-06-01") {
             Some(timestamp) => timestamp,
             None => panic!("Error parsing date"),
         };

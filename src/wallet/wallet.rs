@@ -200,9 +200,10 @@ impl Wallet {
         let sec = user.public_key;
 
         let mut script_sig: Vec<u8> = Vec::new();
+
         script_sig.extend(vec![(der.len() + 1) as u8]);
         script_sig.extend(der);
-        script_sig.extend([1]); // SIGHASH_ALL
+        script_sig.extend([1]);
         script_sig.extend(vec![sec.len() as u8]);
         script_sig.extend(sec);
 
@@ -293,7 +294,6 @@ impl User {
             pk_hash,
             secret_key,
             public_key,
-            // txns_hist: Vec::new(),
         }
     }
 

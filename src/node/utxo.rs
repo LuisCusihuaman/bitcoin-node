@@ -1,3 +1,5 @@
+use bitcoin_hashes::{hash160, Hash};
+
 use crate::net::message::tx::Tx;
 use crate::utils::read_be;
 use std::collections::BTreeMap;
@@ -65,26 +67,21 @@ pub fn get_utxos_by_address(
 // Deletes the outpoints from the UTXO set that each Tx_in points to
 pub fn update_utxo_set(utxo_set: &mut BTreeMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
     for tx_in in &tx.tx_in {
+        
         // <Sig> <PubKey> OP_DUP OP_HASH160 <PubkeyHash> OP_EQUALVERIFY OP_CHECKSIG
         let mut sig_script_inv = tx_in.signature_script.clone();
         sig_script_inv.reverse();
 
-        // HOLA
-        // let sig_length = tx_in.signature_script[0] as usize;
-        // let sig_pk = tx_in.signature_script[sig_length + 1..].to_vec();
-        // let pk_hash = hash160::Hash::hash(&sig_pk);
-
-        if sig_script_inv.len() < 22 {
+        // Esto es una coinbase o si es una sigScript invalida
+        if tx_in.script_length < 33 {
             return;
         }
 
-        if tx_in.script_length == 30 {
-            // Esto es una coinbase
-            return;
-        }
+        // Public Key
+        let sec_pk = sig_script_inv[0..33].to_vec();
+        let pk_hash = hash160::Hash::hash(&sec_pk).to_byte_array();
 
-        let mut pk_hash = [0u8; 20];
-        pk_hash.copy_from_slice(&sig_script_inv[2..22]);
+        print!("{:?}", pk_hash);
 
         let hash_tx = tx_in.previous_output.hash;
         let index = tx_in.previous_output.index;

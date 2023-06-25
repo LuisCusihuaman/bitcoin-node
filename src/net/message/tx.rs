@@ -213,10 +213,11 @@ pub fn decode_internal_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
             return None;
         }
 
-        outpoint_hash.copy_from_slice(&buffer[0..32]);
+        outpoint_hash.copy_from_slice(&buffer[*offset..*offset + 32]);
+        outpoint_hash.reverse();
         *offset += 32;
 
-        outpoint_index.copy_from_slice(&buffer[32..36]);
+        outpoint_index.copy_from_slice(&buffer[*offset..*offset + 4]);
         *offset += 4;
 
         let previous_output = OutPoint {

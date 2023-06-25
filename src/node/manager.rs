@@ -149,7 +149,10 @@ impl NodeManager {
                             },
                         };
 
-                        self.update_utxo_set(block.clone());
+                        if !self.utxo_set.is_empty() {
+                            self.update_utxo_set(block.clone());
+                        }
+
                         self.update_unconfirm_txns(block.clone().txns);
 
                         // For genesis block
@@ -460,11 +463,28 @@ impl NodeManager {
     pub fn initial_block_download(&mut self) -> Result<(), String> {
         self.headers_first();
         self.blocks_download();
+        self.init_utxo_set();
         Ok(())
     }
 
+    fn init_utxo_set(&mut self) {
+        let blocks = self.get_blocks();
+
+        log(
+            self.logger_tx.clone(),
+            format!("Generating utxo set with {} blocks", blocks.len()),
+        );
+
+        for block in blocks.clone() {
+            if block.txns.is_empty() {
+                continue;
+            }
+            self.update_utxo_set(block);
+        }
+    }
+
     fn blocks_download(&mut self) {
-        let timestamp = match date_to_timestamp("2023-06-01") {
+        let timestamp = match date_to_timestamp("2023-06-07") {
             Some(timestamp) => timestamp,
             None => panic!("Error parsing date"),
         };

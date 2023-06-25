@@ -1,27 +1,30 @@
-use crate::config::Config;
-use crate::logger::log;
-use crate::net::message::get_utxos::PayloadGetUtxos;
-use crate::net::message::tx::{OutPoint, Tx, TxIn, TxOut};
-use crate::net::message::{MessagePayload, TxStatus};
-use crate::net::p2p_connection::P2PConnection;
-use crate::node::utxo::Utxo;
-use crate::utils::{double_sha256, pk_hash_from_addr};
-use bitcoin_hashes::hash160;
-use bitcoin_hashes::Hash;
-use rand::rngs::OsRng;
-use rand::Rng;
-use secp256k1::{Message, Secp256k1, SecretKey};
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 use std::vec;
 
+use bitcoin_hashes::Hash;
+use bitcoin_hashes::hash160;
+use rand::Rng;
+use rand::rngs::OsRng;
+use secp256k1::{Message, Secp256k1, SecretKey};
+
+use crate::config::Config;
+use crate::logger::log;
+use crate::net::message::{MessagePayload, TxStatus};
+use crate::net::message::get_utxos::PayloadGetUtxos;
+use crate::net::message::tx::{OutPoint, Tx, TxIn, TxOut};
+use crate::net::p2p_connection::P2PConnection;
+use crate::node::utxo::Utxo;
+use crate::utils::{double_sha256, pk_hash_from_addr};
+
+#[derive(Clone)]
 pub struct Wallet {
     config: Config,
     logger_tx: Sender<String>,
     node_manager: P2PConnection,
-    users: Vec<User>,
-    pending_tx: PendingTx,
-    tnxs_history: HashMap<[u8; 32], (Tx, TxStatus)>, //tnxs_history: Vec<(TxStatus, Tx)>, // puede ser un struct
+    pub users: Vec<User>,
+    pub pending_tx: PendingTx,
+    pub tnxs_history: HashMap<[u8; 32], (Tx, TxStatus, String, f64)>, //tnxs_history: Vec<(TxStatus, Tx)>, // puede ser un struct
 }
 
 impl Wallet {
@@ -74,9 +77,8 @@ impl Wallet {
 
                     // sign the Tx
                     let signed_tx = self.sign_tx(tx.clone(), self.users[0].clone());
-
                     // send the Tx to the node
-                    self.tnxs_history.insert(tx.id, (tx, TxStatus::Unconfirmed));
+                    self.tnxs_history.insert(tx.id, (tx, TxStatus::Unconfirmed, self.pending_tx.receive_addr.clone(), self.pending_tx.amount));
                     self.send(MessagePayload::Tx(signed_tx));
                 }
                 MessagePayload::TxStatus(payload) => {
@@ -86,14 +88,13 @@ impl Wallet {
                             self.logger_tx.clone(),
                             format!("Transaction Error. Unknown transaction status"),
                         );
-
                         continue;
                     }
 
                     match self.tnxs_history.get(&payload.tx_id) {
                         Some(tx) => {
                             self.tnxs_history
-                                .insert(payload.tx_id, (tx.0.clone(), payload.status));
+                                .insert(payload.tx_id, (tx.0.clone(), payload.status, tx.2.clone(), tx.3.clone()));
                         }
                         None => {
                             log(
@@ -228,7 +229,7 @@ impl Wallet {
         p2pkh_script
     }
 
-    fn create_pending_tx(&mut self, receiver_addr: String, amount: f64) {
+    pub fn create_pending_tx(&mut self, receiver_addr: String, amount: f64) {
         let get_utxo_message = MessagePayload::GetUTXOs(PayloadGetUtxos {
             address: self.users[0].get_pk_hash(),
         });
@@ -246,8 +247,8 @@ impl Wallet {
 
 #[derive(Clone, Debug)]
 pub struct PendingTx {
-    receive_addr: String,
-    amount: f64,
+    pub receive_addr: String,
+    pub amount: f64,
 }
 
 #[derive(Clone, Debug)]
@@ -258,7 +259,6 @@ pub struct User {
     pub public_key: [u8; 33],
     // pub txns_hist: Vec<Tx>,
 }
-
 impl User {
     pub fn new(name: String, priv_key_wif: String, is_anonymous: bool) -> User {
         let mut rng = OsRng::default();
@@ -319,11 +319,12 @@ impl User {
 mod tests {
     use secp256k1::Message;
 
-    use super::*;
     use crate::logger::Logger;
     use crate::net::message::ping_pong::PayloadPingPong;
     use crate::net::message::tx::{OutPoint, Tx, TxIn, TxOut};
     use crate::utils::{double_sha256, get_address_base58};
+
+    use super::*;
 
     #[test]
     fn test_wallet_save_multiple_users() {

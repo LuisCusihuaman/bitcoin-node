@@ -1,13 +1,14 @@
 use crate::config::Config;
 use crate::logger::log;
 use crate::net::message::get_utxos::PayloadGetUtxos;
-use crate::net::message::tx::{OutPoint, Tx, TxIn, TxOut};
+use crate::net::message::tx::{decode_internal_tx, decode_tx, OutPoint, Tx, TxIn, TxOut};
 use crate::net::message::{MessagePayload, TxStatus};
 use crate::net::p2p_connection::P2PConnection;
 use crate::node::utxo::Utxo;
 use crate::utils::{double_sha256, pk_hash_from_addr};
 use bitcoin_hashes::hash160;
 use bitcoin_hashes::Hash;
+use bs58::decode;
 use rand::rngs::OsRng;
 use rand::Rng;
 use secp256k1::{Message, Secp256k1, SecretKey};
@@ -78,6 +79,10 @@ impl Wallet {
                     let mut buffer = vec![];
                     let coso = signed_tx.encode(&mut buffer);
 
+                    let mut offset = 0;
+                    let tx_decoded = decode_internal_tx(&coso, &mut offset).unwrap();
+
+                    println!("Signed Tx id: {:?}", tx_decoded.id.clone());
                     println!("Signed Tx: {:?}", coso);
 
                     // send the Tx to the node
@@ -127,7 +132,7 @@ impl Wallet {
         }
 
         let amount = amount * 100_000_000.0; // amount to send in satoshis
-        let fee = 10000.0; // fee for the Tx
+        let fee = 10000.0; // self.config.tx_fee ; // fee for the Tx
 
         if (available_money as f64) < (amount + fee) {
             log(self.logger_tx.clone(), format!("Error: Insufficient funds"));
@@ -136,7 +141,13 @@ impl Wallet {
 
         let mut tx_ins: Vec<TxIn> = vec![];
 
+        let mut counter = 0.0;
+
         for i in utxos.iter() {
+            if counter >= (amount + fee) {
+                break;
+            }
+
             let p2pkh_script = Self::create_p2pkh_script(user.get_pk_hash());
 
             let mut tx_id = i.transaction_id.clone();
@@ -151,10 +162,12 @@ impl Wallet {
                 signature_script: p2pkh_script.to_vec(),
                 sequence: 0xffffffff,
             };
+
+            counter += i.value as f64;
             tx_ins.push(tx_in);
         }
 
-        let change = (available_money as f64) - amount - fee;
+        let change = counter - amount - fee;
 
         // Design choice.
         // There's always going to be two TxOuts. One for the amount and one for the change.
@@ -481,40 +494,25 @@ mod tests {
     }
 
     #[test]
-    fn test_wallet_sends_utxo_msg_to_node_manager() -> Result<(), String> {
-        let logger = Logger::mock_logger();
-        let config = Config::from_file("nodo.config")
-            .map_err(|err| err.to_string())
-            .unwrap();
-
-        let priv_key_wif = "cSM1NQcoCMDP8jy2AMQWHXTLc9d4HjSr7H4AqxKk2bD1ykbaRw59".to_string();
-        let messi = User::new("Messi".to_string(), priv_key_wif, false);
-
-        let receiver_addr = "mpiQbuypLNHoUCXeFtrS956jPSNhwmYwai".to_string();
-        let amount = 0.0001; // 100_000
-
-        let mut wallet = Wallet::new(config, logger.tx, messi);
-
-        wallet.create_pending_tx(receiver_addr, amount);
-
-        wallet.receive();
-
-        Ok(())
-    }
-
-    #[test]
     fn test_wallet_create_tx() -> Result<(), String> {
+        // Primer cuenta
+        // bitcoin_address: mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb
+        // secret_secret: cVK6pF1sfsvvmF9vGyq4wFeMywy1SMFHNpXa3d4Hi2evKHRQyTbn
+
+        // Segunda cuenta
+        // bitcoin_address: mpiQbuypLNHoUCXeFtrS956jPSNhwmYwai
+        // secret_key: cSM1NQcoCMDP8jy2AMQWHXTLc9d4HjSr7H4AqxKk2bD1ykbaRw59
+
         let logger = Logger::mock_logger();
         let config = Config::from_file("nodo.config")
             .map_err(|err| err.to_string())
             .unwrap();
 
-        // let priv_key_wif = "cVK6pF1sfsvvmF9vGyq4wFeMywy1SMFHNpXa3d4Hi2evKHRQyTbn".to_string();
         let priv_key_wif = "cSM1NQcoCMDP8jy2AMQWHXTLc9d4HjSr7H4AqxKk2bD1ykbaRw59".to_string();
         let messi = User::new("Messi".to_string(), priv_key_wif, false);
 
         let receiver_addr = "mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb".to_string();
-        let amount = 0.001;
+        let amount = 0.001544886;
 
         let mut wallet = Wallet::new(config, logger.tx, messi);
 

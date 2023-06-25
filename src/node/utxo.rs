@@ -123,6 +123,12 @@ pub fn generate_utxos(utxo_set: &mut HashMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
         // append to address this UTXO
         let utxos = match utxo_set.get(&pk_hash) {
             Some(utxos) => {
+                for utxo_pk in utxos {
+                    if utxo_pk == &utxo {
+                        continue;
+                    }
+                }
+
                 let mut utxos = utxos.clone();
                 utxos.push(utxo);
                 utxos

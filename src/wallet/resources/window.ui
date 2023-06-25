@@ -136,6 +136,18 @@
                                     <object class="GtkColumnView" id="transactions_view">
                                         <property name="valign">start</property>
                                         <child>
+                                            <object class="GtkColumnViewColumn" id="tx_id_column">
+                                                <property name="title">TX ID</property>
+                                                <!-- Add your desired widget for each address item -->
+                                            </object>
+                                        </child>
+                                        <child>
+                                            <object class="GtkColumnViewColumn" id="tx_status_column">
+                                                <property name="title">TX Status</property>
+                                                <!-- Add your desired widget for each address item -->
+                                            </object>
+                                        </child>
+                                        <child>
                                             <object class="GtkColumnViewColumn" id="address_column">
                                                 <property name="title">Address</property>
                                                     <!-- Add your desired widget for each address item -->

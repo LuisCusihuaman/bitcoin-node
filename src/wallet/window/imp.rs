@@ -20,6 +20,10 @@ pub struct Window {
     #[template_child]
     pub transactions_view: TemplateChild<ColumnView>,
     #[template_child]
+    pub tx_id_column: TemplateChild<ColumnViewColumn>,
+    #[template_child]
+    pub tx_status_column: TemplateChild<ColumnViewColumn>,
+    #[template_child]
     pub address_column: TemplateChild<ColumnViewColumn>,
     #[template_child]
     pub amount_column: TemplateChild<ColumnViewColumn>,

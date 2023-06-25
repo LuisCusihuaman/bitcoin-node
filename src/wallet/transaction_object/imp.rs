@@ -12,6 +12,8 @@ use super::TransactionData;
 #[derive(Properties, Default)]
 #[properties(wrapper_type = super::TransactionObject)]
 pub struct TransactionObject {
+    #[property(name = "id", get, set, type = String, member = id)]
+    #[property(name = "status", get, set, type = String, member = status)]
     #[property(name = "address", get, set, type = String, member = address)]
     #[property(name = "amount", get, set, type = String, member = amount)]
     pub data: RefCell<TransactionData>,

@@ -1,4 +1,6 @@
+use std::cell::RefCell;
 use std::fs::File;
+use std::rc::Rc;
 
 use gio::Settings;
 use glib::{clone, Object};
@@ -7,11 +9,15 @@ use gtk::{
     SignalListItemFactory,
 };
 use gtk::{ListItem, prelude::*};
+use gtk::glib::Sender;
 use gtk::subclass::prelude::*;
+
+use app::wallet::wallet::Wallet;
 
 use crate::APP_ID;
 use crate::transaction_object::TransactionObject;
 use crate::transaction_row::TransactionRow;
+use crate::window::imp::MessageWallet;
 
 mod imp;
 
@@ -38,7 +44,7 @@ impl Window {
     }
 
     // ANCHOR: setup_tasks
-    fn setup_transactions(&self) {
+    fn setup_transactions(&self, sender_clone: Sender<MessageWallet>) {
         // Create new mode
         let model = gio::ListStore::new(TransactionObject::static_type());
 
@@ -51,7 +57,7 @@ impl Window {
     }
     // ANCHOR_END: setup_tasks
     // ANCHOR: new_transaction
-    fn new_transaction(&self) {
+    fn new_transaction(&self, sender_clone: Sender<MessageWallet>) {
         // Get Transaction from entry and clear it
         let buffer_address = self.imp().pay_to_entry.buffer();
         let buffer_amount = self.imp().amount_entry.buffer();
@@ -71,11 +77,11 @@ impl Window {
     }
     // ANCHOR_END: new_task
     // ANCHOR: setup_callbacks
-    fn setup_callbacks(&self) {
+    fn setup_callbacks(&self, sender_clone: Sender<MessageWallet>) {
         self.imp()
             .send_transaction_button
             .connect_clicked(clone!(@weak self as window => move |_| {
-                window.new_transaction();
+                window.new_transaction(sender_clone.clone());
             }));
     }
     // ANCHOR_END: setup_callbacks

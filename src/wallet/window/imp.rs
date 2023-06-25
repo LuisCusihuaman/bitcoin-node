@@ -21,6 +21,7 @@ use crate::transaction_object::TransactionObject;
 pub enum MessageWallet {
     UpdateTransactions,
     NewPendingTransaction(String, String),
+    GetBalance,
 }
 
 // ANCHOR: struct_and_subclass
@@ -29,11 +30,25 @@ pub enum MessageWallet {
 #[template(resource = "/org/gtk_rs/wallet-rustica/window.ui")]
 pub struct Window {
     #[template_child]
+    pub available_balance_value: TemplateChild<gtk::Label>,
+    #[template_child]
+    pub pending_balance_value: TemplateChild<gtk::Label>,
+    #[template_child]
+    pub total_balance_value: TemplateChild<gtk::Label>,
+    #[template_child]
     pub pay_to_entry: TemplateChild<Entry>,
     #[template_child]
     pub amount_entry: TemplateChild<Entry>,
     #[template_child]
+    pub balance_section: TemplateChild<gtk::Box>,
+    #[template_child]
+    pub send_transaction_section: TemplateChild<gtk::Box>,
+    #[template_child]
     pub transactions_section: TemplateChild<gtk::Box>,
+    #[template_child]
+    pub balance_section_button: TemplateChild<gtk::Button>,
+    #[template_child]
+    pub send_transaction_section_button: TemplateChild<gtk::Button>,
     #[template_child]
     pub transactions_section_button: TemplateChild<gtk::Button>,
     #[template_child]
@@ -97,7 +112,6 @@ impl ObjectImpl for Window {
         obj.setup_transactions(sender_clone.clone());
         obj.setup_callbacks(sender.clone());
         obj.setup_factories(sender_clone);
-
         thread::spawn(move || {
             loop {
                 let mut wallet = wallet_clone.lock().unwrap();
@@ -147,6 +161,15 @@ impl ObjectImpl for Window {
                     let mut wallet = wallet_clone.lock().unwrap();
                     wallet.create_pending_tx(address_clone, amount.parse::<f64>().unwrap());
                     println!("New Pending transaction: {} {}", address, amount);
+                    sender_clone.send(MessageWallet::UpdateTransactions).unwrap();
+                });
+                Continue(true)
+            }
+            MessageWallet::GetBalance => {
+                let wallet_clone = wallet.clone();
+                let sender_clone = sender.clone();
+                thread::spawn(move || {
+                    let mut wallet = wallet_clone.lock().unwrap();
                     sender_clone.send(MessageWallet::UpdateTransactions).unwrap();
                 });
                 Continue(true)

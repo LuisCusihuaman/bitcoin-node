@@ -20,24 +20,18 @@
                         <property name="margin-end">12</property>
                         <property name="spacing">6</property>
                         <child>
-                            <object class="GtkButton">
+                            <object class="GtkButton" id="balance_section_button">
                                 <property name="label">Overview</property>
                                 <property name="icon-name">user-info</property>
                                 <property name="name">overview_button</property>
                                 <property name="receives-default">false</property>
-                                <style>
-                                    <class name="linked"/>
-                                    <class name="suggested-action"/>
-                                    <class name="active"/>
-                                    <class name="insensitive"/>
-                                </style>
                             </object>
                         </child>
                         <child>
                             <object class="GtkSeparator"/>
                         </child>
                         <child>
-                            <object class="GtkButton">
+                            <object class="GtkButton" id="send_transaction_section_button">
                                 <property name="label">Send</property>
                                 <property name="use-underline">true</property>
                                 <property name="icon-name">mail-send-receive-symbolic</property>
@@ -66,18 +60,48 @@
                             </object>
                         </child>
                         <child>
-                            <object class="GtkLabel" id="available_balance_label">
-                                <property name="label">Available: 50.0000 BTC</property>
+                            <object class="GtkBox">
+                                <property name="orientation">horizontal</property>
+                                <child>
+                                    <object class="GtkLabel" id="available_balance_title">
+                                        <property name="label">Available: </property>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkLabel" id="available_balance_value">
+                                        <property name="label">00.0000 BTC</property>
+                                    </object>
+                                </child>
                             </object>
                         </child>
                         <child>
-                            <object class="GtkLabel" id="pending_balance_label">
-                                <property name="label">Pending: 20.000 BTC</property>
+                            <object class="GtkBox">
+                                <property name="orientation">horizontal</property>
+                                <child>
+                                    <object class="GtkLabel" id="pending_balance_title">
+                                        <property name="label">Pending: </property>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkLabel" id="pending_balance_value">
+                                        <property name="label">00.000 BTC</property>
+                                    </object>
+                                </child>
                             </object>
                         </child>
                         <child>
-                            <object class="GtkLabel" id="total_balance_label">
-                                <property name="label">TOTAL: 70.0000 BTC</property>
+                            <object class="GtkBox">
+                                <property name="orientation">horizontal</property>
+                                <child>
+                                    <object class="GtkLabel" id="total_balance_title">
+                                        <property name="label">TOTAL: </property>
+                                    </object>
+                                </child>
+                                <child>
+                                    <object class="GtkLabel" id="total_balance_value">
+                                        <property name="label">00.0000 BTC</property>
+                                    </object>
+                                </child>
                             </object>
                         </child>
                     </object>
@@ -85,6 +109,7 @@
                 <child>
                     <object class="GtkBox" id="send_transaction_section">
                         <property name="orientation">vertical</property>
+                        <property name="visible">False</property>
                         <child>
                             <object class="GtkLabel">
                                 <property name="label">Send Transaction</property>
@@ -122,6 +147,7 @@
                 <child>
                     <object class="GtkBox" id="transactions_section">
                         <property name="orientation">vertical</property>
+                        <property name="visible">False</property>
                         <child>
                             <object class="GtkLabel" id="transactions_title">
                                 <property name="label">Transactions</property>
@@ -150,7 +176,7 @@
                                         <child>
                                             <object class="GtkColumnViewColumn" id="address_column">
                                                 <property name="title">Address</property>
-                                                    <!-- Add your desired widget for each address item -->
+                                                <!-- Add your desired widget for each address item -->
                                             </object>
                                         </child>
                                         <child>

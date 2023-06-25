@@ -75,12 +75,7 @@ impl Window {
         //let transaction = TransactionObject::new(tx_id, "Unconfirmed".to_string(), address, amount);
         //self.transactions().append(&transaction); // added to a 'model' store
     }
-    fn refresh_transactions(&self, sender_clone: Sender<MessageWallet>) {
-        // Get Transaction from entry and clear it
-        sender_clone.send(MessageWallet::UpdateTransactions).unwrap();
-    }
-    // ANCHOR_END: new_task
-    // ANCHOR: setup_callbacks
+
     fn setup_callbacks(&self, sender_clone: Sender<MessageWallet>) {
         let sender_clone_new_transaction = sender_clone.clone();
         self.imp()
@@ -90,12 +85,32 @@ impl Window {
         }));
 
         let sender_clone_refresh_transactions = sender_clone.clone();
-        self.imp()
-            .transactions_section_button
-            .connect_clicked(clone!(@weak self as window => move |_| {
-            window.refresh_transactions(sender_clone_refresh_transactions.clone());
-        }));
+        let transactions_section_button = self.imp().transactions_section_button.clone();
+        let balance_section_button = self.imp().balance_section_button.clone();
+        let send_transaction_section_button = self.imp().send_transaction_section_button.clone();
+
+        transactions_section_button.connect_clicked(clone!(@weak self as window => move |_| {
+        window.imp().transactions_section.set_visible(true);
+        window.imp().balance_section.set_visible(false);
+        window.imp().send_transaction_section.set_visible(false);
+        sender_clone_refresh_transactions.clone().send(MessageWallet::UpdateTransactions).unwrap();
+    }));
+
+        balance_section_button.connect_clicked(clone!(@weak self as window => move |_| {
+        window.imp().transactions_section.set_visible(false);
+        window.imp().balance_section.set_visible(true);
+        window.imp().send_transaction_section.set_visible(false);
+    }));
+
+        send_transaction_section_button.connect_clicked(clone!(@weak self as window => move |_| {
+        window.imp().transactions_section.set_visible(false);
+        window.imp().balance_section.set_visible(false);
+        window.imp().send_transaction_section.set_visible(true);
+    }));
     }
+
+
+
     // ANCHOR_END: setup_callbacks
 
     fn setup_factories(&self, sender_clone: Sender<MessageWallet>) {

@@ -33,6 +33,10 @@ pub struct Window {
     #[template_child]
     pub amount_entry: TemplateChild<Entry>,
     #[template_child]
+    pub transactions_section: TemplateChild<gtk::Box>,
+    #[template_child]
+    pub transactions_section_button: TemplateChild<gtk::Button>,
+    #[template_child]
     pub send_transaction_button: TemplateChild<gtk::Button>,
     #[template_child]
     pub transactions_view: TemplateChild<ColumnView>,

@@ -75,14 +75,26 @@ impl Window {
         //let transaction = TransactionObject::new(tx_id, "Unconfirmed".to_string(), address, amount);
         //self.transactions().append(&transaction); // added to a 'model' store
     }
+    fn refresh_transactions(&self, sender_clone: Sender<MessageWallet>) {
+        // Get Transaction from entry and clear it
+        sender_clone.send(MessageWallet::UpdateTransactions).unwrap();
+    }
     // ANCHOR_END: new_task
     // ANCHOR: setup_callbacks
     fn setup_callbacks(&self, sender_clone: Sender<MessageWallet>) {
+        let sender_clone_new_transaction = sender_clone.clone();
         self.imp()
             .send_transaction_button
             .connect_clicked(clone!(@weak self as window => move |_| {
-                window.new_transaction(sender_clone.clone());
-            }));
+            window.new_transaction(sender_clone_new_transaction.clone());
+        }));
+
+        let sender_clone_refresh_transactions = sender_clone.clone();
+        self.imp()
+            .transactions_section_button
+            .connect_clicked(clone!(@weak self as window => move |_| {
+            window.refresh_transactions(sender_clone_refresh_transactions.clone());
+        }));
     }
     // ANCHOR_END: setup_callbacks
 

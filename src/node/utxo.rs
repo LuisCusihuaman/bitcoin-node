@@ -113,12 +113,12 @@ pub fn generate_utxos(utxo_set: &mut HashMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
         let pk_script = &tx_out.pk_script;
 
         // From pk_script obtain the address and encode it into base58Check
-        if pk_script.len() < 22 {
+        if pk_script.len() < 23 {
             continue;
         }
 
         let mut pk_hash = [0u8; 20];
-        pk_hash.copy_from_slice(&pk_script[2..22]);
+        pk_hash.copy_from_slice(&pk_script[3..23]);
 
         // append to address this UTXO
         let utxos = match utxo_set.get(&pk_hash) {

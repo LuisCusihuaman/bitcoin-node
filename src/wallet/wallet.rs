@@ -75,6 +75,11 @@ impl Wallet {
                     // sign the Tx
                     let signed_tx = self.sign_tx(tx.clone(), self.users[0].clone());
 
+                    let mut buffer = vec![];
+                    let coso = signed_tx.encode(&mut buffer);
+
+                    println!("Signed Tx: {:?}", coso);
+
                     // send the Tx to the node
                     self.tnxs_history.insert(tx.id, (tx, TxStatus::Unconfirmed));
                     self.send(MessagePayload::Tx(signed_tx));
@@ -121,11 +126,8 @@ impl Wallet {
             available_money += i.value;
         }
 
-        //////////
-        // Tal vez hay que hacer aca
-        // utxo[i].tx_id.reverse();
-
-        let fee = 0.1; // fee for the Tx
+        let amount = amount * 100_000_000.0; // amount to send in satoshis
+        let fee = 1.0; // fee for the Tx
 
         if (available_money as f64) < (amount + fee) {
             log(self.logger_tx.clone(), format!("Error: Insufficient funds"));
@@ -185,10 +187,23 @@ impl Wallet {
         Some(tx)
     }
 
-    // Returns a signed transaction
-    fn sign_tx(&mut self, mut tx: Tx, user: User) -> Tx {
+    fn get_sig_input(&self, tx: Tx, index: usize, user: User) -> Vec<u8> {
+        let mut copy_tx = tx.clone();
+        let p2pkh_script = self.create_p2pkh_script(user.pk_hash);
+
+        for (i, _tx) in tx.tx_in.iter().enumerate() {
+            if i == index {
+                copy_tx.tx_in[i].signature_script = p2pkh_script.clone();
+                copy_tx.tx_in[i].script_length = p2pkh_script.len();
+            } else {
+                copy_tx.tx_in[i].signature_script = vec![];
+                copy_tx.tx_in[i].script_length = 0;
+            }
+        }
+
         let mut buffer = vec![];
-        let mut tx_bytes = tx.encode(&mut buffer);
+        let mut tx_bytes = copy_tx.encode(&mut buffer);
+
         tx_bytes.extend([1, 0, 0, 0]);
 
         let signature_hash = double_sha256(&tx_bytes).to_byte_array();
@@ -199,19 +214,25 @@ impl Wallet {
         let der = signature.clone().serialize_der().to_vec();
         let sec = user.public_key;
 
-        let mut script_sig: Vec<u8> = Vec::new();
-
-        script_sig.extend(vec![(der.len() + 1) as u8]);
+        let mut script_sig: Vec<u8> = vec![];
+        script_sig.push(0x30);
+        script_sig.push(der.len() as u8);
         script_sig.extend(der);
-        script_sig.extend([1]);
-        script_sig.extend(vec![sec.len() as u8]);
+        script_sig.push(0x02);
+        script_sig.push(sec.len() as u8);
         script_sig.extend(sec);
 
-        for tx_in in tx.tx_in.iter_mut() {
-            tx_in.signature_script = script_sig.clone();
-            tx_in.script_length = script_sig.len();
-        }
+        script_sig
+    }
 
+    // Returns a signed transaction
+    fn sign_tx(&mut self, mut tx: Tx, user: User) -> Tx {
+        for (index, _tx_in) in tx.clone().tx_in.iter().enumerate() {
+            let script_sig = self.get_sig_input(tx.clone(), index, user.clone());
+
+            tx.tx_in[index].signature_script = script_sig.clone();
+            tx.tx_in[index].script_length = script_sig.len();
+        }
         tx
     }
 
@@ -476,7 +497,7 @@ mod tests {
         let messi = User::new("Messi".to_string(), priv_key_wif, false);
 
         let receiver_addr = "mpiQbuypLNHoUCXeFtrS956jPSNhwmYwai".to_string();
-        let amount = 0.01;
+        let amount = 0.001;
 
         let mut wallet = Wallet::new(config, logger.tx, messi);
 
@@ -595,6 +616,8 @@ mod tests {
         tx.tx_in[0].script_length = script_sig.len();
 
         let final_tx_encode = tx.encode(&mut buffer);
+
+        println!("Final tx: {:?}", final_tx_encode);
 
         Ok(())
     }

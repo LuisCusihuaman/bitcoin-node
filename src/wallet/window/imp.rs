@@ -22,7 +22,7 @@ use crate::transaction_object::TransactionObject;
 pub enum MessageWallet {
     UpdateTransactions,
     NewPendingTransaction(String, String),
-    GetBalance,
+    UpdateBalance,
 }
 
 // ANCHOR: struct_and_subclass
@@ -32,10 +32,6 @@ pub enum MessageWallet {
 pub struct Window {
     #[template_child]
     pub available_balance_value: TemplateChild<gtk::Label>,
-    #[template_child]
-    pub pending_balance_value: TemplateChild<gtk::Label>,
-    #[template_child]
-    pub total_balance_value: TemplateChild<gtk::Label>,
     #[template_child]
     pub pay_to_entry: TemplateChild<Entry>,
     #[template_child]
@@ -155,13 +151,11 @@ impl ObjectImpl for Window {
                 });
                 Continue(true)
             }
-            MessageWallet::GetBalance => {
+            MessageWallet::UpdateBalance => {
                 let wallet_clone = wallet.clone();
-                let sender_clone = sender.clone();
-                thread::spawn(move || {
-                    let mut wallet = wallet_clone.lock().unwrap();
-                    sender_clone.send(MessageWallet::UpdateTransactions).unwrap();
-                });
+                let mut wallet = wallet_clone.lock().unwrap();
+                wallet.update_balance();
+                println!("Balance: {}", wallet.available_money);
                 Continue(true)
             }
         });

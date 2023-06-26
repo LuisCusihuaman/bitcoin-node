@@ -64,41 +64,11 @@
                                 <property name="orientation">horizontal</property>
                                 <child>
                                     <object class="GtkLabel" id="available_balance_title">
-                                        <property name="label">Available: </property>
+                                        <property name="label">Available Money: </property>
                                     </object>
                                 </child>
                                 <child>
                                     <object class="GtkLabel" id="available_balance_value">
-                                        <property name="label">00.0000 BTC</property>
-                                    </object>
-                                </child>
-                            </object>
-                        </child>
-                        <child>
-                            <object class="GtkBox">
-                                <property name="orientation">horizontal</property>
-                                <child>
-                                    <object class="GtkLabel" id="pending_balance_title">
-                                        <property name="label">Pending: </property>
-                                    </object>
-                                </child>
-                                <child>
-                                    <object class="GtkLabel" id="pending_balance_value">
-                                        <property name="label">00.000 BTC</property>
-                                    </object>
-                                </child>
-                            </object>
-                        </child>
-                        <child>
-                            <object class="GtkBox">
-                                <property name="orientation">horizontal</property>
-                                <child>
-                                    <object class="GtkLabel" id="total_balance_title">
-                                        <property name="label">TOTAL: </property>
-                                    </object>
-                                </child>
-                                <child>
-                                    <object class="GtkLabel" id="total_balance_value">
                                         <property name="label">00.0000 BTC</property>
                                     </object>
                                 </child>

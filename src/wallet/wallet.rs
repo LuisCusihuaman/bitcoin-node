@@ -26,6 +26,7 @@ pub struct Wallet {
     pub users: Vec<User>,
     pub pending_tx: PendingTx,
     pub tnxs_history: HashMap<[u8; 32], (Tx, TxStatus, String, f64)>, //tnxs_history: Vec<(TxStatus, Tx)>, // puede ser un struct
+    pub available_money: u64,
 }
 
 impl Wallet {
@@ -43,6 +44,7 @@ impl Wallet {
                 amount: 0.0,
             },
             tnxs_history: HashMap::new(),
+            available_money: 0.0 as u64,
         }
     }
 
@@ -73,7 +75,7 @@ impl Wallet {
                         self.pending_tx.amount,
                     ) {
                         Some(tx) => tx,
-                        None => continue,
+                        None => return,
                     };
 
                     // sign the Tx
@@ -131,9 +133,15 @@ impl Wallet {
         for i in utxos.iter() {
             available_money += i.value;
         }
+        self.available_money = available_money;
 
         let amount = amount * 100_000_000.0; // amount to send in satoshis
         let fee = 10000.0; // self.config.tx_fee ; // fee for the Tx
+
+        if amount <= 0 as f64 {
+            log(self.logger_tx.clone(), format!("Error: Invalid amount"));
+            return None;
+        }
 
         if (available_money as f64) < (amount + fee) {
             log(self.logger_tx.clone(), format!("Error: Insufficient funds"));
@@ -293,7 +301,21 @@ impl Wallet {
         // Save the pending transaction in the wallet. When the UTXOs arrive, the wallet will create the transaction
         self.pending_tx = PendingTx {
             receive_addr: receiver_addr,
-            amount: amount,
+            amount,
+        };
+    }
+    pub fn update_balance(&mut self) {
+        let get_utxo_message = MessagePayload::GetUTXOs(PayloadGetUtxos {
+            address: self.users[0].get_pk_hash(),
+        });
+
+        // Send message to node
+        self.send(get_utxo_message);
+
+        // Save the pending transaction in the wallet. When the UTXOs arrive, the wallet will create the transaction
+        self.pending_tx = PendingTx {
+            receive_addr: "".to_string(),
+            amount: -1.0,
         };
     }
     pub fn update_txs_history(&mut self) {

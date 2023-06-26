@@ -136,7 +136,7 @@ impl Wallet {
         self.available_money = available_money;
 
         let amount = amount * 100_000_000.0; // amount to send in satoshis
-        let fee = 10000.0; // self.config.tx_fee ; // fee for the Tx
+        let fee = 100000.0; // self.config.tx_fee ; // fee for the Tx
 
         if amount <= 0 as f64 {
             log(self.logger_tx.clone(), format!("Error: Invalid amount"));

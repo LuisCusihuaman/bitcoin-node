@@ -117,6 +117,7 @@ impl ObjectImpl for Window {
         });
 
         let transaction_list_clone = self.transactions.clone();
+        let balance_value_clone = self.available_balance_value.clone();
         receiver.attach(None, move |msg| match msg {
             MessageWallet::UpdateTransactions => {
                 println!("Updating transactions");
@@ -156,6 +157,8 @@ impl ObjectImpl for Window {
                 let mut wallet = wallet_clone.lock().unwrap();
                 wallet.update_balance();
                 println!("Balance: {}", wallet.available_money);
+                let formatted_btc_balance = format!("{:.8} BTC", ((wallet.available_money as f64) / 100_000_000.0));
+                balance_value_clone.set_text(&formatted_btc_balance);
                 Continue(true)
             }
         });

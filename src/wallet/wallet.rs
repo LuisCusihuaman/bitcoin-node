@@ -16,7 +16,7 @@ use crate::net::message::get_utxos::PayloadGetUtxos;
 use crate::net::message::tx::{decode_internal_tx, decode_tx, OutPoint, Tx, TxIn, TxOut};
 use crate::net::p2p_connection::P2PConnection;
 use crate::node::utxo::Utxo;
-use crate::utils::{double_sha256, pk_hash_from_addr};
+use crate::utils::{array_to_hex, double_sha256, pk_hash_from_addr};
 
 #[derive(Clone)]
 pub struct Wallet {
@@ -85,8 +85,8 @@ impl Wallet {
                     let mut offset = 0;
                     let tx_decoded = decode_internal_tx(&signed_tx_encoded, &mut offset).unwrap();
 
-                    println!("Signed Tx id: {:?}", tx_decoded.clone().id);
-                    println!("Signed Tx: {:?}", signed_tx_encoded);
+                    println!("Signed Tx id: {:?}", array_to_hex(&(tx_decoded.clone().id)));
+                    println!("Signed Tx: {:?}", array_to_hex(&signed_tx_encoded));
                     // send the Tx to the node
                     self.tnxs_history.insert(tx_decoded.clone().id, (tx_decoded.clone(), TxStatus::Unconfirmed, self.pending_tx.receive_addr.clone(), self.pending_tx.amount));
                     self.send(MessagePayload::Tx(signed_tx));

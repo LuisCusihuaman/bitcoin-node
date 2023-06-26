@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use glib::subclass::InitializingObject;
-use gtk::{ColumnView, ColumnViewColumn, CompositeTemplate, Entry, gio, glib, ListView};
+use gtk::{ColumnView, ColumnViewColumn, CompositeTemplate, Entry, gio, glib, ListView, NoSelection};
 use gtk::gio::Settings;
 use gtk::glib::{Continue, MainContext, PRIORITY_DEFAULT, PropertyGet, Sender, StaticType};
 use gtk::glib::once_cell::unsync::OnceCell;
@@ -14,6 +14,7 @@ use gtk::traits::RecentManagerExt;
 use app::config::Config;
 use app::logger::Logger;
 use app::net::message::{MessagePayload, TxStatus};
+use app::utils::array_to_hex;
 use app::wallet::wallet::{User, Wallet};
 
 use crate::transaction_object::TransactionObject;
@@ -124,8 +125,9 @@ impl ObjectImpl for Window {
             MessageWallet::UpdateTransactions => {
                 println!("Updating transactions");
                 let mut wallet = wallet.lock().unwrap();
+                transaction_list_clone.borrow().as_ref().unwrap().remove_all();
                 for (tx_id, tx_history) in wallet.tnxs_history.iter() {
-                    let tx_id_str = "nuevito".to_string();
+                    let tx_id_str = array_to_hex(tx_id);
                     let status = match tx_history.1 {
                         TxStatus::Unconfirmed => "Unconfirmed",
                         TxStatus::Confirmed => "Confirmed",
@@ -136,15 +138,6 @@ impl ObjectImpl for Window {
                         status.to_string(),
                         tx_history.2.to_string(),
                         tx_history.3.to_string(),
-                    );
-                    transaction_list_clone.borrow().as_ref().unwrap().append(&tx_obj);
-                }
-                if wallet.pending_tx.receive_addr != "" {
-                    let tx_obj = TransactionObject::new(
-                        "PendingID".to_string(),
-                        "Unconfirmed".to_string(),
-                        wallet.pending_tx.receive_addr.to_string(),
-                        wallet.pending_tx.amount.to_string(),
                     );
                     transaction_list_clone.borrow().as_ref().unwrap().append(&tx_obj);
                 }

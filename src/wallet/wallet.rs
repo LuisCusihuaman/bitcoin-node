@@ -80,16 +80,15 @@ impl Wallet {
                     let signed_tx = Self::sign_tx(tx.clone(), self.users[0].clone());
 
                     let mut buffer = vec![];
-                    let coso = signed_tx.encode(&mut buffer);
+                    let signed_tx_encoded = signed_tx.encode(&mut buffer);
 
                     let mut offset = 0;
-                    let tx_decoded = decode_internal_tx(&coso, &mut offset).unwrap();
+                    let tx_decoded = decode_internal_tx(&signed_tx_encoded, &mut offset).unwrap();
 
-                    println!("Signed Tx id: {:?}", tx_decoded.id.clone());
-                    println!("Signed Tx: {:?}", coso);
-                    let mut tx_send = tx.clone();
+                    println!("Signed Tx id: {:?}", tx_decoded.clone().id);
+                    println!("Signed Tx: {:?}", signed_tx_encoded);
                     // send the Tx to the node
-                    self.tnxs_history.insert(tx_send.clone().id, (tx_send, TxStatus::Unconfirmed, self.pending_tx.receive_addr.clone(), self.pending_tx.amount));
+                    self.tnxs_history.insert(tx_decoded.clone().id, (tx_decoded.clone(), TxStatus::Unconfirmed, self.pending_tx.receive_addr.clone(), self.pending_tx.amount));
                     self.send(MessagePayload::Tx(signed_tx));
                 }
                 MessagePayload::TxStatus(payload) => {

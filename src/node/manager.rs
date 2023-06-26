@@ -488,7 +488,7 @@ impl NodeManager {
         };
 
         let get_data_messages: &Vec<MessagePayload> = &blocks[index..]
-            .chunks(50)
+            .chunks(25)
             .map(|chunk| {
                 let inventories: Vec<Inventory> = chunk
                     .iter()

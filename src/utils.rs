@@ -166,6 +166,14 @@ pub fn date_to_timestamp(date_str: &str) -> Option<u32> {
     None
 }
 
+pub fn array_to_hex(buff: &[u8]) -> String {
+    let mut result = String::new();
+    for byte in buff {
+        result.push_str(&format!("{:02x}", byte));
+    }
+    result
+}
+
 pub fn little_endian_to_int(bytes: &[u8; 32]) -> u128 {
     let mut result: u128 = 0;
 
@@ -218,6 +226,47 @@ impl Write for MockTcpStream {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_array_to_hex_format() {
+        // Empty array
+        let array_1 = vec![];
+        let result_1 = array_to_hex(&array_1);
+
+        let expected_1 = "".to_string();
+        assert!(result_1 == expected_1);
+
+        // Array id
+        let array_2 = [
+            137, 85, 169, 121, 99, 223, 138, 234, 189, 76, 239, 70, 217, 238, 236, 133, 13, 246,
+            181, 56, 30, 176, 253, 102, 55, 78, 134, 49, 5, 56, 149, 31,
+        ];
+        let result_2 = array_to_hex(&array_2);
+
+        let expeced_2 =
+            "8955a97963df8aeabd4cef46d9eeec850df6b5381eb0fd66374e86310538951f".to_string();
+        assert!(result_2 == expeced_2);
+
+        // Array tx raw
+        let array_3 = [
+            1, 0, 0, 0, 1, 123, 204, 137, 18, 138, 54, 143, 112, 41, 75, 105, 9, 20, 115, 168, 198,
+            197, 241, 39, 23, 24, 252, 55, 172, 80, 134, 255, 92, 89, 109, 230, 188, 0, 0, 0, 0,
+            106, 71, 48, 68, 2, 32, 90, 170, 121, 238, 37, 6, 132, 231, 219, 177, 232, 205, 193,
+            91, 19, 0, 78, 80, 3, 220, 74, 72, 193, 233, 60, 142, 7, 146, 55, 176, 114, 103, 2, 32,
+            77, 132, 142, 31, 180, 80, 208, 220, 209, 113, 149, 161, 101, 31, 48, 203, 6, 231, 128,
+            247, 187, 43, 252, 11, 99, 202, 70, 115, 113, 45, 3, 186, 1, 33, 2, 20, 28, 142, 103,
+            244, 6, 181, 130, 126, 50, 140, 1, 132, 188, 50, 59, 67, 144, 104, 43, 227, 97, 153,
+            206, 105, 1, 12, 47, 189, 173, 128, 172, 255, 255, 255, 255, 2, 160, 134, 1, 0, 0, 0,
+            0, 0, 25, 118, 169, 20, 181, 51, 138, 19, 120, 118, 0, 187, 24, 163, 236, 151, 149,
+            117, 93, 82, 212, 10, 107, 236, 136, 172, 128, 209, 16, 0, 0, 0, 0, 0, 25, 118, 169,
+            20, 100, 227, 171, 27, 188, 160, 210, 116, 110, 81, 97, 65, 97, 169, 21, 128, 49, 207,
+            184, 237, 136, 172, 0, 0, 0, 0,
+        ];
+        let result_3 = array_to_hex(&array_3);
+
+        let expected_3 = "01000000017bcc89128a368f70294b69091473a8c6c5f1271718fc37ac5086ff5c596de6bc000000006a47304402205aaa79ee250684e7dbb1e8cdc15b13004e5003dc4a48c1e93c8e079237b0726702204d848e1fb450d0dcd17195a1651f30cb06e780f7bb2bfc0b63ca4673712d03ba012102141c8e67f406b5827e328c0184bc323b4390682be36199ce69010c2fbdad80acffffffff02a0860100000000001976a914b5338a13787600bb18a3ec9795755d52d40a6bec88ac80d11000000000001976a91464e3ab1bbca0d2746e51614161a9158031cfb8ed88ac00000000".to_string();
+        assert!(result_3 == expected_3);
+    }
 
     #[test]
     fn test_read_varint() {

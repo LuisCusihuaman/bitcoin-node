@@ -1,36 +1,32 @@
-use app::config::Config;
-use app::logger::Logger;
-use app::wallet::wallet::Wallet;
-use std::error::Error;
-use std::io;
-use std::{env, thread};
+mod transaction_object;
+mod transaction_row;
+mod window;
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let filepath = env::args().nth(1).ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Se debe pasar el nombre del archivo como parámetro",
-        )
-    })?;
-    let config = Config::from_file(&filepath)?;
+use gtk::prelude::*;
+use gtk::{gio, glib, Application};
+use window::Window;
 
-    let logger = Logger::new(&config)?;
-    let logger_tx = logger.tx.clone();
+const APP_ID: &str = "org.gtk_rs.wallet-rustica";
 
-    let logger_thread = thread::spawn(move || {
-        logger.run();
-    });
+fn main() -> glib::ExitCode {
+    // Register and include resources
+    gio::resources_register_include!("wallet-rustica.gresource")
+        .expect("Failed to register resources.");
 
-    // let mut _wallet = Wallet::new(config, logger_tx);
+    // Create a new application
+    let app = Application::builder()
+        .application_id(APP_ID)
+        .build();
 
-    // TODO inicializar interface
+    app.connect_activate(build_ui);
 
-    //////////// Para Edu
-    // loop{
-    //     preguntar si ya se acepto la Tx
-    //      wallet.send(getTxStatus())
-    // }
-
-    logger_thread.join().unwrap();
-    Ok(())
+    // Run the application
+    app.run()
 }
+
+fn build_ui(app: &Application) {
+    // Create a new custom window and show it
+    let window = Window::new(app);
+    window.present();
+}
+// ANCHOR_END: main

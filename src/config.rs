@@ -7,6 +7,7 @@ use std::io::Read;
 
 // use app::error::Error;
 
+#[derive(Clone,Debug)]
 pub struct Config {
     pub log_file: String,
     pub addrs: String,

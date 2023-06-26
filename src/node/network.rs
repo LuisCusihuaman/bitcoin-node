@@ -6,6 +6,7 @@ use std::sync::mpsc;
 use std::sync::mpsc::Sender;
 use std::thread;
 
+
 pub struct NodeNetwork {
     pub logger_tx: Sender<String>,
     pub peer_connections: Vec<P2PConnection>,
@@ -44,10 +45,12 @@ impl NodeNetwork {
 
     pub fn send_messages(&self, payloads: Vec<MessagePayload>) {
         let mut threads = Vec::new();
+        let mut shuffled_connections = self.peer_connections.clone();
+        shuffled_connections.shuffle(&mut rand::thread_rng());
 
         // TODO: connection must be at least one if not enter to infinite loop
         for (payload, connection) in payloads.iter().cloned().zip(
-            self.peer_connections
+            shuffled_connections
                 .iter()
                 .cycle()
                 .filter(|connection| connection.handshaked),

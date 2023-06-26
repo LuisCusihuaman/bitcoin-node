@@ -87,19 +87,21 @@ impl Window {
         let sender_clone_refresh_transactions = sender_clone.clone();
         let transactions_section_button = self.imp().transactions_section_button.clone();
         let balance_section_button = self.imp().balance_section_button.clone();
+        let sender_clone_balance = sender_clone.clone();
         let send_transaction_section_button = self.imp().send_transaction_section_button.clone();
 
         transactions_section_button.connect_clicked(clone!(@weak self as window => move |_| {
         window.imp().transactions_section.set_visible(true);
         window.imp().balance_section.set_visible(false);
         window.imp().send_transaction_section.set_visible(false);
-        sender_clone_refresh_transactions.clone().send(MessageWallet::UpdateTransactions).unwrap();
+        sender_clone_balance.clone().send(MessageWallet::UpdateTransactions).unwrap();
     }));
 
         balance_section_button.connect_clicked(clone!(@weak self as window => move |_| {
-        window.imp().transactions_section.set_visible(false);
-        window.imp().balance_section.set_visible(true);
-        window.imp().send_transaction_section.set_visible(false);
+            window.imp().transactions_section.set_visible(false);
+            window.imp().balance_section.set_visible(true);
+            window.imp().send_transaction_section.set_visible(false);
+            sender_clone_refresh_transactions.clone().send(MessageWallet::UpdateBalance).unwrap();
     }));
 
         send_transaction_section_button.connect_clicked(clone!(@weak self as window => move |_| {
@@ -108,7 +110,6 @@ impl Window {
         window.imp().send_transaction_section.set_visible(true);
     }));
     }
-
 
 
     // ANCHOR_END: setup_callbacks

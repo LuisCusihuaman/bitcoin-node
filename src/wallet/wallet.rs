@@ -96,7 +96,6 @@ impl Wallet {
                             self.logger_tx.clone(),
                             format!("Transaction Error. Unknown transaction status"),
                         );
-
                         continue;
                     }
 
@@ -488,6 +487,56 @@ mod tests {
         let ping_message = MessagePayload::Ping(PayloadPingPong::new());
 
         wallet.send(ping_message);
+        wallet.receive();
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_wallet_sends_get_tx_status() -> Result<(), String> {
+        let logger = Logger::mock_logger();
+        let config = Config::from_file("nodo.config")
+            .map_err(|err| err.to_string())
+            .unwrap();
+
+        let priv_key_wif = "cSM1NQcoCMDP8jy2AMQWHXTLc9d4HjSr7H4AqxKk2bD1ykbaRw59".to_string();
+        let messi = User::new("Messi".to_string(), priv_key_wif, false);
+
+        let mut wallet = Wallet::new(config, logger.tx, messi);
+
+        let tx = Tx {
+            id: [168, 100, 164, 165, 157, 239, 225, 158, 30, 139, 116, 50, 75, 224, 71, 198, 133, 10, 228, 4, 57, 246, 166, 229, 0, 245, 47, 243, 166, 54, 94, 44], // the trhurut
+            version: 2,
+            flag: 0,
+            tx_in_count: 1,
+            tx_in: vec![TxIn {
+                previous_output: OutPoint {
+                    hash: [0; 32],
+                    index: 255,
+                },
+                script_length: 18,
+                signature_script: vec![
+                    3, 206, 247, 1, 5, 82, 126, 227, 169, 4, 0, 0, 0, 0, 14, 0, 0, 0,
+                ],
+                sequence: 4294967295,
+            }],
+            tx_out_count: 1,
+            tx_out: vec![TxOut {
+                value: 5000020000,
+                pk_script_length: 25,
+                pk_script: vec![
+                    118, 169, 20, 195, 208, 147, 199, 86, 220, 79, 141, 216, 23, 181, 3, 198, 78,
+                    203, 128, 39, 118, 33, 52, 136, 172,
+                ],
+            }],
+            tx_witness: vec![],
+            lock_time: 0,
+        };
+
+
+        let tx_status_message = MessagePayload::GetTxStatus(tx);
+
+        wallet.send(tx_status_message);
         wallet.receive();
 
         Ok(())

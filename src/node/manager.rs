@@ -277,7 +277,7 @@ impl NodeManager {
 
                         let tx_status = match self.wallet_tnxs.get(&tx.id) {
                             Some(status) => status.clone(),
-                            None => continue,
+                            None => TxStatus::Unknown,
                         };
 
                         self.send_to(

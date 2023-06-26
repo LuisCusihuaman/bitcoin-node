@@ -186,8 +186,22 @@ pub fn decode_tx(buffer: &[u8]) -> Result<MessagePayload, String> {
     }
 }
 
+pub fn decode_tx_status(buffer: &[u8]) -> Result<MessagePayload, String> {
+    let mut offset: usize = 0;
+    
+    match decode_internal_tx(buffer, &mut offset) {
+        Some(tx) => Ok(MessagePayload::GetTxStatus(tx)),
+        None => Err("Error decoding tx status".to_string()),
+    }
+}
+
 pub fn decode_internal_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
     let old_offset = *offset;
+
+    if buffer[*offset..].len() < 4 as usize {
+        return None;
+    }
+
     let version = read_u32_le(buffer, *offset);
     *offset += 4;
 
@@ -204,10 +218,15 @@ pub fn decode_internal_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
         let mut outpoint_hash = [0u8; 32];
         let mut outpoint_index = [0u8; 4];
 
-        outpoint_hash.copy_from_slice(&buffer[0..32]);
+        if buffer[*offset..].len() < 36 {
+            return None;
+        }
+
+        outpoint_hash.copy_from_slice(&buffer[*offset..*offset + 32]);
+//        outpoint_hash.reverse();
         *offset += 32;
 
-        outpoint_index.copy_from_slice(&buffer[32..36]);
+        outpoint_index.copy_from_slice(&buffer[*offset..*offset + 4]);
         *offset += 4;
 
         let previous_output = OutPoint {
@@ -218,9 +237,17 @@ pub fn decode_internal_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
         let script_length = read_varint(&buffer[*offset..]);
         *offset += get_offset(&buffer[*offset..]);
 
+        if buffer[*offset..].len() < script_length {
+            return None;
+        }
+
         let mut signature_script = Vec::new();
         signature_script.extend(&buffer[*offset..*offset + script_length]);
         *offset += script_length;
+
+        if buffer[*offset..].len() < 4 as usize {
+            return None;
+        }
 
         let sequence = read_u32_le(buffer, *offset);
         *offset += 4;
@@ -247,6 +274,10 @@ pub fn decode_internal_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
         let pk_script_length = read_varint(&buffer[*offset..]);
         *offset += get_offset(&buffer[*offset..]);
 
+        if buffer[*offset..].len() < pk_script_length as usize {
+            return None;
+        }
+
         let mut pk_script = Vec::new();
         pk_script.extend(&buffer[*offset..*offset + pk_script_length]);
         *offset += pk_script_length;
@@ -264,6 +295,10 @@ pub fn decode_internal_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
         let witness_length = buffer[*offset];
         *offset += 1;
 
+        if buffer[*offset..].len() < witness_length as usize {
+            return None;
+        }
+
         let mut tx_witness = Vec::new();
         tx_witness.extend(&buffer[*offset..*offset + witness_length as usize]);
         *offset += witness_length as usize;
@@ -273,6 +308,10 @@ pub fn decode_internal_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
         Vec::new()
         // Offset no se actualiza
     };
+
+    if buffer[*offset..].len() < 4 as usize {
+        return None;
+    }
 
     let lock_time = read_u32_le(buffer, *offset);
     *offset += 4;

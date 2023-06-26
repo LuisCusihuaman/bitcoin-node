@@ -28,11 +28,11 @@ impl PayloadTxStatus {
     }
 }
 
-pub fn decode_tx_status(buffer: &[u8]) -> Result<MessagePayload, String> {
+pub fn decode_send_tx_status(buffer: &[u8]) -> Result<MessagePayload, String> {
     let mut tx_id = [0u8; 32];
     tx_id.copy_from_slice(&buffer[0..32]);
 
-    let status = decode_status(&buffer[33]);
+    let status = decode_status(&buffer[32]);
 
     Ok(MessagePayload::TxStatus(PayloadTxStatus { tx_id, status }))
 }

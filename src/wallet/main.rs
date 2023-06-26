@@ -25,6 +25,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // TODO inicializar interface
 
+    //////////// Para Edu
+    // loop{
+    //     preguntar si ya se acepto la Tx
+    //      wallet.send(getTxStatus())
+    // }
+
     logger_thread.join().unwrap();
     Ok(())
 }

@@ -1,5 +1,5 @@
 use crate::logger::log;
-use crate::net::message::MessagePayload;
+use crate::net::message::{Encoding, MessagePayload};
 use crate::net::p2p_connection::P2PConnection;
 use rand::seq::SliceRandom;
 use std::sync::mpsc;
@@ -55,19 +55,34 @@ impl NodeNetwork {
             let mut conn = connection.clone();
             let payload = payload.clone();
             let logger_tx = self.logger_tx.clone();
+            let (sender, receiver) = mpsc::channel();
 
             threads.push(thread::spawn(move || {
                 if let Err(err) = conn.send(&payload) {
                     log(
-                        logger_tx,
+                        logger_tx.clone(),
                         format!(
                             "Error sending message: {} for peer: {:?}",
                             err,
                             conn.peer_address.clone()
                         ),
                     );
+                    if err == "Broken pipe (os error 32)" {
+                        log(
+                            logger_tx,
+                            format!("Retry sending {} to other peer", payload.command_name()),
+                        );
+                        sender.send(payload).unwrap();
+                    }
                 }
             }));
+
+            match receiver.recv() {
+                Ok(msg) => {
+                    self.send_messages(vec![msg]);
+                }
+                Err(_) => {}
+            };
         }
 
         for thread in threads {

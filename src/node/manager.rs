@@ -33,7 +33,7 @@ pub struct NodeManager {
     config: Config,
     logger_tx: Sender<String>,
     blocks: Vec<Block>,
-    utxo_set: BTreeMap<[u8; 20], Vec<Utxo>>, // utxo_set is a Hash with key <address> and value <OutPoint>
+    utxo_set: HashMap<[u8; 20], Vec<Utxo>>, // utxo_set is a Hash with key <address> and value <OutPoint>
     blocks_btreemap: BTreeMap<[u8; 32], usize>,
     wallet_tnxs: HashMap<[u8; 32], TxStatus>,
 }
@@ -46,7 +46,7 @@ impl NodeManager {
             node_network: NodeNetwork::new(logger_tx),
             logger_tx: logger_tx_cloned,
             blocks: vec![], // inicializar el block genesis (con el config)
-            utxo_set: BTreeMap::new(),
+            utxo_set: HashMap::new(),
             blocks_btreemap: BTreeMap::new(),
             wallet_tnxs: HashMap::new(),
         }
@@ -149,7 +149,10 @@ impl NodeManager {
                             },
                         };
 
-                        self.update_utxo_set(block.clone());
+                        if !self.utxo_set.is_empty() {
+                            self.update_utxo_set(block.clone());
+                        }
+
                         self.update_unconfirm_txns(block.clone().txns);
 
                         // For genesis block
@@ -274,7 +277,7 @@ impl NodeManager {
 
                         let tx_status = match self.wallet_tnxs.get(&tx.id) {
                             Some(status) => status.clone(),
-                            None => continue,
+                            None => TxStatus::Unknown,
                         };
 
                         self.send_to(
@@ -460,11 +463,28 @@ impl NodeManager {
     pub fn initial_block_download(&mut self) -> Result<(), String> {
         self.headers_first();
         self.blocks_download();
+        self.init_utxo_set();
         Ok(())
     }
 
+    fn init_utxo_set(&mut self) {
+        let blocks = self.get_blocks();
+
+        log(
+            self.logger_tx.clone(),
+            format!("Generating utxo set with {} blocks", blocks.len()),
+        );
+
+        for block in blocks.clone() {
+            if block.txns.is_empty() {
+                continue;
+            }
+            self.update_utxo_set(block);
+        }
+    }
+
     fn blocks_download(&mut self) {
-        let timestamp = match date_to_timestamp("2023-06-24") {
+        let timestamp = match date_to_timestamp("2023-06-07") {
             Some(timestamp) => timestamp,
             None => panic!("Error parsing date"),
         };

@@ -517,7 +517,7 @@ mod tests {
         let mut wallet = Wallet::new(config, logger.tx, messi);
 
         wallet.create_pending_tx(receiver_addr, amount);
-
+        
         wallet.receive();
 
         Ok(())

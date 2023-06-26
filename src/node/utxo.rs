@@ -81,7 +81,8 @@ pub fn update_utxo_set(utxo_set: &mut HashMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
 
         let pk_hash = hash160::Hash::hash(&sec_pk).to_byte_array();
 
-        let hash_tx = tx_in.previous_output.hash;
+        let mut hash_tx = tx_in.previous_output.hash;
+        hash_tx.reverse(); //this is because we didnt reverse the hash in decode_internal_tx
         let index = tx_in.previous_output.index;
 
         if let Some(utxos) = utxo_set.get(&pk_hash) {
@@ -104,7 +105,7 @@ pub fn update_utxo_set(utxo_set: &mut HashMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
 pub fn generate_utxos(utxo_set: &mut HashMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
     for (index, tx_out) in tx.tx_out.iter().enumerate() {
         //  Creo un outpoint a partir de la TxOut
-        let utxo = Utxo {
+        let utxo_new: Utxo = Utxo {
             transaction_id: tx.id,
             output_index: index as u32,
             value: tx_out.value,
@@ -119,28 +120,31 @@ pub fn generate_utxos(utxo_set: &mut HashMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
 
         let mut pk_hash = [0u8; 20];
         pk_hash.copy_from_slice(&pk_script[3..23]);
-
+        let mut is_duplicated= false;
         // append to address this UTXO
-        let utxos = match utxo_set.get(&pk_hash) {
+        let utxos_updated: Vec<Utxo> = match utxo_set.get(&pk_hash) {
             Some(utxos) => {
-                for utxo_pk in utxos {
-                    if utxo_pk == &utxo {
-                        continue;
+                let mut utxos_return: Vec<Utxo> = utxos.clone();
+                for utxo_curr in utxos {
+                    if utxo_curr == &utxo_new {
+                        is_duplicated = true;
+                        break;
                     }
                 }
-
-                let mut utxos = utxos.clone();
-                utxos.push(utxo);
-                utxos
+                if !is_duplicated {
+                    utxos_return.push(utxo_new);
+                }
+                utxos_return
             }
             None => {
-                let mut utxos = Vec::new();
-                utxos.push(utxo);
-                utxos
+                // new address from one month
+                let mut utxos_return = Vec::new();
+                utxos_return.push(utxo_new);
+                utxos_return
             }
         };
 
-        utxo_set.insert(pk_hash, utxos);
+        utxo_set.insert(pk_hash, utxos_updated);
     }
 }
 

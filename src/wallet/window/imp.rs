@@ -13,7 +13,7 @@ use gtk::traits::RecentManagerExt;
 
 use app::config::Config;
 use app::logger::Logger;
-use app::net::message::TxStatus;
+use app::net::message::{MessagePayload, TxStatus};
 use app::wallet::wallet::{User, Wallet};
 
 use crate::transaction_object::TransactionObject;
@@ -111,6 +111,7 @@ impl ObjectImpl for Window {
         thread::spawn(move || {
             loop {
                 let mut wallet = wallet_clone.lock().unwrap();
+                wallet.update_txs_history();
                 wallet.receive();
                 println!("Updating receiving!!");
                 drop(wallet);
@@ -124,7 +125,7 @@ impl ObjectImpl for Window {
                 println!("Updating transactions");
                 let mut wallet = wallet.lock().unwrap();
                 for (tx_id, tx_history) in wallet.tnxs_history.iter() {
-                    let tx_id_str = String::from_utf8_lossy(tx_id).to_string(); //TODO: BOOM
+                    let tx_id_str = "nuevito".to_string();
                     let status = match tx_history.1 {
                         TxStatus::Unconfirmed => "Unconfirmed",
                         TxStatus::Confirmed => "Confirmed",
@@ -141,7 +142,7 @@ impl ObjectImpl for Window {
                 if wallet.pending_tx.receive_addr != "" {
                     let tx_obj = TransactionObject::new(
                         "PendingID".to_string(),
-                        "Pending".to_string(),
+                        "Unconfirmed".to_string(),
                         wallet.pending_tx.receive_addr.to_string(),
                         wallet.pending_tx.amount.to_string(),
                     );

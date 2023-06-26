@@ -87,9 +87,9 @@ impl Wallet {
 
                     println!("Signed Tx id: {:?}", tx_decoded.id.clone());
                     println!("Signed Tx: {:?}", coso);
-
+                    let mut tx_send = tx.clone();
                     // send the Tx to the node
-                    self.tnxs_history.insert(tx.id, (tx, TxStatus::Unconfirmed, self.pending_tx.receive_addr.clone(), self.pending_tx.amount));
+                    self.tnxs_history.insert(tx_send.clone().id, (tx_send, TxStatus::Unconfirmed, self.pending_tx.receive_addr.clone(), self.pending_tx.amount));
                     self.send(MessagePayload::Tx(signed_tx));
                 }
                 MessagePayload::TxStatus(payload) => {
@@ -103,9 +103,9 @@ impl Wallet {
                     }
 
                     match self.tnxs_history.get(&payload.tx_id) {
-                        Some(tx) => {
+                        Some(tx_history) => {
                             self.tnxs_history
-                                .insert(payload.tx_id, (tx.0.clone(), payload.status, tx.2.clone(), tx.3.clone()));
+                                .insert(payload.tx_id, (tx_history.0.clone(), payload.status, tx_history.2.clone(), tx_history.3.clone()));
                         }
                         None => {
                             log(
@@ -296,6 +296,12 @@ impl Wallet {
             receive_addr: receiver_addr,
             amount: amount,
         };
+    }
+    pub fn update_txs_history(&mut self) {
+        for (_, tx_history) in self.tnxs_history.clone().iter() {
+            let tx_cloned = tx_history.0.clone();
+            self.send(MessagePayload::GetTxStatus(tx_cloned));
+        }
     }
 }
 

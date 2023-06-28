@@ -58,6 +58,12 @@ impl PayloadGetHeaders {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PayloadHeaders {
+    pub count: usize,        // variable size
+    pub headers: Vec<Block>, // variable size
+}
+
 pub fn decode_headers(buffer: &[u8]) -> Result<MessagePayload, String> {
     let _count = read_varint(&buffer[0..]);
     let offset = get_offset(buffer);
@@ -74,7 +80,12 @@ pub fn decode_headers(buffer: &[u8]) -> Result<MessagePayload, String> {
         }
     }
 
-    Ok(MessagePayload::BlockHeader(blocks))
+    let payload = PayloadHeaders {
+        count: blocks.len(),
+        headers: blocks,
+    };
+
+    Ok(MessagePayload::Headers(payload))
 }
 
 pub fn decode_header(buffer: &[u8]) -> Option<Block> {

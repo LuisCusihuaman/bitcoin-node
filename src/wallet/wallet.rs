@@ -1,14 +1,13 @@
 use crate::config::Config;
 use crate::logger::log;
 use crate::net::message::get_utxos::PayloadGetUtxos;
-use crate::net::message::tx::{decode_internal_tx, decode_tx, OutPoint, Tx, TxIn, TxOut};
+use crate::net::message::tx::{decode_internal_tx, OutPoint, Tx, TxIn, TxOut};
 use crate::net::message::{MessagePayload, TxStatus};
 use crate::net::p2p_connection::P2PConnection;
 use crate::node::utxo::Utxo;
 use crate::utils::{double_sha256, pk_hash_from_addr};
 use bitcoin_hashes::hash160;
 use bitcoin_hashes::Hash;
-use bs58::decode;
 use rand::rngs::OsRng;
 use rand::Rng;
 use secp256k1::{Message, Secp256k1, SecretKey};
@@ -517,7 +516,7 @@ mod tests {
         let mut wallet = Wallet::new(config, logger.tx, messi);
 
         wallet.create_pending_tx(receiver_addr, amount);
-        
+
         wallet.receive();
 
         Ok(())

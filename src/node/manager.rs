@@ -4,6 +4,7 @@ use crate::net::message::block::Block;
 use crate::net::message::get_data_inv::Inventory;
 use crate::net::message::get_data_inv::PayloadGetDataInv;
 use crate::net::message::get_headers::PayloadGetHeaders;
+use crate::net::message::get_headers::PayloadHeaders;
 use crate::net::message::ping_pong::PayloadPingPong;
 use crate::net::message::tx::Tx;
 use crate::net::message::tx_status::PayloadTxStatus;
@@ -95,34 +96,41 @@ impl NodeManager {
                             matched_peer_messages.push(MessagePayload::Version(version.clone()));
                         }
                     }
-                    MessagePayload::BlockHeader(blocks) => {
+                    MessagePayload::Headers(payload) => {
                         // Primeros headers
                         if self.get_blocks().is_empty() {
                             if commands.contains(&"headers") {
                                 matched_peer_messages
-                                    .push(MessagePayload::BlockHeader(blocks.clone()));
+                                    .push(MessagePayload::Headers(payload.clone()));
                             }
-                            self.blocks.extend(blocks.clone());
-                            Block::encode_blocks_to_file(blocks, "block_headers.bin");
+                            self.blocks.extend(payload.headers.clone());
+                            Block::encode_blocks_to_file(&payload.headers, "block_headers.bin");
                         }
 
                         // Continuidad de la blockchain
                         if let Some(actual_last_block) = self.blocks.last() {
-                            if let Some(first_block) = blocks.first() {
+                            if let Some(first_block) = payload.headers.first() {
                                 if actual_last_block.get_hash() == first_block.get_prev() {
                                     if commands.contains(&"headers") {
                                         // only i want to save msg on correct blockchain integrity
                                         matched_peer_messages
-                                            .push(MessagePayload::BlockHeader(blocks.clone()));
+                                            .push(MessagePayload::Headers(payload.clone()));
                                     }
-                                    self.blocks.extend(blocks.clone());
-                                    Block::encode_blocks_to_file(blocks, "block_headers.bin");
+                                    self.blocks.extend(payload.headers.clone());
+                                    Block::encode_blocks_to_file(
+                                        &payload.headers,
+                                        "block_headers.bin",
+                                    );
                                 }
                             }
                         }
                         log(
                             self.logger_tx.clone(),
-                            format!("Received {} headers from {}", blocks.len(), peer_address),
+                            format!(
+                                "Received {} headers from {}",
+                                payload.headers.len(),
+                                peer_address
+                            ),
                         );
                     }
                     MessagePayload::Block(block) => {
@@ -288,6 +296,14 @@ impl NodeManager {
                             }),
                         );
                     }
+                    MessagePayload::GetHeaders(getheaders) => {
+                        log(
+                            self.logger_tx.clone(),
+                            format!("Received getheaders from {}", peer_address),
+                        );
+
+                        self.send_headers(&getheaders, &peer_address);
+                    }
                     _ => {
                         log(
                             self.logger_tx.clone(),
@@ -299,6 +315,32 @@ impl NodeManager {
             matched_messages.push((peer_address.clone(), matched_peer_messages));
         }
         matched_messages
+    }
+
+    fn send_headers(&mut self, get_headers: &PayloadGetHeaders, address: &String) {
+        println!("get_headers: {:?}", get_headers);
+
+        let header = [0u8; 32]; //self.blocks_btreemap.get(&get_headers.block_header_hashes[0]);
+                                // let header_hashes =
+                                //     get_headers.block_header_hashes
+                                //     .chunks(32);
+
+        let index = self.get_block_index_by_hash(header).unwrap();
+
+        let blockchain = self.get_blocks();
+
+        let blocks_to_send = if blockchain[index..].len() >= 2000 {
+            &blockchain[index..index + 2000]
+        } else {
+            &blockchain[index..]
+        };
+
+        let payload = PayloadHeaders {
+            count: blocks_to_send.len(),
+            headers: blocks_to_send.to_vec(),
+        };
+
+        self.send_to(address.clone(), &MessagePayload::Headers(payload));
     }
 
     fn update_unconfirm_txns(&mut self, tnxs: Vec<Tx>) {
@@ -567,7 +609,13 @@ impl NodeManager {
         self.node_network.get_one_peer_address()
     }
 
-    pub fn run(&mut self) {
+    pub fn run_secondary(&mut self) {
+        loop {
+            self.wait_for(vec![]);
+        }
+    }
+
+    pub fn run_main(&mut self) {
         let (sender, rx) = channel();
         let listener = TcpListener::bind("127.0.0.1:18333").unwrap();
         let logger_tx = self.logger_tx.clone();

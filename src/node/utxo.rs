@@ -120,7 +120,7 @@ pub fn generate_utxos(utxo_set: &mut HashMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
 
         let mut pk_hash = [0u8; 20];
         pk_hash.copy_from_slice(&pk_script[3..23]);
-        let mut is_duplicated= false;
+        let mut is_duplicated = false;
         // append to address this UTXO
         let utxos_updated: Vec<Utxo> = match utxo_set.get(&pk_hash) {
             Some(utxos) => {

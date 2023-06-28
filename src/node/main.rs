@@ -25,7 +25,15 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut node_manager = NodeManager::new(config, logger_tx);
 
-    let node_network_ips = node_manager.get_initial_nodes()?;
+    let is_main_node = true;
+
+    let node_network_ips = match is_main_node {
+        true => node_manager.get_initial_nodes()?,
+        false => {
+            let main_node_ip = "127.0.0.1".to_string();
+            vec![main_node_ip.clone()]
+        }
+    };
 
     node_manager.connect(
         node_network_ips
@@ -36,7 +44,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     node_manager.handshake();
     node_manager.initial_block_download()?;
-    node_manager.run();
+
+    match is_main_node {
+        true => node_manager.run_main(),
+        false => node_manager.run_secondary(),
+    }
 
     logger_thread.join().unwrap();
 

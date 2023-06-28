@@ -1,4 +1,5 @@
 use self::get_data_inv::{decode_get_data, decode_inv, PayloadGetDataInv};
+use self::get_headers::PayloadHeaders;
 use self::tx_status::{decode_tx_status, PayloadTxStatus};
 use crate::net::message::block::{decode_block, Block};
 use crate::net::message::get_blocks::PayloadGetBlocks;
@@ -34,7 +35,7 @@ pub enum MessagePayload {
     Version(PayloadVersion),
     Verack,
     GetHeaders(PayloadGetHeaders),
-    BlockHeader(Vec<Block>),
+    Headers(PayloadHeaders),
     GetBlocks(PayloadGetBlocks),
     Inv(PayloadGetDataInv),
     GetData(PayloadGetDataInv),
@@ -185,7 +186,7 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::Verack => "verack",
             MessagePayload::GetHeaders(_) => "getheaders",
             MessagePayload::GetBlocks(_) => "getblocks",
-            MessagePayload::BlockHeader(_) => "headers",
+            MessagePayload::Headers(_) => "headers",
             MessagePayload::Inv(_) => "inv",
             MessagePayload::GetData(_) => "getdata",
             MessagePayload::Block(_) => "block",

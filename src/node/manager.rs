@@ -33,8 +33,9 @@ pub struct NodeManager {
     node_network: NodeNetwork,
     config: Config,
     logger_tx: Sender<String>,
-    blocks: Vec<Block>,
-    utxo_set: HashMap<[u8; 20], Vec<Utxo>>, // utxo_set is a Hash with key <address> and value <OutPoint>
+    blockchain: Vec<Block>,
+    // is_updating_blockchain: bool,
+    utxo_set: HashMap<[u8; 20], Vec<Utxo>>,
     blocks_btreemap: BTreeMap<[u8; 32], usize>,
     wallet_tnxs: HashMap<[u8; 32], TxStatus>,
 }
@@ -46,7 +47,8 @@ impl NodeManager {
             config,
             node_network: NodeNetwork::new(logger_tx),
             logger_tx: logger_tx_cloned,
-            blocks: vec![], // inicializar el block genesis (con el config)
+            blockchain: vec![],
+            // is_updating_blockchain: false,
             utxo_set: HashMap::new(),
             blocks_btreemap: BTreeMap::new(),
             wallet_tnxs: HashMap::new(),
@@ -98,12 +100,12 @@ impl NodeManager {
                     }
                     MessagePayload::Headers(payload) => {
                         // Primeros headers
-                        if self.get_blocks().is_empty() {
+                        if self.get_blockchain().is_empty() {
                             if commands.contains(&"headers") {
                                 matched_peer_messages
                                     .push(MessagePayload::Headers(payload.clone()));
                             }
-                            self.blocks.extend(payload.headers.clone());
+                            self.blockchain.extend(payload.headers.clone());
                             Block::encode_blocks_to_file(&payload.headers, "block_headers.bin");
                         }
 
@@ -113,20 +115,16 @@ impl NodeManager {
                             None => continue,
                         };
 
-                        let blockchain_last_block = match self.get_blocks().last() {
+                        let blockchain_last_block = match self.get_blockchain().last() {
                             Some(block) => block.clone(),
                             None => continue,
                         };
 
                         if blockchain_last_block.hash == payload_first_block.previous_block {
-                            self.blocks.extend(payload.headers.clone());
+                            self.blockchain.extend(payload.headers.clone());
                             Block::encode_blocks_to_file(&payload.headers, "block_headers.bin");
                         }
 
-                        if commands.contains(&"headers") {
-                            // only i want to save msg on correct blockchain integrity
-                            matched_peer_messages.push(MessagePayload::Headers(payload.clone()));
-                        }
                         log(
                             self.logger_tx.clone(),
                             format!(
@@ -135,6 +133,20 @@ impl NodeManager {
                                 peer_address
                             ),
                         );
+
+                        if payload.headers.len() != 0 {
+                            self.send_get_headers();
+                        } else {
+                            // self.is_updating_blockchain = true;
+                            self.init_block_btreemap();
+                            self.blocks_download();
+                            self.init_utxo_set();
+                        }
+
+                        if commands.contains(&"headers") {
+                            // only i want to save msg on correct blockchain integrity
+                            matched_peer_messages.push(MessagePayload::Headers(payload.clone()));
+                        }
                     }
                     MessagePayload::Block(block) => {
                         if commands.contains(&"block") {
@@ -174,19 +186,19 @@ impl NodeManager {
                                 73, 67,
                             ]
                         {
-                            self.blocks[0] = block.clone();
+                            self.blockchain[0] = block.clone();
                             log(
                                 self.logger_tx.clone(),
                                 format!("updated block with index 0"),
                             );
-                        } else if prev_index + 1 == self.blocks.len() {
-                            self.blocks.push(block.clone());
+                        } else if prev_index + 1 == self.blockchain.len() {
+                            self.blockchain.push(block.clone());
                             log(
                                 self.logger_tx.clone(),
                                 format!("new block with index {}", prev_index + 1),
                             );
                         } else {
-                            self.blocks[prev_index + 1] = block.clone();
+                            self.blockchain[prev_index + 1] = block.clone();
                             log(
                                 self.logger_tx.clone(),
                                 format!("updated block with index {}", prev_index + 1),
@@ -329,7 +341,7 @@ impl NodeManager {
             None => return,
         };
 
-        let blockchain = self.get_blocks();
+        let blockchain = self.get_blockchain();
 
         let blocks_to_send = if blockchain[index..].len() >= 2000 {
             &blockchain[index..index + 2000]
@@ -360,8 +372,8 @@ impl NodeManager {
         }
     }
 
-    pub fn get_blocks(&self) -> Vec<Block> {
-        self.blocks.clone()
+    pub fn get_blockchain(&self) -> Vec<Block> {
+        self.blockchain.clone()
     }
 
     fn resolve_hostname(&self, hostname: &str, port: u16) -> Result<Vec<IpAddr>, std::io::Error> {
@@ -442,41 +454,19 @@ impl NodeManager {
                 self.logger_tx.clone(),
                 format!("Loading header blocks from file"),
             );
-            self.blocks = Block::decode_blocks_from_file(file_path);
+            self.blockchain = Block::decode_blocks_from_file(file_path);
         }
 
         log(
             self.logger_tx.clone(),
-            format!("{:?} blocks loaded by file", self.blocks.len()),
+            format!("{:?} blocks loaded by file", self.blockchain.len()),
         );
-        self.initial_block_headers_download();
-    }
 
-    fn initial_block_headers_download(&mut self) {
-        let mut last_block: [u8; 32] = if self.blocks.is_empty() {
-            get_hash_block_genesis()
-        } else {
-            let last_block_found = self.blocks.last().unwrap();
-            last_block_found.get_hash()
-        };
-
-        let mut is_finished: bool = false;
-
-        while !is_finished {
-            let messages: Vec<MessagePayload> = self.send_get_headers_with_block_hash(&last_block);
-
-            if let Some(block) = self.blocks.last() {
-                last_block = block.get_hash();
-            }
-
-            is_finished = messages.is_empty();
-        }
-
-        self.init_block_btreemap();
+        self.send_get_headers();
     }
 
     fn init_block_btreemap(&mut self) {
-        let blocks = self.get_blocks();
+        let blocks = self.get_blockchain();
 
         log(
             self.logger_tx.clone(),
@@ -488,31 +478,39 @@ impl NodeManager {
         }
     }
 
-    fn send_get_headers_with_block_hash(&mut self, block_hash: &[u8; 32]) -> Vec<MessagePayload> {
+    // fn send_get_headers_with_block_hash(&mut self){ // -> Vec<MessagePayload> {
+    fn send_get_headers(&mut self) {
+        // -> Vec<MessagePayload> {
+        let last_block: [u8; 32] = if self.blockchain.is_empty() {
+            get_hash_block_genesis()
+        } else {
+            let last_block_found = self.blockchain.last().unwrap();
+            last_block_found.get_hash()
+        };
+
         let stop_hash = [0u8; 32];
 
-        let mut hash_reversed: [u8; 32] = *block_hash;
+        let mut hash_reversed: [u8; 32] = last_block;
         hash_reversed.reverse();
 
         let payload_get_headers =
             PayloadGetHeaders::new(70015, 1, hash_reversed.to_vec(), stop_hash.to_vec());
-        let get_headers_message = MessagePayload::GetHeaders(payload_get_headers);
 
-        let address = self.get_random_peer_address();
-        self.send_to(address.clone(), &get_headers_message);
-        let response: Vec<(String, Vec<MessagePayload>)> = self.wait_for(vec!["headers"]);
-        filter_by(response, address)
+        self.node_network
+            .send_messages(vec![MessagePayload::GetHeaders(payload_get_headers)]);
+        self.wait_for(vec!["headers"]);
     }
 
     pub fn initial_block_download(&mut self) -> Result<(), String> {
         self.headers_first();
-        self.blocks_download();
-        self.init_utxo_set();
+        // self.init_block_btreemap();
+        // self.blocks_download();
+        // self.init_utxo_set();
         Ok(())
     }
 
     fn init_utxo_set(&mut self) {
-        let blocks = self.get_blocks();
+        let blocks = self.get_blockchain();
 
         log(
             self.logger_tx.clone(),
@@ -534,7 +532,7 @@ impl NodeManager {
         };
 
         // TODO: Integrate date from self.config.download_blocks_since_date
-        let blocks = self.get_blocks();
+        let blocks = self.get_blockchain();
 
         let index = match self.get_block_index_by_timestamp(timestamp) {
             Some(index) => index,
@@ -570,7 +568,7 @@ impl NodeManager {
     }
 
     pub fn get_block_index_by_timestamp(&self, timestamp: u32) -> Option<usize> {
-        for (index, block) in self.get_blocks().iter().enumerate() {
+        for (index, block) in self.get_blockchain().iter().enumerate() {
             if block.timestamp >= timestamp && block.txns.is_empty() {
                 return Some(index);
             }
@@ -579,7 +577,7 @@ impl NodeManager {
     }
 
     pub fn get_block_index_by_hash(&self, prev_hash: [u8; 32]) -> Option<usize> {
-        for (index, block) in self.get_blocks().iter().enumerate().rev() {
+        for (index, block) in self.get_blockchain().iter().enumerate().rev() {
             if block.get_hash() == prev_hash {
                 return Some(index);
             }
@@ -605,10 +603,6 @@ impl NodeManager {
                 format!("Error sending message to peer: {:?}", e),
             );
         }
-    }
-
-    fn get_random_peer_address(&self) -> String {
-        self.node_network.get_one_peer_address()
     }
 
     pub fn run_secondary(&mut self) {
@@ -675,18 +669,5 @@ fn listen_for_conn(
                 );
             }
         }
-    }
-}
-
-pub fn filter_by(
-    messages: Vec<(String, Vec<MessagePayload>)>,
-    address: String,
-) -> Vec<MessagePayload> {
-    let messages_from_peer = messages
-        .iter()
-        .find(|(peer_address, _)| peer_address == &address);
-    match messages_from_peer {
-        Some((_, messages)) => messages.clone(),
-        None => vec![],
     }
 }

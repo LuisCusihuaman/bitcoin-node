@@ -44,10 +44,12 @@ impl NodeNetwork {
 
     pub fn send_messages(&self, payloads: Vec<MessagePayload>) {
         let mut threads = Vec::new();
+        let mut shuffled_connections = self.peer_connections.clone();
+        shuffled_connections.shuffle(&mut rand::thread_rng());
 
         // TODO: connection must be at least one if not enter to infinite loop
         for (payload, connection) in payloads.iter().cloned().zip(
-            self.peer_connections
+            shuffled_connections
                 .iter()
                 .cycle()
                 .filter(|connection| connection.handshaked),
@@ -160,19 +162,5 @@ impl NodeNetwork {
             .collect();
 
         received_messages
-    }
-
-    pub fn get_one_peer_address(&self) -> String {
-        let handshaked_connections: Vec<&P2PConnection> = self
-            .peer_connections
-            .iter()
-            .filter(|connection| connection.handshaked)
-            .collect();
-
-        if let Some(peer_connection) = handshaked_connections.choose(&mut rand::thread_rng()) {
-            peer_connection.peer_address.clone()
-        } else {
-            String::from("")
-        }
     }
 }

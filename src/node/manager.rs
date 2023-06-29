@@ -34,7 +34,7 @@ pub struct NodeManager {
     config: Config,
     logger_tx: Sender<String>,
     blockchain: Vec<Block>,
-    // is_updating_blockchain: bool,
+    // is_updating_blockchain: bool, // TODO: sirve para el front?
     utxo_set: HashMap<[u8; 20], Vec<Utxo>>,
     blocks_btreemap: BTreeMap<[u8; 32], usize>,
     wallet_tnxs: HashMap<[u8; 32], TxStatus>,
@@ -48,7 +48,7 @@ impl NodeManager {
             node_network: NodeNetwork::new(logger_tx),
             logger_tx: logger_tx_cloned,
             blockchain: vec![],
-            // is_updating_blockchain: false,
+            // is_updating_blockchain: true, // TODO: sirve para el front?
             utxo_set: HashMap::new(),
             blocks_btreemap: BTreeMap::new(),
             wallet_tnxs: HashMap::new(),
@@ -99,6 +99,22 @@ impl NodeManager {
                         }
                     }
                     MessagePayload::Headers(payload) => {
+                        log(
+                            self.logger_tx.clone(),
+                            format!(
+                                "Received {} headers from {}",
+                                payload.headers.len(),
+                                peer_address
+                            ),
+                        );
+
+                        if payload.headers.is_empty() {
+                            // self.is_updating_blockchain = false; // TODO: sirve para el front?
+                            self.init_block_btreemap();
+                            self.blocks_download();
+                            self.init_utxo_set();
+                        }
+
                         // Primeros headers
                         if self.get_blockchain().is_empty() {
                             if commands.contains(&"headers") {
@@ -125,28 +141,12 @@ impl NodeManager {
                             Block::encode_blocks_to_file(&payload.headers, "block_headers.bin");
                         }
 
-                        log(
-                            self.logger_tx.clone(),
-                            format!(
-                                "Received {} headers from {}",
-                                payload.headers.len(),
-                                peer_address
-                            ),
-                        );
-
-                        if payload.headers.len() != 0 {
-                            self.send_get_headers();
-                        } else {
-                            // self.is_updating_blockchain = true;
-                            self.init_block_btreemap();
-                            self.blocks_download();
-                            self.init_utxo_set();
-                        }
-
                         if commands.contains(&"headers") {
                             // only i want to save msg on correct blockchain integrity
                             matched_peer_messages.push(MessagePayload::Headers(payload.clone()));
                         }
+
+                        self.send_get_headers();
                     }
                     MessagePayload::Block(block) => {
                         if commands.contains(&"block") {

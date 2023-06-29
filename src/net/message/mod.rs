@@ -1,5 +1,5 @@
 use self::get_data_inv::{decode_get_data, decode_inv, PayloadGetDataInv};
-use self::get_headers::PayloadHeaders;
+use self::get_headers::{decode_get_headers, PayloadHeaders};
 use self::tx_status::{decode_tx_status, PayloadTxStatus};
 use crate::net::message::block::{decode_block, Block};
 use crate::net::message::get_blocks::PayloadGetBlocks;
@@ -136,6 +136,7 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::Tx(tx) => tx.size(),
             MessagePayload::GetTxStatus(tx) => tx.size(),
             MessagePayload::TxStatus(tx_status) => tx_status.size(),
+            MessagePayload::Headers(headers) => headers.size(),
             _ => no_payload,
         }
     }
@@ -174,6 +175,9 @@ impl Encoding<MessagePayload> for MessagePayload {
             }
             MessagePayload::GetTxStatus(get_tx_status) => {
                 get_tx_status.encode(buffer);
+            }
+            MessagePayload::Headers(headers) => {
+                headers.encode(buffer);
             }
             _ => {}
         }
@@ -216,6 +220,7 @@ impl Encoding<MessagePayload> for MessagePayload {
             "txconfirmed" => decode_tx(buffer),
             "gettxstatus" => decode_tx(buffer),
             "txstatus" => decode_tx_status(buffer),
+            "getheaders" => decode_get_headers(buffer),
             _ => Err("Unknown command: ".to_owned() + cmd),
         }
     }

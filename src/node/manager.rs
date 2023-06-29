@@ -108,21 +108,24 @@ impl NodeManager {
                         }
 
                         // Continuidad de la blockchain
-                        if let Some(actual_last_block) = self.blocks.last() {
-                            if let Some(first_block) = payload.headers.first() {
-                                if actual_last_block.get_hash() == first_block.get_prev() {
-                                    if commands.contains(&"headers") {
-                                        // only i want to save msg on correct blockchain integrity
-                                        matched_peer_messages
-                                            .push(MessagePayload::Headers(payload.clone()));
-                                    }
-                                    self.blocks.extend(payload.headers.clone());
-                                    Block::encode_blocks_to_file(
-                                        &payload.headers,
-                                        "block_headers.bin",
-                                    );
-                                }
-                            }
+                        let payload_first_block = match payload.headers.first() {
+                            Some(block) => block.clone(),
+                            None => continue,
+                        };
+
+                        let blockchain_last_block = match self.get_blocks().last() {
+                            Some(block) => block.clone(),
+                            None => continue,
+                        };
+
+                        if blockchain_last_block.hash == payload_first_block.previous_block {
+                            self.blocks.extend(payload.headers.clone());
+                            Block::encode_blocks_to_file(&payload.headers, "block_headers.bin");
+                        }
+
+                        if commands.contains(&"headers") {
+                            // only i want to save msg on correct blockchain integrity
+                            matched_peer_messages.push(MessagePayload::Headers(payload.clone()));
                         }
                         log(
                             self.logger_tx.clone(),
@@ -318,14 +321,13 @@ impl NodeManager {
     }
 
     fn send_headers(&mut self, get_headers: &PayloadGetHeaders, address: &String) {
-        println!("get_headers: {:?}", get_headers);
+        let mut header = [0u8; 32];
+        header.copy_from_slice(&get_headers.block_header_hashes);
 
-        let header = [0u8; 32]; //self.blocks_btreemap.get(&get_headers.block_header_hashes[0]);
-                                // let header_hashes =
-                                //     get_headers.block_header_hashes
-                                //     .chunks(32);
-
-        let index = self.get_block_index_by_hash(header).unwrap();
+        let index = match self.get_block_index_by_hash(header) {
+            Some(index) => index,
+            None => return,
+        };
 
         let blockchain = self.get_blocks();
 

@@ -4,7 +4,7 @@ use crate::net::message::MessagePayload;
 use crate::node::merkle_tree::MerkleTree;
 use crate::utils::*;
 use bitcoin_hashes::Hash;
-use std::vec;
+use std::{mem, vec};
 
 use std::{
     fs::{File, OpenOptions},
@@ -29,6 +29,25 @@ pub struct Block {
 }
 
 impl Block {
+    pub fn size(&self) -> usize {
+        let mut size = 0;
+
+        size += mem::size_of::<u32>(); // version
+        size += 32; // hash
+        size += 32; // previous_block
+        size += 32; // merkle_root_hash
+        size += mem::size_of::<u32>(); // timestamp
+        size += mem::size_of::<u32>(); // n_bits
+        size += mem::size_of::<u32>(); // nonce
+        size += get_le_varint(self.txn_count).len(); // variable size
+
+        for tx in &self.txns {
+            size += tx.size();
+        }
+
+        size
+    }
+
     // generates the target to validate proof of work using this formula
     // target = coefficient * 256**(exponent - 3)
     fn pow_256(exponent: u32) -> Vec<u8> {

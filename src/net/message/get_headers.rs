@@ -38,8 +38,17 @@ impl PayloadGetHeaders {
         buffer[offset..offset + hash_count.len()].copy_from_slice(&hash_count); // variable size
         offset += hash_count.len();
 
-        buffer[offset..37].copy_from_slice(&self.block_header_hashes); // variable size
-        offset += self.block_header_hashes.len();
+        let mut aux = 0;
+        for _ in 0..self.hash_count {
+            let mut hash = [0u8; 32];
+
+            hash.copy_from_slice(&self.block_header_hashes[aux..aux + 32]);
+            hash.reverse();
+            aux += 32;
+
+            buffer[offset..offset + 32].copy_from_slice(&hash); // variable size
+            offset += 32;
+        }
 
         buffer[offset..].copy_from_slice(&self.stop_hash); // 8 bytes
     }
@@ -77,7 +86,8 @@ pub fn decode_get_headers(buffer: &[u8]) -> Result<MessagePayload, String> {
         offset += 32;
     }
 
-    let stop_hash = buffer[offset..offset + 32].to_vec();
+    let mut stop_hash = buffer[offset..offset + 32].to_vec();
+    stop_hash.reverse();
 
     let payload = PayloadGetHeaders {
         version,

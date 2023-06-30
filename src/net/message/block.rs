@@ -33,7 +33,6 @@ impl Block {
         let mut size = 0;
 
         size += mem::size_of::<u32>(); // version
-        size += 32; // hash
         size += 32; // previous_block
         size += 32; // merkle_root_hash
         size += mem::size_of::<u32>(); // timestamp

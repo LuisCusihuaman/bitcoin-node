@@ -337,13 +337,17 @@ impl NodeManager {
         header.copy_from_slice(&get_headers.block_header_hashes);
 
         let index = match self.get_block_index_by_hash(header) {
-            Some(index) => index,
+            Some(index) => index + 1, // envío desde el siguiente en adelante
             None => return,
         };
 
         let blockchain = self.get_blockchain();
 
-        let blocks_to_send = if blockchain[index..].len() >= 2000 {
+        let empty: &Vec<Block> = &vec![]; // Para que funcione if de abajo
+
+        let blocks_to_send = if blockchain.len() == index {
+            empty
+        } else if blockchain[index..].len() > 2000 {
             &blockchain[index..index + 2000]
         } else {
             &blockchain[index..]
@@ -481,7 +485,7 @@ impl NodeManager {
     // fn send_get_headers_with_block_hash(&mut self){ // -> Vec<MessagePayload> {
     fn send_get_headers(&mut self) {
         // -> Vec<MessagePayload> {
-        let last_block: [u8; 32] = if self.blockchain.is_empty() {
+        let block_hash: [u8; 32] = if self.blockchain.is_empty() {
             get_hash_block_genesis()
         } else {
             let last_block_found = self.blockchain.last().unwrap();
@@ -490,11 +494,8 @@ impl NodeManager {
 
         let stop_hash = [0u8; 32];
 
-        let mut hash_reversed: [u8; 32] = last_block;
-        hash_reversed.reverse();
-
         let payload_get_headers =
-            PayloadGetHeaders::new(70015, 1, hash_reversed.to_vec(), stop_hash.to_vec());
+            PayloadGetHeaders::new(70015, 1, block_hash.to_vec(), stop_hash.to_vec());
 
         self.node_network
             .send_messages(vec![MessagePayload::GetHeaders(payload_get_headers)]);
@@ -503,9 +504,6 @@ impl NodeManager {
 
     pub fn initial_block_download(&mut self) -> Result<(), String> {
         self.headers_first();
-        // self.init_block_btreemap();
-        // self.blocks_download();
-        // self.init_utxo_set();
         Ok(())
     }
 

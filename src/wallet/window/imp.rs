@@ -96,7 +96,15 @@ impl ObjectImpl for Window {
 
         let priv_key_wif = "cSM1NQcoCMDP8jy2AMQWHXTLc9d4HjSr7H4AqxKk2bD1ykbaRw59".to_string();
         let messi = User::new("Messi".to_string(), priv_key_wif, false);
-        let wallet = Arc::new(Mutex::new(Wallet::new(config, logger.tx, messi)));
+
+        let priv_key_wif = "cVK6pF1sfsvvmF9vGyq4wFeMywy1SMFHNpXa3d4Hi2evKHRQyTbn".to_string();
+        let maradona = User::new("Messi".to_string(), priv_key_wif, false);
+
+        let users = vec![messi, maradona];
+
+        // EL ultimo usuario activo es users[-1]
+        let wallet = Arc::new(Mutex::new(Wallet::new(config, logger.tx, users)));
+
         let wallet_clone = wallet.clone(); // Clone the Arc<Mutex<Wallet>>
 
         let (sender, receiver) = MainContext::channel(PRIORITY_DEFAULT);

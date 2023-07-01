@@ -1,10 +1,12 @@
-use app::config::Config;
+mod config;
+
 use app::logger::Logger;
 use app::node::manager::NodeManager;
 use std::env;
 use std::error::Error;
 use std::io;
 use std::thread;
+use app::node::config::Config;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // let filepath = env::args().nth(1).ok_or_else(|| {

@@ -9,12 +9,12 @@ use rand::rngs::OsRng;
 use rand::Rng;
 use secp256k1::{Message, Secp256k1, SecretKey};
 
-use crate::config::Config;
 use crate::logger::log;
 use crate::net::message::get_utxos::PayloadGetUtxos;
 use crate::net::message::tx::{decode_internal_tx, decode_tx, OutPoint, Tx, TxIn, TxOut};
 use crate::net::message::{MessagePayload, TxStatus};
 use crate::net::p2p_connection::P2PConnection;
+use crate::wallet::config::Config;
 use crate::node::utxo::Utxo;
 use crate::utils::{array_to_hex, double_sha256, pk_hash_from_addr};
 
@@ -31,7 +31,7 @@ pub struct Wallet {
 impl Wallet {
     pub fn new(config: Config, sender: Sender<String>, users: Vec<User>) -> Wallet {
         let logger_tx = sender.clone();
-        let node_manager = P2PConnection::connect("127.0.0.1:18333", sender.clone()).unwrap();
+        let node_manager = P2PConnection::connect(config.node_manager_address.as_str(), sender.clone()).unwrap();
 
         Wallet {
             config,
@@ -106,7 +106,7 @@ impl Wallet {
         self.users[self.index_last_active_user].available_money = self.get_balance();
 
         let amount = amount * 100_000_000.0; // amount to send in satoshis
-        let fee = 100000.0; // self.config.tx_fee ; // fee for the Tx
+        let fee =  self.config.tx_fee; // self.config.tx_fee ; // fee for the Tx
 
         if amount <= 0 as f64 {
             log(self.logger_tx.clone(), format!("Error: Invalid amount"));

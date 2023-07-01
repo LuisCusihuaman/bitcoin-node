@@ -1,4 +1,3 @@
-use crate::config::Config;
 use crate::utils::get_time;
 use std::cell::RefCell;
 use std::error::Error;
@@ -6,6 +5,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
+use crate::node::config::Config;
 
 pub struct Logger {
     rx: Receiver<String>,

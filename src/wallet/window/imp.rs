@@ -13,10 +13,10 @@ use gtk::{
     gio, glib, ColumnView, ColumnViewColumn, CompositeTemplate, Entry, ListView, NoSelection,
 };
 
-use app::config::Config;
 use app::logger::Logger;
 use app::net::message::{MessagePayload, TxStatus};
 use app::utils::array_to_hex;
+use app::wallet::config::Config;
 use app::wallet::wallet::{User, Wallet};
 
 use crate::transaction_object::TransactionObject;
@@ -90,18 +90,13 @@ impl ObjectImpl for Window {
         // Call "constructed" on parent
         self.parent_constructed();
         let logger = Logger::mock_logger();
-        let config = Config::from_file("nodo.config")
+        let config = Config::from_file("wallet.config")
             .map_err(|err| err.to_string())
             .unwrap();
-
-        let priv_key_wif = "cSM1NQcoCMDP8jy2AMQWHXTLc9d4HjSr7H4AqxKk2bD1ykbaRw59".to_string();
-        let messi = User::new("Messi".to_string(), priv_key_wif, false);
-
-        let priv_key_wif = "cVK6pF1sfsvvmF9vGyq4wFeMywy1SMFHNpXa3d4Hi2evKHRQyTbn".to_string();
-        let maradona = User::new("Messi".to_string(), priv_key_wif, false);
-
-        let users = vec![messi, maradona];
-
+        let mut users = Vec::new();
+        for user_cfg in config.users.iter() {
+            users.push(User::new(user_cfg.name.clone(), user_cfg.private_key.clone(), false));
+        }
         // EL ultimo usuario activo es users[-1]
         let wallet = Arc::new(Mutex::new(Wallet::new(config, logger.tx, users)));
 

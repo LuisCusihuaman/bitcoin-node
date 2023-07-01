@@ -1,6 +1,7 @@
 mod transaction_object;
 mod transaction_row;
 mod window;
+mod config;
 
 use gtk::prelude::*;
 use gtk::{gio, glib, Application};

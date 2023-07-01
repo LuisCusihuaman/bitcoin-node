@@ -244,11 +244,6 @@ impl NodeManager {
                         }
                     }
                     MessagePayload::GetUTXOs(payload) => {
-                        log(
-                            self.logger_tx.clone(),
-                            format!("Received getutxos message from {}", peer_address),
-                        );
-
                         let utxos = get_utxos_by_address(&self.utxo_set, payload.address.clone());
 
                         if utxos.is_empty() {
@@ -280,14 +275,9 @@ impl NodeManager {
                         self.broadcast(&tx_message);
                     }
                     MessagePayload::GetTxStatus(tx) => {
-                        log(
-                            self.logger_tx.clone(),
-                            format!("Received gettxstatus from {}", peer_address),
-                        );
-
                         let tx_status = match self.wallet_tnxs.get(&tx.id) {
                             Some(status) => status.clone(),
-                            None => continue,
+                            None => TxStatus::Unknown,
                         };
 
                         self.send_to(
@@ -525,7 +515,7 @@ impl NodeManager {
         };
 
         let get_data_messages: &Vec<MessagePayload> = &blocks[index..]
-            .chunks(50)
+            .chunks(25)
             .map(|chunk| {
                 let inventories: Vec<Inventory> = chunk
                     .iter()

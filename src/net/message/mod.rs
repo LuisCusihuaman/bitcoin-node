@@ -1,12 +1,12 @@
 use self::get_data_inv::{decode_get_data, decode_inv, PayloadGetDataInv};
 use self::get_headers::{decode_get_headers, PayloadHeaders};
-use self::tx_status::{decode_tx_status, PayloadTxStatus};
+use self::tx_status::{decode_send_tx_status, PayloadTxStatus};
 use crate::net::message::block::{decode_block, Block};
 use crate::net::message::get_blocks::PayloadGetBlocks;
 use crate::net::message::get_headers::{decode_headers, PayloadGetHeaders};
 use crate::net::message::get_utxos::{decode_get_utxos, PayloadGetUtxos};
 use crate::net::message::ping_pong::{decode_ping, decode_pong, PayloadPingPong};
-use crate::net::message::tx::{decode_tx, Tx};
+use crate::net::message::tx::{decode_tx, decode_tx_status, Tx};
 use crate::net::message::utxos_msg::{decode_utxos, PayloadUtxosMsg};
 use crate::net::message::version::{decode_version, PayloadVersion};
 use crate::utils::read_le;
@@ -218,9 +218,9 @@ impl Encoding<MessagePayload> for MessagePayload {
             "tx" => decode_tx(buffer),
             "getdata" => decode_get_data(buffer),
             "txconfirmed" => decode_tx(buffer),
-            "gettxstatus" => decode_tx(buffer),
-            "txstatus" => decode_tx_status(buffer),
             "getheaders" => decode_get_headers(buffer),
+            "gettxstatus" => decode_tx_status(buffer),
+            "txstatus" => decode_send_tx_status(buffer),
             _ => Err("Unknown command: ".to_owned() + cmd),
         }
     }

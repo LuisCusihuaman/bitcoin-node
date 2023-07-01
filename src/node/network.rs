@@ -6,6 +6,7 @@ use std::sync::mpsc;
 use std::sync::mpsc::Sender;
 use std::thread;
 
+
 pub struct NodeNetwork {
     pub logger_tx: Sender<String>,
     pub peer_connections: Vec<P2PConnection>,

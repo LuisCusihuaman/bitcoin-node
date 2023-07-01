@@ -285,10 +285,10 @@ impl Wallet {
     // Sends any pending transaction that's in the wallet
     pub fn send_pending_tx(&mut self) {
         if (self.utxo_updated == false) {
-            log(
-                self.logger_tx.clone(),
-                format!("Transaction Error. Balance outdated"),
-            );
+            // log(
+            //     self.logger_tx.clone(),
+            //     format!("Transaction Error. Balance outdated"),
+            // );
             return;
         }
 

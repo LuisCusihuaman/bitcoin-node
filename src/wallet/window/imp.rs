@@ -4,12 +4,14 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use glib::subclass::InitializingObject;
-use gtk::{ColumnView, ColumnViewColumn, CompositeTemplate, Entry, gio, glib, ListView, NoSelection};
 use gtk::gio::Settings;
-use gtk::glib::{Continue, MainContext, PRIORITY_DEFAULT, PropertyGet, Sender, StaticType};
 use gtk::glib::once_cell::unsync::OnceCell;
+use gtk::glib::{Continue, MainContext, PropertyGet, Sender, StaticType, PRIORITY_DEFAULT};
 use gtk::subclass::prelude::*;
 use gtk::traits::RecentManagerExt;
+use gtk::{
+    gio, glib, ColumnView, ColumnViewColumn, CompositeTemplate, Entry, ListView, NoSelection,
+};
 
 use app::config::Config;
 use app::logger::Logger;
@@ -105,14 +107,13 @@ impl ObjectImpl for Window {
         obj.setup_transactions(sender_clone.clone());
         obj.setup_callbacks(sender.clone());
         obj.setup_factories(sender_clone);
-        thread::spawn(move || {
-            loop {
-                let mut wallet = wallet_clone.lock().unwrap();
-                wallet.update_txs_history();
-                wallet.receive();
-                drop(wallet);
-                thread::sleep(std::time::Duration::from_secs(5));
-            }
+        thread::spawn(move || loop {
+            let mut wallet = wallet_clone.lock().unwrap();
+            wallet.update_txs_history();
+            wallet.receive();
+            wallet.send_pending_tx();
+            drop(wallet);
+            thread::sleep(std::time::Duration::from_secs(5));
         });
 
         let transaction_list_clone = self.transactions.clone();
@@ -120,7 +121,11 @@ impl ObjectImpl for Window {
         receiver.attach(None, move |msg| match msg {
             MessageWallet::UpdateTransactions => {
                 let mut wallet = wallet.lock().unwrap();
-                transaction_list_clone.borrow().as_ref().unwrap().remove_all();
+                transaction_list_clone
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .remove_all();
                 for (tx_id, tx_history) in wallet.tnxs_history.iter() {
                     let tx_id_str = array_to_hex(tx_id);
                     let status = match tx_history.1 {
@@ -134,7 +139,11 @@ impl ObjectImpl for Window {
                         tx_history.2.to_string(),
                         tx_history.3.to_string(),
                     );
-                    transaction_list_clone.borrow().as_ref().unwrap().append(&tx_obj);
+                    transaction_list_clone
+                        .borrow()
+                        .as_ref()
+                        .unwrap()
+                        .append(&tx_obj);
                 }
                 Continue(true)
             }
@@ -146,7 +155,9 @@ impl ObjectImpl for Window {
                     let mut wallet = wallet_clone.lock().unwrap();
                     wallet.create_pending_tx(address_clone, amount.parse::<f64>().unwrap());
                     println!("New Pending transaction: {} {}", address, amount);
-                    sender_clone.send(MessageWallet::UpdateTransactions).unwrap();
+                    sender_clone
+                        .send(MessageWallet::UpdateTransactions)
+                        .unwrap();
                 });
                 Continue(true)
             }
@@ -154,7 +165,10 @@ impl ObjectImpl for Window {
                 let wallet_clone = wallet.clone();
                 let mut wallet = wallet_clone.lock().unwrap();
                 wallet.update_balance();
-                let formatted_btc_balance = format!("{:.8} BTC", ((wallet.available_money as f64) / 100_000_000.0));
+                let formatted_btc_balance = format!(
+                    "{:.8} BTC",
+                    ((wallet.available_money as f64) / 100_000_000.0)
+                );
                 balance_value_clone.set_text(&formatted_btc_balance);
                 Continue(true)
             }

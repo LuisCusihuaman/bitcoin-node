@@ -1,4 +1,3 @@
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 use std::vec;
@@ -77,21 +76,19 @@ impl Wallet {
                         continue;
                     }
 
-                    let user = &mut self.users[self.index_last_active_user];
-                    let tnxs_history = &mut user.tnxs_history;
-                    let entry = tnxs_history.entry(payload.tx_id);
-
-                    match entry {
-                        Entry::Occupied(mut entry) => {
-                            let tx_history = entry.get_mut();
-                            *tx_history = (
-                                tx_history.0.clone(),
-                                payload.status,
-                                tx_history.2.clone(),
-                                tx_history.3.clone(),
+                    match self.users[self.index_last_active_user].clone().tnxs_history.get(&payload.tx_id) {
+                        Some(tx_history) => {
+                            self.users[self.index_last_active_user].tnxs_history.insert(
+                                payload.tx_id,
+                                (
+                                    tx_history.0.clone(),
+                                    payload.status,
+                                    tx_history.2.clone(),
+                                    tx_history.3.clone(),
+                                ),
                             );
                         }
-                        Entry::Vacant(_) => {
+                        None => {
                             log(
                                 self.logger_tx.clone(),
                                 format!("Transaction id not found in transaction history"),
@@ -105,19 +102,19 @@ impl Wallet {
     }
 
     // Returns a Tx (not yet signed)
-    fn create_tx(&mut self, mut user: User, to_address: String, amount: f64) -> Option<Tx> {
-        user.available_money = self.get_balance();
+    fn create_tx(&mut self, user: User, to_address: String, amount: f64) -> Option<Tx> {
+        self.users[self.index_last_active_user].available_money = self.get_balance();
 
         let amount = amount * 100_000_000.0; // amount to send in satoshis
         let fee = 100000.0; // self.config.tx_fee ; // fee for the Tx
 
         if amount <= 0 as f64 {
-            //log(self.logger_tx.clone(), format!("Error: Invalid amount"));
+            log(self.logger_tx.clone(), format!("Error: Invalid amount"));
             return None;
         }
 
-        if (user.available_money as f64) < (amount + fee) {
-          //  log(self.logger_tx.clone(), format!("Error: Insufficient funds"));
+        if (self.users[self.index_last_active_user].available_money as f64) < (amount + fee) {
+            log(self.logger_tx.clone(), format!("Error: Insufficient funds"));
             return None;
         }
 
@@ -125,7 +122,7 @@ impl Wallet {
 
         let mut counter = 0.0;
 
-        for i in user.utxo_available.clone().iter() {
+        for i in self.users[self.index_last_active_user].utxo_available.clone().iter() {
             if counter >= (amount + fee) {
                 break;
             }
@@ -277,9 +274,7 @@ impl Wallet {
 
     // Sends any pending transaction that's in the wallet
     pub fn send_pending_tx(&mut self) {
-        let user = &mut self.users[self.index_last_active_user];
-
-        if user.utxo_updated == false && user.pending_tx.receive_addr == "".to_string() {
+        if self.users[self.index_last_active_user].utxo_updated == false && self.users[self.index_last_active_user].pending_tx.receive_addr == "".to_string() {
             // log(
             //     self.logger_tx.clone(),
             //     format!("Transaction Error. Balance outdated"),
@@ -288,16 +283,16 @@ impl Wallet {
         }
 
         let tx = match self.create_tx(
-            user,
-            user.clone().pending_tx.receive_addr.clone(),
-            user.pending_tx.amount,
+            self.users[self.index_last_active_user].clone(),
+            self.users[self.index_last_active_user].pending_tx.receive_addr.clone(),
+            self.users[self.index_last_active_user].pending_tx.amount,
         ) {
             Some(tx) => tx,
             None => return,
         };
 
         // sign the Tx
-        let signed_tx = Self::sign_tx(tx.clone(), user.clone());
+        let signed_tx = Self::sign_tx(tx.clone(), self.users[self.index_last_active_user].clone());
 
         let mut buffer = vec![];
         let signed_tx_encoded = signed_tx.encode(&mut buffer);
@@ -308,24 +303,26 @@ impl Wallet {
         println!("Signed Tx id: {:?}", array_to_hex(&(tx_decoded.clone().id)));
         println!("Signed Tx: {:?}", array_to_hex(&signed_tx_encoded));
 
+        let addr = self.users[self.index_last_active_user].pending_tx.receive_addr.clone();
+        let amount = self.users[self.index_last_active_user].pending_tx.amount;
+
         // send the Tx to the node
-        user.tnxs_history.insert(
+        self.users[self.index_last_active_user].tnxs_history.insert(
             tx_decoded.clone().id,
             (
                 tx_decoded.clone(),
                 TxStatus::Unconfirmed,
-                user.pending_tx.receive_addr.clone(),
-                user.pending_tx.amount,
+                addr,
+                amount,
             ),
         );
         self.send(MessagePayload::Tx(signed_tx));
-        user.utxo_updated = false;
-        user.pending_tx = PendingTx {
+        self.users[self.index_last_active_user].utxo_updated = false;
+        self.users[self.index_last_active_user].pending_tx = PendingTx {
             receive_addr: "".to_string(),
             amount: 0.0,
         };
     }
-
 
     // Updates the balances of the wallet
     pub fn update_balance(&mut self) {
@@ -338,7 +335,7 @@ impl Wallet {
     }
 
     // Returns the balance of the wallet
-    pub fn get_balance(&self) -> u64 {
+    pub fn get_balance(&mut self) -> u64 {
         let mut available_money = 0;
 
         for i in self.users[self.index_last_active_user].utxo_available.iter() {
@@ -355,6 +352,7 @@ impl Wallet {
         }
     }
 }
+
 
 #[derive(Clone, Debug)]
 pub struct PendingTx {
@@ -418,6 +416,7 @@ impl User {
                 amount: 0.0,
             },
         }
+
     }
 
     // 33 byte public key

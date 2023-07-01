@@ -27,7 +27,7 @@ pub struct Wallet {
     pub pending_tx: PendingTx,
     pub tnxs_history: HashMap<[u8; 32], (Tx, TxStatus, String, f64)>, //tnxs_history: Vec<(TxStatus, Tx)>, // puede ser un struct
     pub index_last_active_user: usize,
-    
+
     // Borrar esto despues
     pub utxo_available: Vec<Utxo>,
     pub available_money: u64,
@@ -38,7 +38,7 @@ impl Wallet {
     pub fn new(config: Config, sender: Sender<String>, users: Vec<User>) -> Wallet {
         let logger_tx = sender.clone();
         let node_manager = P2PConnection::connect("127.0.0.1:18333", sender.clone()).unwrap();
-        
+
         Wallet {
             config,
             logger_tx,
@@ -50,7 +50,7 @@ impl Wallet {
             },
             tnxs_history: HashMap::new(),
             index_last_active_user: 0,
-            
+
             // Esto va en users
             utxo_available: vec![],
             available_money: 0.0 as u64,
@@ -290,7 +290,7 @@ impl Wallet {
 
     // Sends any pending transaction that's in the wallet
     pub fn send_pending_tx(&mut self) {
-        if (self.utxo_updated == false) {
+        if self.utxo_updated == false && self.pending_tx.receive_addr == "".to_string() {
             // log(
             //     self.logger_tx.clone(),
             //     format!("Transaction Error. Balance outdated"),
@@ -319,7 +319,7 @@ impl Wallet {
         println!("Signed Tx id: {:?}", array_to_hex(&(tx_decoded.clone().id)));
         println!("Signed Tx: {:?}", array_to_hex(&signed_tx_encoded));
 
-        self.utxo_updated = false;
+
 
         // send the Tx to the node
         self.tnxs_history.insert(
@@ -332,6 +332,11 @@ impl Wallet {
             ),
         );
         self.send(MessagePayload::Tx(signed_tx));
+        self.utxo_updated = false;
+        self.pending_tx = PendingTx {
+            receive_addr: "".to_string(),
+            amount: 0.0,
+        };
     }
 
     // Updates the balances of the wallet
@@ -465,7 +470,7 @@ mod tests {
 
         let priv_key_wif = "cSM1NQcoCMDP8jy2AMQWHXTLc9d4HjSr7H4AqxKk2bD1ykbaRw59".to_string();
         let messi = User::new("Messi".to_string(), priv_key_wif, false);
-        
+
         let mut wallet = Wallet::new(config, logger.tx, vec![messi]);
 
         assert_eq!(wallet.users.len(), 1);
@@ -487,7 +492,7 @@ mod tests {
 
         let priv_key_wif = "cSM1NQcoCMDP8jy2AMQWHXTLc9d4HjSr7H4AqxKk2bD1ykbaRw59".to_string();
         let messi = User::new("Messi".to_string(), priv_key_wif, false);
-        
+
         let mut wallet = Wallet::new(config, logger.tx, vec![messi]);
 
         assert_eq!(wallet.users.len(), 1);

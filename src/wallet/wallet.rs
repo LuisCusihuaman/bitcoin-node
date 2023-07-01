@@ -26,7 +26,9 @@ pub struct Wallet {
     pub users: Vec<User>,
     pub pending_tx: PendingTx,
     pub tnxs_history: HashMap<[u8; 32], (Tx, TxStatus, String, f64)>, //tnxs_history: Vec<(TxStatus, Tx)>, // puede ser un struct
+    pub utxo_available: Vec<Utxo>,
     pub available_money: u64,
+    pub utxo_updated: bool,
 }
 
 impl Wallet {
@@ -44,7 +46,9 @@ impl Wallet {
                 amount: 0.0,
             },
             tnxs_history: HashMap::new(),
+            utxo_available: vec![],
             available_money: 0.0 as u64,
+            utxo_updated: false,
         }
     }
 
@@ -68,30 +72,8 @@ impl Wallet {
         for message in messages {
             match message {
                 MessagePayload::UTXOs(payload) => {
-                    let tx = match self.create_tx(
-                        payload.utxos,
-                        self.users[0].clone(),
-                        self.pending_tx.receive_addr.clone(),
-                        self.pending_tx.amount,
-                    ) {
-                        Some(tx) => tx,
-                        None => return,
-                    };
-
-                    // sign the Tx
-                    let signed_tx = Self::sign_tx(tx.clone(), self.users[0].clone());
-
-                    let mut buffer = vec![];
-                    let signed_tx_encoded = signed_tx.encode(&mut buffer);
-
-                    let mut offset = 0;
-                    let tx_decoded = decode_internal_tx(&signed_tx_encoded, &mut offset).unwrap();
-
-                    println!("Signed Tx id: {:?}", array_to_hex(&(tx_decoded.clone().id)));
-                    println!("Signed Tx: {:?}", array_to_hex(&signed_tx_encoded));
-                    // send the Tx to the node
-                    self.tnxs_history.insert(tx_decoded.clone().id, (tx_decoded.clone(), TxStatus::Unconfirmed, self.pending_tx.receive_addr.clone(), self.pending_tx.amount));
-                    self.send(MessagePayload::Tx(signed_tx));
+                    self.utxo_available = payload.utxos;
+                    self.utxo_updated = true;
                 }
                 MessagePayload::TxStatus(payload) => {
                     // update the status of the Tx
@@ -124,16 +106,12 @@ impl Wallet {
     // Returns a Tx (not yet signed)
     fn create_tx(
         &mut self,
-        utxos: Vec<Utxo>,
         user: User,
         to_address: String,
         amount: f64,
     ) -> Option<Tx> {
-        let mut available_money = 0;
-        for i in utxos.iter() {
-            available_money += i.value;
-        }
-        self.available_money = available_money;
+
+        self.available_money = self.get_balance();
 
         let amount = amount * 100_000_000.0; // amount to send in satoshis
         let fee = 100000.0; // self.config.tx_fee ; // fee for the Tx
@@ -291,12 +269,9 @@ impl Wallet {
     }
 
     pub fn create_pending_tx(&mut self, receiver_addr: String, amount: f64) {
-        let get_utxo_message = MessagePayload::GetUTXOs(PayloadGetUtxos {
-            address: self.users[0].get_pk_hash(),
-        });
 
-        // Send message to node
-        self.send(get_utxo_message);
+        // Get the UTXOs from the node
+        self.update_balance();
 
         // Save the pending transaction in the wallet. When the UTXOs arrive, the wallet will create the transaction
         self.pending_tx = PendingTx {
@@ -304,6 +279,45 @@ impl Wallet {
             amount,
         };
     }
+
+    // Sends any pending transaction that's in the wallet
+    pub fn send_pending_tx(self){
+
+        if(self.utxo_updated == false){
+            println!("You need to update your balance first");
+            return;
+        }
+
+        let tx = match self.create_tx(
+            payload.utxos,
+            self.users[0].clone(),
+            self.pending_tx.receive_addr.clone(),
+            self.pending_tx.amount,
+        ) {
+            Some(tx) => tx,
+            None => return,
+        };
+
+        // sign the Tx
+        let signed_tx = Self::sign_tx(tx.clone(), self.users[0].clone());
+
+        let mut buffer = vec![];
+        let signed_tx_encoded = signed_tx.encode(&mut buffer);
+
+        let mut offset = 0;
+        let tx_decoded = decode_internal_tx(&signed_tx_encoded, &mut offset).unwrap();
+
+        println!("Signed Tx id: {:?}", array_to_hex(&(tx_decoded.clone().id)));
+        println!("Signed Tx: {:?}", array_to_hex(&signed_tx_encoded));
+
+        self.utxo_updated = false;
+        
+        // send the Tx to the node
+        self.tnxs_history.insert(tx_decoded.clone().id, (tx_decoded.clone(), TxStatus::Unconfirmed, self.pending_tx.receive_addr.clone(), self.pending_tx.amount));
+        self.send(MessagePayload::Tx(signed_tx));
+    }
+
+    // Updates the balances of the wallet
     pub fn update_balance(&mut self) {
         let get_utxo_message = MessagePayload::GetUTXOs(PayloadGetUtxos {
             address: self.users[0].get_pk_hash(),
@@ -311,13 +325,17 @@ impl Wallet {
 
         // Send message to node
         self.send(get_utxo_message);
-
-        // Save the pending transaction in the wallet. When the UTXOs arrive, the wallet will create the transaction
-        self.pending_tx = PendingTx {
-            receive_addr: "".to_string(),
-            amount: -1.0,
-        };
     }
+
+    // Returns the balance of the wallet
+    pub fn get_balance(self) -> u64 {
+        let mut available_money = 0;
+        
+        for i in self.utxo_available.clone().iter() {
+            available_money += i.value;
+        }
+    }
+
     pub fn update_txs_history(&mut self) {
         for (_, tx_history) in self.tnxs_history.clone().iter() {
             let tx_cloned = tx_history.0.clone();

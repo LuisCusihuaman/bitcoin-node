@@ -351,6 +351,16 @@ impl Wallet {
             self.send(MessagePayload::GetTxStatus(tx_cloned));
         }
     }
+    pub fn select_user(&mut self, name: String){
+        let mut index = 0;
+        for user in self.users.iter(){
+            if user.name == name {
+                self.index_last_active_user = index;
+                return;
+            }
+            index += 1;
+        }
+    }
 }
 
 

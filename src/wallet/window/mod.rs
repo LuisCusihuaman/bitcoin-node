@@ -89,26 +89,38 @@ impl Window {
         let balance_section_button = self.imp().balance_section_button.clone();
         let sender_clone_balance = sender_clone.clone();
         let send_transaction_section_button = self.imp().send_transaction_section_button.clone();
+        let sender_select_user = sender_clone.clone();
 
         transactions_section_button.connect_clicked(clone!(@weak self as window => move |_| {
         window.imp().transactions_section.set_visible(true);
         window.imp().balance_section.set_visible(false);
         window.imp().send_transaction_section.set_visible(false);
         sender_clone_balance.clone().send(MessageWallet::UpdateTransactions).unwrap();
-    }));
+        }));
 
         balance_section_button.connect_clicked(clone!(@weak self as window => move |_| {
             window.imp().transactions_section.set_visible(false);
             window.imp().balance_section.set_visible(true);
             window.imp().send_transaction_section.set_visible(false);
             sender_clone_refresh_transactions.clone().send(MessageWallet::UpdateBalance).unwrap();
-    }));
+        }));
 
         send_transaction_section_button.connect_clicked(clone!(@weak self as window => move |_| {
         window.imp().transactions_section.set_visible(false);
         window.imp().balance_section.set_visible(false);
         window.imp().send_transaction_section.set_visible(true);
-    }));
+        }));
+
+        let users_dropdown = self.imp().users_dropdown.clone();
+        users_dropdown.connect_selected_item_notify(clone!(@weak self as window => move |_| {
+        if let Some(active_user) = window.imp().users_dropdown.selected_item() {
+            if let Ok(user_string_object) = active_user.downcast::<gtk::StringObject>() {
+                let user_string = user_string_object.string();
+                println!("Selected user: {}", user_string);
+                    sender_select_user.clone().send(MessageWallet::SelectUser(user_string.to_string())).unwrap();
+            }
+        }
+        }));
     }
 
 

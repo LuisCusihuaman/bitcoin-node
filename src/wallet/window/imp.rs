@@ -6,12 +6,10 @@ use std::thread;
 use glib::subclass::InitializingObject;
 use gtk::gio::Settings;
 use gtk::glib::once_cell::unsync::OnceCell;
-use gtk::glib::{Continue, MainContext, PropertyGet, Sender, StaticType, PRIORITY_DEFAULT};
+use gtk::glib::{Continue, MainContext, PropertyGet, Sender, StaticType, PRIORITY_DEFAULT, Cast};
 use gtk::subclass::prelude::*;
-use gtk::traits::RecentManagerExt;
-use gtk::{
-    gio, glib, ColumnView, ColumnViewColumn, CompositeTemplate, Entry, ListView, NoSelection,
-};
+use gtk::traits::{BoxExt, RecentManagerExt};
+use gtk::{gio, glib, ColumnView, ColumnViewColumn, CompositeTemplate, Entry, ListView, NoSelection, StringList};
 
 use app::logger::Logger;
 use app::net::message::{MessagePayload, TxStatus};
@@ -25,6 +23,7 @@ pub enum MessageWallet {
     UpdateTransactions,
     NewPendingTransaction(String, String),
     UpdateBalance,
+    SelectUser(String),
 }
 
 // ANCHOR: struct_and_subclass
@@ -63,6 +62,10 @@ pub struct Window {
     #[template_child]
     pub amount_column: TemplateChild<ColumnViewColumn>,
     pub transactions: RefCell<Option<gio::ListStore>>,
+    #[template_child]
+    pub users_dropdown: TemplateChild<gtk::DropDown>,
+    #[template_child]
+    pub users: TemplateChild<StringList>,
 }
 
 // The central trait for subclassing a GObject
@@ -94,8 +97,10 @@ impl ObjectImpl for Window {
             .map_err(|err| err.to_string())
             .unwrap();
         let mut users = Vec::new();
+        let users_list: StringList = self.users.clone().upcast();
         for user_cfg in config.users.iter() {
             users.push(User::new(user_cfg.name.clone(), user_cfg.private_key.clone(), false));
+            users_list.append(user_cfg.name.as_str());
         }
         // EL ultimo usuario activo es users[-1]
         let wallet = Arc::new(Mutex::new(Wallet::new(config, logger.tx, users)));
@@ -173,6 +178,12 @@ impl ObjectImpl for Window {
                     ((wallet.users[wallet.index_last_active_user].available_money as f64) / 100_000_000.0)
                 );
                 balance_value_clone.set_text(&formatted_btc_balance);
+                Continue(true)
+            }
+            MessageWallet::SelectUser(private_key) => {
+                let wallet_clone = wallet.clone();
+                let mut wallet = wallet_clone.lock().unwrap();
+                wallet.select_user(private_key);
                 Continue(true)
             }
         });

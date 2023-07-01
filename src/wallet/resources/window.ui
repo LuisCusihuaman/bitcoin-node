@@ -12,6 +12,19 @@
                 <property name="margin-end">12</property>
                 <property name="spacing">6</property>
                 <child>
+                    <object class="GtkDropDown" id="users_dropdown">
+                        <property name="model">
+                            <object class="GtkStringList" id="users">
+                                <items>
+<!--                                    <item translatable="yes">Factory</item>-->
+<!--                                    <item translatable="yes">Home</item>-->
+<!--                                    <item translatable="yes">Subway</item>-->
+                                </items>
+                            </object>
+                        </property>
+                    </object>
+                </child>
+                <child>
                     <object class="GtkBox" id="tabs">
                         <property name="orientation">horizontal</property>
                         <property name="margin-top">12</property>
@@ -19,6 +32,7 @@
                         <property name="margin-start">12</property>
                         <property name="margin-end">12</property>
                         <property name="spacing">6</property>
+
                         <child>
                             <object class="GtkButton" id="balance_section_button">
                                 <property name="label">Overview</property>
@@ -59,6 +73,7 @@
                                 <property name="label">Balance</property>
                             </object>
                         </child>
+
                         <child>
                             <object class="GtkBox">
                                 <property name="orientation">horizontal</property>
@@ -120,7 +135,7 @@
                         <property name="visible">False</property>
                         <child>
                             <object class="GtkLabel" id="transactions_title">
-                                <property name="label">Transactions</property>
+                                <property name="label">Transactions sent</property>
                             </object>
                         </child>
                         <child>

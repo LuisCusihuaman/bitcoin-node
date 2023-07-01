@@ -1,3 +1,4 @@
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 use std::vec;
@@ -24,14 +25,8 @@ pub struct Wallet {
     logger_tx: Sender<String>,
     node_manager: P2PConnection,
     pub users: Vec<User>,
-    pub pending_tx: PendingTx,
-    pub tnxs_history: HashMap<[u8; 32], (Tx, TxStatus, String, f64)>, //tnxs_history: Vec<(TxStatus, Tx)>, // puede ser un struct
     pub index_last_active_user: usize,
-
     // Borrar esto despues
-    pub utxo_available: Vec<Utxo>,
-    pub available_money: u64,
-    pub utxo_updated: bool,
 }
 
 impl Wallet {
@@ -44,17 +39,7 @@ impl Wallet {
             logger_tx,
             node_manager,
             users: users.clone(),
-            pending_tx: PendingTx {
-                receive_addr: "".to_string(),
-                amount: 0.0,
-            },
-            tnxs_history: HashMap::new(),
             index_last_active_user: 0,
-
-            // Esto va en users
-            utxo_available: vec![],
-            available_money: 0.0 as u64,
-            utxo_updated: false,
         }
     }
 
@@ -78,8 +63,8 @@ impl Wallet {
         for message in messages {
             match message {
                 MessagePayload::UTXOs(payload) => {
-                    self.utxo_available = payload.utxos;
-                    self.utxo_updated = true;
+                    self.users[self.index_last_active_user].utxo_available = payload.utxos;
+                    self.users[self.index_last_active_user].utxo_updated = true;
                 }
 
                 MessagePayload::TxStatus(payload) => {
@@ -92,19 +77,21 @@ impl Wallet {
                         continue;
                     }
 
-                    match self.tnxs_history.get(&payload.tx_id) {
-                        Some(tx_history) => {
-                            self.tnxs_history.insert(
-                                payload.tx_id,
-                                (
-                                    tx_history.0.clone(),
-                                    payload.status,
-                                    tx_history.2.clone(),
-                                    tx_history.3.clone(),
-                                ),
+                    let user = &mut self.users[self.index_last_active_user];
+                    let tnxs_history = &mut user.tnxs_history;
+                    let entry = tnxs_history.entry(payload.tx_id);
+
+                    match entry {
+                        Entry::Occupied(mut entry) => {
+                            let tx_history = entry.get_mut();
+                            *tx_history = (
+                                tx_history.0.clone(),
+                                payload.status,
+                                tx_history.2.clone(),
+                                tx_history.3.clone(),
                             );
                         }
-                        None => {
+                        Entry::Vacant(_) => {
                             log(
                                 self.logger_tx.clone(),
                                 format!("Transaction id not found in transaction history"),
@@ -118,19 +105,19 @@ impl Wallet {
     }
 
     // Returns a Tx (not yet signed)
-    fn create_tx(&mut self, user: User, to_address: String, amount: f64) -> Option<Tx> {
-        self.available_money = self.get_balance();
+    fn create_tx(&mut self, mut user: User, to_address: String, amount: f64) -> Option<Tx> {
+        user.available_money = self.get_balance();
 
         let amount = amount * 100_000_000.0; // amount to send in satoshis
         let fee = 100000.0; // self.config.tx_fee ; // fee for the Tx
 
         if amount <= 0 as f64 {
-            log(self.logger_tx.clone(), format!("Error: Invalid amount"));
+            //log(self.logger_tx.clone(), format!("Error: Invalid amount"));
             return None;
         }
 
-        if (self.available_money as f64) < (amount + fee) {
-            log(self.logger_tx.clone(), format!("Error: Insufficient funds"));
+        if (user.available_money as f64) < (amount + fee) {
+          //  log(self.logger_tx.clone(), format!("Error: Insufficient funds"));
             return None;
         }
 
@@ -138,7 +125,7 @@ impl Wallet {
 
         let mut counter = 0.0;
 
-        for i in self.utxo_available.clone().iter() {
+        for i in user.utxo_available.clone().iter() {
             if counter >= (amount + fee) {
                 break;
             }
@@ -282,7 +269,7 @@ impl Wallet {
         self.update_balance();
 
         // Save the pending transaction in the wallet. When the UTXOs arrive, the wallet will create the transaction
-        self.pending_tx = PendingTx {
+        self.users[self.index_last_active_user].pending_tx = PendingTx {
             receive_addr: receiver_addr,
             amount,
         };
@@ -290,7 +277,9 @@ impl Wallet {
 
     // Sends any pending transaction that's in the wallet
     pub fn send_pending_tx(&mut self) {
-        if self.utxo_updated == false && self.pending_tx.receive_addr == "".to_string() {
+        let user = &mut self.users[self.index_last_active_user];
+
+        if user.utxo_updated == false && user.pending_tx.receive_addr == "".to_string() {
             // log(
             //     self.logger_tx.clone(),
             //     format!("Transaction Error. Balance outdated"),
@@ -299,16 +288,16 @@ impl Wallet {
         }
 
         let tx = match self.create_tx(
-            self.users[self.index_last_active_user].clone(),
-            self.pending_tx.receive_addr.clone(),
-            self.pending_tx.amount,
+            user,
+            user.clone().pending_tx.receive_addr.clone(),
+            user.pending_tx.amount,
         ) {
             Some(tx) => tx,
             None => return,
         };
 
         // sign the Tx
-        let signed_tx = Self::sign_tx(tx.clone(), self.users[self.index_last_active_user].clone());
+        let signed_tx = Self::sign_tx(tx.clone(), user.clone());
 
         let mut buffer = vec![];
         let signed_tx_encoded = signed_tx.encode(&mut buffer);
@@ -319,25 +308,24 @@ impl Wallet {
         println!("Signed Tx id: {:?}", array_to_hex(&(tx_decoded.clone().id)));
         println!("Signed Tx: {:?}", array_to_hex(&signed_tx_encoded));
 
-
-
         // send the Tx to the node
-        self.tnxs_history.insert(
+        user.tnxs_history.insert(
             tx_decoded.clone().id,
             (
                 tx_decoded.clone(),
                 TxStatus::Unconfirmed,
-                self.pending_tx.receive_addr.clone(),
-                self.pending_tx.amount,
+                user.pending_tx.receive_addr.clone(),
+                user.pending_tx.amount,
             ),
         );
         self.send(MessagePayload::Tx(signed_tx));
-        self.utxo_updated = false;
-        self.pending_tx = PendingTx {
+        user.utxo_updated = false;
+        user.pending_tx = PendingTx {
             receive_addr: "".to_string(),
             amount: 0.0,
         };
     }
+
 
     // Updates the balances of the wallet
     pub fn update_balance(&mut self) {
@@ -350,10 +338,10 @@ impl Wallet {
     }
 
     // Returns the balance of the wallet
-    pub fn get_balance(&mut self) -> u64 {
+    pub fn get_balance(&self) -> u64 {
         let mut available_money = 0;
 
-        for i in self.utxo_available.iter() {
+        for i in self.users[self.index_last_active_user].utxo_available.iter() {
             available_money += i.value;
         }
 
@@ -361,7 +349,7 @@ impl Wallet {
     }
 
     pub fn update_txs_history(&mut self) {
-        for (_, tx_history) in self.tnxs_history.clone().iter() {
+        for (_, tx_history) in self.users[self.index_last_active_user].tnxs_history.clone().iter() {
             let tx_cloned = tx_history.0.clone();
             self.send(MessagePayload::GetTxStatus(tx_cloned));
         }
@@ -380,7 +368,11 @@ pub struct User {
     pub pk_hash: [u8; 20],
     pub secret_key: SecretKey,
     pub public_key: [u8; 33],
-    // pub txns_hist: Vec<Tx>,
+    pub tnxs_history: HashMap<[u8; 32], (Tx, TxStatus, String, f64)>, //tnxs_history: Vec<(TxStatus, Tx)>, // puede ser un struct
+    pub utxo_available: Vec<Utxo>,
+    pub available_money: u64,
+    pub utxo_updated: bool,
+    pub pending_tx: PendingTx,
 }
 
 impl User {
@@ -417,6 +409,14 @@ impl User {
             pk_hash,
             secret_key,
             public_key,
+            utxo_available: vec![],
+            tnxs_history: HashMap::new(),
+            available_money: 0.0 as u64,
+            utxo_updated: false,
+            pending_tx: PendingTx {
+                receive_addr: "".to_string(),
+                amount: 0.0,
+            },
         }
     }
 

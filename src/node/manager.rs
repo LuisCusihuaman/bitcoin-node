@@ -158,18 +158,15 @@ impl NodeManager {
                             continue;
                         }
 
-                        let prev_index = match self.blocks_btreemap.get(&block.get_prev()) {
+                        let prev_index = match self.get_block_index_by_hash(block.get_prev()) {
                             Some(index) => index.clone(),
-                            None => match self.get_block_index_by_hash(block.get_prev()) {
-                                Some(index) => index,
-                                None => {
-                                    log(
-                                        self.logger_tx.clone(),
-                                        format!("Previous block not found in the blockchain"),
-                                    );
-                                    continue;
-                                }
-                            },
+                            None => {
+                                log(
+                                    self.logger_tx.clone(),
+                                    format!("Previous block not found in the blockchain"),
+                                );
+                                continue;
+                            }
                         };
 
                         if !self.utxo_set.is_empty() {
@@ -178,21 +175,11 @@ impl NodeManager {
 
                         self.update_unconfirm_txns(block.clone().txns);
 
-                        // For genesis block
-                        if block.get_prev()
-                            == [
-                                0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186,
-                                174, 195, 206, 217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127,
-                                73, 67,
-                            ]
-                        {
-                            self.blockchain[0] = block.clone();
-                            log(
-                                self.logger_tx.clone(),
-                                format!("updated block with index 0"),
-                            );
-                        } else if prev_index + 1 == self.blockchain.len() {
+                        if prev_index + 1 == self.blockchain.len() {
                             self.blockchain.push(block.clone());
+                            self.blocks_btreemap
+                                .insert(block.hash.clone(), prev_index + 1);
+
                             log(
                                 self.logger_tx.clone(),
                                 format!("new block with index {}", prev_index + 1),
@@ -524,7 +511,7 @@ impl NodeManager {
     }
 
     fn blocks_download(&mut self) {
-        let timestamp = match date_to_timestamp("2023-06-07") {
+        let timestamp = match date_to_timestamp("2023-06-30") {
             Some(timestamp) => timestamp,
             None => panic!("Error parsing date"),
         };
@@ -575,23 +562,17 @@ impl NodeManager {
     }
 
     pub fn get_block_index_by_hash(&self, prev_hash: [u8; 32]) -> Option<usize> {
-        for (index, block) in self.get_blockchain().iter().enumerate().rev() {
-            if block.get_hash() == prev_hash {
-                return Some(index);
+        match self.blocks_btreemap.get(&prev_hash) {
+            Some(index) => return Some(*index),
+            None => {
+                // For genesis block
+                if prev_hash == get_hash_block_genesis() {
+                    return Some(0);
+                }
+
+                None
             }
         }
-
-        // For genesis block
-        if prev_hash
-            == [
-                0, 0, 0, 0, 9, 51, 234, 1, 173, 14, 233, 132, 32, 151, 121, 186, 174, 195, 206,
-                217, 15, 163, 244, 8, 113, 149, 38, 248, 215, 127, 73, 67,
-            ]
-        {
-            return Some(0);
-        }
-
-        None
     }
 
     pub fn send_to(&mut self, peer_address: String, payload: &MessagePayload) {
@@ -648,7 +629,7 @@ fn listen_for_conn(
 
                 log(
                     logger_tx.clone(),
-                    format!("Wallet connected successfully: {addr}"),
+                    format!("New connection has been established: {addr}"),
                 );
 
                 let connection = P2PConnection {
@@ -661,10 +642,7 @@ fn listen_for_conn(
                 sender.send(connection).unwrap();
             }
             Err(e) => {
-                log(
-                    logger_tx.clone(),
-                    format!("couldn't connect to wallet: {e:?}"),
-                );
+                log(logger_tx.clone(), format!("Couldn't connect: {e:?}"));
             }
         }
     }

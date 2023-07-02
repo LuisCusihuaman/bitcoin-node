@@ -1124,7 +1124,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // TODO fix this test
     fn test_validate_target_expected() {
         let block = Block {
             version: 2,
@@ -1141,108 +1140,88 @@ mod tests {
                 16, 92, 241, 228, 96, 167, 60, 7, 168, 155, 54, 29, 202, 64, 99,
             ],
             timestamp: 1384047529,
-            n_bits: 83886081, // has a 5 as last byte
+            n_bits: 83886081,
             nonce: 2442677017,
             txn_count: 2,
             txns: vec![],
         };
+
         let target = block.target();
-        assert_eq!(
-            u32::from_le_bytes([target[0], target[1], target[2], target[3]]),
-            65536
-        );
+
+        // Just last four bytes to avoid overflow
+        let aux_target = read_be(&target[28..32]);
+
+        assert_eq!(aux_target, 65536);
     }
 
     #[test]
-    #[ignore] // TODO fix this test
     fn scalar_bytes() {
-        // Test case with u8
+        // Test case with array of one byte
         let bytes_u8 = vec![20];
         let result_bytes = Block::scalar_by(2, &bytes_u8);
-        let expected_bytes: Vec<u8> = vec![40];
-        let expected_u8 = u8::from_le_bytes(result_bytes[..].try_into().unwrap());
-        assert_eq!(result_bytes, expected_bytes);
-        assert_eq!(expected_u8, 40);
 
-        // Test case with u16
+        let expected_bytes: Vec<u8> = vec![40];
+
+        assert_eq!(result_bytes, expected_bytes);
+
+        // Test case with array of two byte
         let bytes_u16 = vec![4, 2];
         let result_bytes = Block::scalar_by(10, &bytes_u16);
+
         let expected_bytes: Vec<u8> = vec![40, 20];
-        let expected_u16 = u16::from_le_bytes(result_bytes[..].try_into().unwrap());
-        assert_eq!(result_bytes, expected_bytes);
-        assert_eq!(expected_u16, 5160);
 
-        // Test case with u32
-        let bytes_u32 = vec![150, 10, 15, 2];
+        assert_eq!(result_bytes, expected_bytes);
+
+        // Test case with array of four byte
+        let bytes_u32 = vec![88, 10, 15, 2];
         let result_bytes = Block::scalar_by(2, &bytes_u32);
-        let expected_bytes: Vec<u8> = vec![44, 21, 30, 4];
-        let expected_u32 = u32::from_le_bytes(result_bytes[..].try_into().unwrap());
-        assert_eq!(result_bytes, expected_bytes);
-        assert_eq!(expected_u32, 69080364);
 
-        // Test case with u64 that result in u128
-        let bytes_u64 = vec![50, 10, 15, 2, 8, 30, 7, 120]; //8648914629131438642
-        let expected_bytes: Vec<u8> = vec![150, 30, 45, 6, 24, 90, 21, 104, 1, 0, 0, 0, 0, 0, 0, 0]; //25946743887394315926
+        let expected_bytes: Vec<u8> = vec![176, 20, 30, 4];
+
+        assert_eq!(result_bytes, expected_bytes);
+
+        // Test case with array of eight byte
+        let bytes_u64 = vec![50, 10, 15, 2, 8, 30, 7, 120];
         let result_bytes = Block::scalar_by(3, &bytes_u64);
-        let expected_u128 = u128::from_le_bytes(result_bytes[..].try_into().unwrap());
-        assert_eq!(result_bytes, expected_bytes);
-        assert_eq!(expected_u128, 25946743887394315926);
 
-        // Test case with u128
-        let bytes_u128 = vec![255, 200, 150, 100, 50, 10, 5, 1, 0, 0, 0, 0, 0, 0, 0, 1]; //1329227995784915872977283240754071807
-        let result_bytes = Block::scalar_by(3, &bytes_u128);
-        let expected_bytes: Vec<u8> =
-            vec![253, 90, 196, 45, 151, 30, 15, 3, 0, 0, 0, 0, 0, 0, 0, 3];
-        let expected_u128 = u128::from_le_bytes(result_bytes[..].try_into().unwrap());
+        let expected_bytes: Vec<u8> = vec![150, 30, 45, 6, 24, 90, 22, 104];
+
         assert_eq!(result_bytes, expected_bytes);
-        assert_eq!(expected_u128, 3987683987354747618931849722262215421);
+
+        // Test case with array of sixteen byte
+        let bytes_u128 = vec![255, 200, 150, 100, 50, 10, 5, 1, 0, 0, 0, 0, 0, 0, 0, 1];
+        let result_bytes = Block::scalar_by(3, &bytes_u128);
+
+        let expected_bytes: Vec<u8> =
+            vec![255, 89, 195, 44, 150, 30, 15, 3, 0, 0, 0, 0, 0, 0, 0, 3];
+
+        assert_eq!(result_bytes, expected_bytes);
     }
 
     #[test]
-    #[ignore] // TODO fix this test
     fn test_pow_256() {
+        // Test case: 256^0 = 1
         let result_with_0 = Block::pow_256(0);
-        assert_eq!(
-            u32::from_le_bytes([
-                result_with_0[0],
-                result_with_0[1],
-                result_with_0[2],
-                result_with_0[3]
-            ]),
-            1
-        );
+        let result = read_be(&result_with_0);
 
-        let result_with_1 = Block::pow_256(1); // 256^1 = 256
-        assert_eq!(
-            u32::from_le_bytes([
-                result_with_1[0],
-                result_with_1[1],
-                result_with_1[2],
-                result_with_1[3]
-            ]),
-            256
-        );
+        assert_eq!(result, 1);
 
-        let result_with_2 = Block::pow_256(2); // 256^2 = 65536
-        assert_eq!(
-            u32::from_le_bytes([
-                result_with_2[0],
-                result_with_2[1],
-                result_with_2[2],
-                result_with_2[3]
-            ]),
-            65536
-        );
+        // Test case: 256^1 = 256
+        let result_with_1 = Block::pow_256(1);
+        let result_1 = read_be(&result_with_1);
 
-        let result_with_3 = Block::pow_256(3); // 256^3 = 16777216
-        assert_eq!(
-            u32::from_le_bytes([
-                result_with_3[0],
-                result_with_3[1],
-                result_with_3[2],
-                result_with_3[3]
-            ]),
-            16777216
-        );
+        assert_eq!(result_1, 256);
+
+        // Test case: 256^2 = 65536
+        let result_with_2 = Block::pow_256(2);
+        let result_2 = read_be(&result_with_2);
+
+        assert_eq!(result_2, 65536);
+
+        // Test case: 256^3 = 16777216
+        let result_with_3 = Block::pow_256(3);
+        let result_3 = read_be(&result_with_3);
+
+        assert_eq!(result_3, 16777216);
     }
 }

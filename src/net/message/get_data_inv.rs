@@ -115,18 +115,18 @@ mod tests {
         };
 
         let payload = PayloadGetDataInv {
-            count: 500,
+            count: 1,
             inv_type: 2,
             inventories: vec![inventory],
         };
 
-        let mut buffer = [0u8; 39];
+        let mut buffer = [0u8; 37];
 
         payload.encode(&mut buffer);
 
         let payload_expected = [
-            253, 244, 1, 2, 0, 0, 0, 6, 18, 142, 135, 190, 139, 27, 77, 234, 71, 167, 36, 125, 85,
-            40, 210, 112, 44, 150, 130, 108, 122, 100, 132, 151, 231, 115, 184, 0, 0, 0, 0,
+            1, 2, 0, 0, 0, 0, 0, 0, 0, 184, 115, 231, 151, 132, 100, 122, 108, 130, 150, 44, 112,
+            210, 40, 85, 125, 36, 167, 71, 234, 77, 27, 139, 190, 135, 142, 18, 6,
         ];
 
         assert_eq!(buffer, payload_expected);
@@ -134,6 +134,13 @@ mod tests {
 
     #[test]
     fn test_decode_inventory() {
+        let buf = [
+            2, 0, 0, 0, 0, 0, 0, 0, 184, 115, 231, 151, 132, 100, 122, 108, 130, 150, 44, 112, 210,
+            40, 85, 125, 36, 167, 71, 234, 77, 27, 139, 190, 135, 142, 18, 6,
+        ];
+
+        let result = decode_inventory(&buf).unwrap();
+
         let expected_inv = Inventory {
             inv_type: 2,
             hash: vec![
@@ -142,13 +149,6 @@ mod tests {
             ]
             .to_vec(),
         };
-
-        let buf = [
-            2, 0, 0, 0, 6, 18, 142, 135, 190, 139, 27, 77, 234, 71, 167, 36, 125, 85, 40, 210, 112,
-            44, 150, 130, 108, 122, 100, 132, 151, 231, 115, 184, 0, 0, 0, 0,
-        ];
-
-        let result = decode_inventory(&buf).unwrap();
 
         assert_eq!(result, expected_inv);
     }

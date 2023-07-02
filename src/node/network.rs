@@ -164,18 +164,4 @@ impl NodeNetwork {
 
         received_messages
     }
-
-    pub fn get_one_peer_address(&self) -> String {
-        let handshaked_connections: Vec<&P2PConnection> = self
-            .peer_connections
-            .iter()
-            .filter(|connection| connection.handshaked)
-            .collect();
-
-        if let Some(peer_connection) = handshaked_connections.choose(&mut rand::thread_rng()) {
-            peer_connection.peer_address.clone()
-        } else {
-            String::from("")
-        }
-    }
 }

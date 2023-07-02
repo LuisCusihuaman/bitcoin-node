@@ -144,7 +144,7 @@ mod tests {
         let mut node_manager = init_valid_node_manager();
 
         node_manager.initial_block_download()?;
-        assert!(check_blockchain_integrity(node_manager.get_blocks()));
+        assert!(check_blockchain_integrity(node_manager.get_blockchain()));
 
         Ok(())
     }

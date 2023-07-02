@@ -61,13 +61,6 @@ impl NodeManager {
         self.wait_for(vec!["version", "verack"]);
     }
 
-    // getBalance (wallet a nodo)
-    // Si balance > amount
-    // pedir UTXO -> getUTXOs (wallet a nodos)
-    // devolver la lista de UTXO -> sendUTXOs (del nodo a wallet)
-    // sendTx (wallet a nodo)
-    // sendTx (nodo a nodos)
-
     pub fn wait_for(&mut self, commands: Vec<&str>) -> Vec<(String, Vec<MessagePayload>)> {
         let mut matched_messages: Vec<(String, Vec<MessagePayload>)> = Vec::new();
 
@@ -296,6 +289,14 @@ impl NodeManager {
 
                         self.send_headers(&getheaders, &peer_address);
                     }
+                    MessagePayload::GetData(getdata) => {
+                        log(
+                            self.logger_tx.clone(),
+                            format!("Received getdata from {}", peer_address),
+                        );
+
+                        self.send_blocks(&getdata, &peer_address);
+                    }
                     _ => {
                         log(
                             self.logger_tx.clone(),
@@ -307,6 +308,24 @@ impl NodeManager {
             matched_messages.push((peer_address.clone(), matched_peer_messages));
         }
         matched_messages
+    }
+
+    fn send_blocks(&mut self, get_data: &PayloadGetDataInv, address: &String) {
+        for inv in get_data.inventories.clone() {
+            if inv.inv_type != 2 {
+                continue;
+            };
+
+            let mut hash = [0u8; 32];
+            hash.copy_from_slice(&inv.hash);
+
+            let block = match self.get_block_index_by_hash(hash) {
+                Some(index) => self.blockchain[index].clone(),
+                None => continue,
+            };
+
+            self.send_to(address.clone(), &MessagePayload::Block(block));
+        }
     }
 
     fn send_headers(&mut self, get_headers: &PayloadGetHeaders, address: &String) {
@@ -459,9 +478,7 @@ impl NodeManager {
         }
     }
 
-    // fn send_get_headers_with_block_hash(&mut self){ // -> Vec<MessagePayload> {
     fn send_get_headers(&mut self) {
-        // -> Vec<MessagePayload> {
         let block_hash: [u8; 32] = if self.blockchain.is_empty() {
             get_hash_block_genesis()
         } else {
@@ -520,8 +537,7 @@ impl NodeManager {
                 let inventories: Vec<Inventory> = chunk
                     .iter()
                     .map(|block| {
-                        let mut block_hash: [u8; 32] = block.get_hash();
-                        block_hash.reverse();
+                        let block_hash: [u8; 32] = block.get_hash();
 
                         Inventory {
                             inv_type: 2,
@@ -551,12 +567,12 @@ impl NodeManager {
         None
     }
 
-    pub fn get_block_index_by_hash(&self, prev_hash: [u8; 32]) -> Option<usize> {
-        match self.blocks_btreemap.get(&prev_hash) {
+    pub fn get_block_index_by_hash(&self, hash: [u8; 32]) -> Option<usize> {
+        match self.blocks_btreemap.get(&hash) {
             Some(index) => return Some(*index),
             None => {
                 // For genesis block
-                if prev_hash == get_hash_block_genesis() {
+                if hash == get_hash_block_genesis() {
                     return Some(0);
                 }
 

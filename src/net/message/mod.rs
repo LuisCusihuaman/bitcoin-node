@@ -137,6 +137,7 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::GetTxStatus(tx) => tx.size(),
             MessagePayload::TxStatus(tx_status) => tx_status.size(),
             MessagePayload::Headers(headers) => headers.size(),
+            MessagePayload::Block(block) => block.size(),
             _ => no_payload,
         }
     }
@@ -178,6 +179,9 @@ impl Encoding<MessagePayload> for MessagePayload {
             }
             MessagePayload::Headers(headers) => {
                 headers.encode(buffer);
+            }
+            MessagePayload::Block(block) => {
+                block.encode(buffer);
             }
             _ => {}
         }

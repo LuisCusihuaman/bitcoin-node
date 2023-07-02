@@ -9,28 +9,6 @@ pub struct PayloadGetDataInv {
 }
 
 impl PayloadGetDataInv {
-    pub fn new_with_invs_bytes(buffer: Vec<u8>) -> Self {
-        let mut inv_type = 0;
-
-        let inventories: Vec<Inventory> = buffer[4..]
-            .chunks(36)
-            .map(|chunk| {
-                inv_type = read_le(&chunk[0..4]) as u32;
-
-                Inventory {
-                    inv_type,
-                    hash: chunk[4..36].to_vec(),
-                }
-            })
-            .collect();
-
-        Self {
-            count: inventories.len(),
-            inv_type,
-            inventories,
-        }
-    }
-
     pub fn size(&self) -> usize {
         let mut size = 0;
         let count = get_le_varint(self.count);
@@ -98,8 +76,11 @@ impl Inventory {
     pub fn encode(&self) -> Vec<u8> {
         let mut buffer = vec![0; 36];
 
+        let mut hash = self.hash.clone();
+        hash.reverse();
+
         buffer[0..4].copy_from_slice(&self.inv_type.to_le_bytes());
-        buffer[4..].copy_from_slice(&self.hash);
+        buffer[4..].copy_from_slice(&hash);
 
         buffer
     }
@@ -111,7 +92,9 @@ fn decode_inventory(buffer: &[u8]) -> Option<Inventory> {
     }
 
     let inv_type = read_le(&buffer[0..4]) as u32;
-    let hash = buffer[4..].to_vec();
+
+    let mut hash = buffer[4..].to_vec();
+    hash.reverse();
 
     Some(Inventory { inv_type, hash })
 }

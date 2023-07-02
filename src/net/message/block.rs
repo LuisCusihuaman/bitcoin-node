@@ -100,37 +100,6 @@ impl Block {
         target
     }
 
-    // generates the target to validate proof of work
-    // // target = coefficient * 256**(exponent - 3)
-    // pub fn target(&self) -> u32 {
-
-    //     let bits = self.n_bits.to_le_bytes();
-    //     let exponent = bits[3] as u32;
-    //     let coefficient = read_le(&[bits[0], bits[1], bits[2]]) as u32;
-
-    //     coefficient * 256u32.pow((exponent - 3) as u32)
-    // }
-
-    /*
-       Otra opcion
-
-       pub fn target(&self) -> [u8,32] {
-
-           let bits = self.n_bits.to_le_bytes();
-           let exponent = (bits[3] >> 3) as usize;
-           let mantissa = u32::from_le_bytes([bits[0], bits[1], bits[2], 0]) >> exponent;
-
-           let mut target = [0u8; 32];
-           target[31] = (mantissa & 0xff) as u8;
-           target[30] = ((mantissa >> 8) & 0xff) as u8;
-           target[29] = ((mantissa >> 16) & 0xff) as u8;
-           target
-
-           // coefficient * 256**(exponent - 3)
-       }
-
-    */
-
     fn validate_pow(&self) -> bool {
         let target = self.target();
         let sha = self.hash.clone();
@@ -228,9 +197,14 @@ impl Block {
         // txn_count
         let tx_count = get_le_varint(self.txn_count);
         buffer[offset..offset + tx_count.len()].copy_from_slice(&tx_count);
+        offset += tx_count.len();
 
-        // Encode txns, for complete initial download is zero.
-        // buffer[offset..offset + 1].copy_from_slice(&[0]);
+        for tx in &self.txns {
+            let tx_size = tx.size();
+
+            tx.encode(&mut buffer[offset..offset + tx_size]);
+            offset += tx_size;
+        }
     }
 
     pub fn get_prev(&self) -> [u8; 32] {

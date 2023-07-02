@@ -188,7 +188,7 @@ pub fn decode_tx(buffer: &[u8]) -> Result<MessagePayload, String> {
 
 pub fn decode_tx_status(buffer: &[u8]) -> Result<MessagePayload, String> {
     let mut offset: usize = 0;
-    
+
     match decode_internal_tx(buffer, &mut offset) {
         Some(tx) => Ok(MessagePayload::GetTxStatus(tx)),
         None => Err("Error decoding tx status".to_string()),

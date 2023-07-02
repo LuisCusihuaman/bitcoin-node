@@ -198,7 +198,7 @@ pub fn decode_tx_status(buffer: &[u8]) -> Result<MessagePayload, String> {
 pub fn decode_internal_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
     let old_offset = *offset;
 
-    if buffer[*offset..].len() < 4 as usize {
+    if buffer[*offset..].len() < 4_usize {
         return None;
     }
 
@@ -245,7 +245,7 @@ pub fn decode_internal_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
         signature_script.extend(&buffer[*offset..*offset + script_length]);
         *offset += script_length;
 
-        if buffer[*offset..].len() < 4 as usize {
+        if buffer[*offset..].len() < 4_usize {
             return None;
         }
 
@@ -274,7 +274,7 @@ pub fn decode_internal_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
         let pk_script_length = read_varint(&buffer[*offset..]);
         *offset += get_offset(&buffer[*offset..]);
 
-        if buffer[*offset..].len() < pk_script_length as usize {
+        if buffer[*offset..].len() < pk_script_length {
             return None;
         }
 
@@ -309,7 +309,7 @@ pub fn decode_internal_tx(buffer: &[u8], offset: &mut usize) -> Option<Tx> {
         // Offset no se actualiza
     };
 
-    if buffer[*offset..].len() < 4 as usize {
+    if buffer[*offset..].len() < 4_usize {
         return None;
     }
 

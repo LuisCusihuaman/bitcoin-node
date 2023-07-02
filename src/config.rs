@@ -17,6 +17,12 @@ pub struct Config {
     pub download_blocks_since_date: String,
 }
 
+impl Default for Config {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Config {
     pub fn new() -> Self {
         Self {

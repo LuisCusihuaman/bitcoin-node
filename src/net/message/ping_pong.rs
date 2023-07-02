@@ -6,6 +6,12 @@ pub struct PayloadPingPong {
     pub nonce: Vec<u8>,
 }
 
+impl Default for PayloadPingPong {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PayloadPingPong {
     pub fn new() -> Self {
         let mut rng = rand::thread_rng();
@@ -20,7 +26,7 @@ impl PayloadPingPong {
     }
 
     pub fn size(&self) -> usize {
-        8 as usize
+        8_usize
     }
 
     pub fn encode(&self, buffer: &mut [u8]) {
@@ -34,7 +40,7 @@ pub fn decode_ping(buffer: &[u8]) -> Result<MessagePayload, String> {
     }
 
     Ok(MessagePayload::Ping(PayloadPingPong {
-        nonce: buffer.clone().to_vec(),
+        nonce: buffer.to_vec(),
     }))
 }
 
@@ -44,6 +50,6 @@ pub fn decode_pong(buffer: &[u8]) -> Result<MessagePayload, String> {
     }
 
     Ok(MessagePayload::Pong(PayloadPingPong {
-        nonce: buffer.clone().to_vec(),
+        nonce: buffer.to_vec(),
     }))
 }

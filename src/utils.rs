@@ -62,8 +62,8 @@ pub fn read_le(bytes: &[u8]) -> usize {
     let mut result: usize = 0;
     let len_bytes = bytes.len();
 
-    for i in 0..len_bytes {
-        result |= (bytes[i] as usize) << (i * 8);
+    for (i, byte) in bytes.iter().enumerate().take(len_bytes) {
+        result |= (*byte as usize) << (i * 8);
     }
     result
 }
@@ -174,8 +174,8 @@ pub fn array_to_hex(buff: &[u8]) -> String {
 pub fn little_endian_to_int(bytes: &[u8; 32]) -> u128 {
     let mut result: u128 = 0;
 
-    for i in 0..16 {
-        result |= u128::from(bytes[i]) << (8 * i);
+    for (i, byte) in bytes.iter().enumerate().take(16) {
+        result |= u128::from(*byte) << (8 * i);
     }
     result
 }

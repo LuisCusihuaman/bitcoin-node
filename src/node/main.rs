@@ -14,7 +14,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     //     )
     // })?;
 
-    let config = Config::from_file(&"nodo.config")?;
+    let config = Config::from_file("nodo.config")?;
 
     let logger = Logger::new(&config)?;
     let logger_tx = logger.tx.clone();

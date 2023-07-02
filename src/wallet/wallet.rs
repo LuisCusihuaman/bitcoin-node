@@ -2,18 +2,17 @@ use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 use std::vec;
 
-use bitcoin_hashes::Hash;
 use bitcoin_hashes::hash160;
-use bs58::decode;
-use rand::Rng;
+use bitcoin_hashes::Hash;
 use rand::rngs::OsRng;
+use rand::Rng;
 use secp256k1::{Message, Secp256k1, SecretKey};
 
 use crate::config::Config;
 use crate::logger::log;
-use crate::net::message::{MessagePayload, TxStatus};
 use crate::net::message::get_utxos::PayloadGetUtxos;
-use crate::net::message::tx::{decode_internal_tx, decode_tx, OutPoint, Tx, TxIn, TxOut};
+use crate::net::message::tx::{decode_internal_tx, OutPoint, Tx, TxIn, TxOut};
+use crate::net::message::{MessagePayload, TxStatus};
 use crate::net::p2p_connection::P2PConnection;
 use crate::node::utxo::Utxo;
 use crate::utils::{array_to_hex, double_sha256, pk_hash_from_addr};
@@ -25,14 +24,14 @@ pub struct Wallet {
     node_manager: P2PConnection,
     pub users: Vec<User>,
     pub pending_tx: PendingTx,
-    pub tnxs_history: HashMap<[u8; 32], (Tx, TxStatus, String, f64)>, //tnxs_history: Vec<(TxStatus, Tx)>, // puede ser un struct
+    pub tnxs_history: HashMap<[u8; 32], (Tx, TxStatus, String, f64)>,
     pub available_money: u64,
 }
 
 impl Wallet {
     pub fn new(config: Config, sender: Sender<String>, user: User) -> Wallet {
         let logger_tx = sender.clone();
-        let node_manager = P2PConnection::connect("127.0.0.1:18333", sender.clone()).unwrap();
+        let node_manager = P2PConnection::connect("127.0.0.1:18333", sender).unwrap();
 
         Wallet {
             config,
@@ -90,7 +89,15 @@ impl Wallet {
                     println!("Signed Tx id: {:?}", array_to_hex(&(tx_decoded.clone().id)));
                     println!("Signed Tx: {:?}", array_to_hex(&signed_tx_encoded));
                     // send the Tx to the node
-                    self.tnxs_history.insert(tx_decoded.clone().id, (tx_decoded.clone(), TxStatus::Unconfirmed, self.pending_tx.receive_addr.clone(), self.pending_tx.amount));
+                    self.tnxs_history.insert(
+                        tx_decoded.clone().id,
+                        (
+                            tx_decoded.clone(),
+                            TxStatus::Unconfirmed,
+                            self.pending_tx.receive_addr.clone(),
+                            self.pending_tx.amount,
+                        ),
+                    );
                     self.send(MessagePayload::Tx(signed_tx));
                 }
                 MessagePayload::TxStatus(payload) => {
@@ -98,20 +105,27 @@ impl Wallet {
                     if payload.status.clone() == TxStatus::Unknown {
                         log(
                             self.logger_tx.clone(),
-                            format!("Transaction Error. Unknown transaction status"),
+                            "Transaction Error. Unknown transaction status".to_string(),
                         );
                         continue;
                     }
 
                     match self.tnxs_history.get(&payload.tx_id) {
                         Some(tx_history) => {
-                            self.tnxs_history
-                                .insert(payload.tx_id, (tx_history.0.clone(), payload.status, tx_history.2.clone(), tx_history.3.clone()));
+                            self.tnxs_history.insert(
+                                payload.tx_id,
+                                (
+                                    tx_history.0.clone(),
+                                    payload.status,
+                                    tx_history.2.clone(),
+                                    tx_history.3,
+                                ),
+                            );
                         }
                         None => {
                             log(
                                 self.logger_tx.clone(),
-                                format!("Transaction id not found in transaction history"),
+                                "Transaction id not found in transaction history".to_string(),
                             );
                         }
                     };
@@ -139,12 +153,15 @@ impl Wallet {
         let fee = 100000.0; // self.config.tx_fee ; // fee for the Tx
 
         if amount <= 0 as f64 {
-            log(self.logger_tx.clone(), format!("Error: Invalid amount"));
+            log(self.logger_tx.clone(), "Error: Invalid amount".to_string());
             return None;
         }
 
         if (available_money as f64) < (amount + fee) {
-            log(self.logger_tx.clone(), format!("Error: Insufficient funds"));
+            log(
+                self.logger_tx.clone(),
+                "Error: Insufficient funds".to_string(),
+            );
             return None;
         }
 
@@ -159,7 +176,7 @@ impl Wallet {
 
             let p2pkh_script = Self::create_p2pkh_script(user.get_pk_hash());
 
-            let mut tx_id = i.transaction_id.clone();
+            let mut tx_id = i.transaction_id;
             tx_id.reverse();
 
             let tx_in = TxIn {
@@ -167,7 +184,7 @@ impl Wallet {
                     hash: tx_id,
                     index: i.output_index,
                 },
-                script_length: p2pkh_script.len() as usize,
+                script_length: p2pkh_script.len(),
                 signature_script: p2pkh_script.to_vec(),
                 sequence: 0xffffffff,
             };
@@ -202,9 +219,9 @@ impl Wallet {
             id: [0; 32],
             version: 1,
             flag: 0,
-            tx_in_count: tx_ins.len() as usize,
+            tx_in_count: tx_ins.len(),
             tx_in: tx_ins,
-            tx_out_count: tx_outs.len() as usize,
+            tx_out_count: tx_outs.len(),
             tx_out: tx_outs,
             tx_witness: vec![],
             lock_time: 0,
@@ -249,7 +266,7 @@ impl Wallet {
         let private_key = user.secret_key;
 
         let message = Message::from_slice(&signature_hash).unwrap();
-        let signature = private_key.sign_ecdsa(message.clone());
+        let signature = private_key.sign_ecdsa(message);
         let der = signature.clone().serialize_der().to_vec();
         let sec = user.public_key;
 
@@ -536,7 +553,10 @@ mod tests {
         let mut wallet = Wallet::new(config, logger.tx, messi);
 
         let tx = Tx {
-            id: [168, 100, 164, 165, 157, 239, 225, 158, 30, 139, 116, 50, 75, 224, 71, 198, 133, 10, 228, 4, 57, 246, 166, 229, 0, 245, 47, 243, 166, 54, 94, 44], // the trhurut
+            id: [
+                168, 100, 164, 165, 157, 239, 225, 158, 30, 139, 116, 50, 75, 224, 71, 198, 133,
+                10, 228, 4, 57, 246, 166, 229, 0, 245, 47, 243, 166, 54, 94, 44,
+            ],
             version: 2,
             flag: 0,
             tx_in_count: 1,
@@ -564,7 +584,6 @@ mod tests {
             lock_time: 0,
         };
 
-
         let tx_status_message = MessagePayload::GetTxStatus(tx);
 
         wallet.send(tx_status_message);
@@ -575,14 +594,6 @@ mod tests {
 
     #[test]
     fn test_wallet_create_tx() -> Result<(), String> {
-        // Primer cuenta
-        // bitcoin_address: mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb
-        // secret_secret: cVK6pF1sfsvvmF9vGyq4wFeMywy1SMFHNpXa3d4Hi2evKHRQyTbn
-
-        // Segunda cuenta
-        // bitcoin_address: mpiQbuypLNHoUCXeFtrS956jPSNhwmYwai
-        // secret_key: cSM1NQcoCMDP8jy2AMQWHXTLc9d4HjSr7H4AqxKk2bD1ykbaRw59
-
         let logger = Logger::mock_logger();
         let config = Config::from_file("nodo.config")
             .map_err(|err| err.to_string())
@@ -612,15 +623,6 @@ mod tests {
 
         let p2pkh_script_change = Wallet::create_p2pkh_script(pk_hash);
 
-        // In this example, we will pay 0.1 testnet bitcoins (tBTC) to mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb (nuestra otra cuenta)
-        // we have an output denoted by a transaction ID and output index bce66d595cff8650ac37fc181727f1c5c6a8731409694b29708f368a1289cc7b:0
-        // (0.01302208 tBTC) we’ll send the bitcoins back to outselves to mpiQbuypLNHoUCXeFtrS956jPSNhwmYwai (nuestra cuenta actual)
-
-        // 0.01302208 BTC in wallet
-        // 0.001 BTC for fee
-        // 0.001 BTC to send
-        // 0.01102208 BTC to receive
-
         let mut hash = [
             0xbc, 0xe6, 0x6d, 0x59, 0x5c, 0xff, 0x86, 0x50, 0xac, 0x37, 0xfc, 0x18, 0x17, 0x27,
             0xf1, 0xc5, 0xc6, 0xa8, 0x73, 0x14, 0x09, 0x69, 0x4b, 0x29, 0x70, 0x8f, 0x36, 0x8a,
@@ -642,7 +644,6 @@ mod tests {
         let value = (0.001 * 100_000_000.0) as u64;
 
         let pk_hash_target = pk_hash_from_addr("mx34LnwGeUD8tc7vR8Ua1tCq4t6ptbjWGb");
-        //let aux = hash160::Hash::hash(&pk_hash_target).to_byte_array();
 
         let p2pkh_script_target = Wallet::create_p2pkh_script(pk_hash_target);
 
@@ -675,32 +676,6 @@ mod tests {
         };
 
         let tx_signed = Wallet::sign_tx(tx, messi);
-
-        // let mut buffer = vec![];
-        // let mut tx_bytes = tx.encode(&mut buffer);
-        // tx_bytes.extend([1, 0, 0, 0]);
-
-        // let signature_hash = double_sha256(&tx_bytes).to_byte_array();
-
-        // // firmar la transaccion
-        // let private_key = messi.secret_key;
-
-        // let message = Message::from_slice(&signature_hash).unwrap();
-        // let signature = private_key.sign_ecdsa(message.clone());
-        // let der = signature.clone().serialize_der().to_vec();
-        // let sec = messi.public_key;
-
-        // let mut script_sig: Vec<u8> = Vec::new();
-        // script_sig.extend(vec![(der.len() + 1) as u8]);
-        // script_sig.extend(der);
-        // script_sig.extend([1]); // SIGHASH_ALL
-        // script_sig.extend(vec![sec.len() as u8]);
-        // script_sig.extend(sec);
-
-        // tx.tx_in[0].signature_script = script_sig.clone();
-        // tx.tx_in[0].script_length = script_sig.len();
-
-        // let final_tx_encode = tx.encode(&mut buffer);
 
         let mut buffer = vec![];
         let _final_tx_encode = tx_signed.encode(&mut buffer);

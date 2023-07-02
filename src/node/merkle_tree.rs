@@ -7,6 +7,12 @@ pub struct MerkleTree {
     hashed_leaves: Vec<sha256::Hash>,
 }
 
+impl Default for MerkleTree {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MerkleTree {
     pub fn new() -> Self {
         Self {

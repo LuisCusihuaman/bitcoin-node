@@ -50,8 +50,8 @@ impl Block {
     // generates the target to validate proof of work using this formula
     // target = coefficient * 256**(exponent - 3)
     fn pow_256(exponent: u32) -> Vec<u8> {
-        let base = 256_i32.to_be_bytes().to_vec().clone(); // [0, 0, 1, 0]
-        let mut result = base.clone();
+        let base = 256_i32.to_be_bytes().to_vec(); // [0, 0, 1, 0]
+        let mut result = base;
 
         if exponent < 1 {
             return vec![0, 0, 0, 1];
@@ -93,16 +93,14 @@ impl Block {
         let mut result = vec![0; zeros_to_add];
         result.extend(pow);
 
-        // this is the same as coefficient (*) 256**(exponent - 3), that multiply???
+        // this is the same as coefficient (*) 256**(exponent - 3)
         let coefficient = u32::from_le_bytes([bits[0], bits[1], bits[2], 0]);
-        let target = Self::scalar_by(coefficient, &result);
-
-        target
+        Self::scalar_by(coefficient, &result)
     }
 
     fn validate_pow(&self) -> bool {
         let target = self.target();
-        let sha = self.hash.clone();
+        let sha = self.hash;
 
         for i in 0..32 {
             if sha[i] == target[i] {
@@ -111,7 +109,7 @@ impl Block {
             return sha[i] < target[i];
         }
 
-        return false;
+        false
     }
 
     fn init_merkle_tree(&self) -> MerkleTree {
@@ -1096,16 +1094,12 @@ mod tests {
 
         block.txns = vec![tx1, tx2];
 
-        let expected_merkle_root = [
-            136, 122, 27, 116, 246, 94, 78, 137, 248, 236, 162, 104, 55, 210, 207, 205, 139, 16,
-            92, 241, 228, 96, 167, 60, 7, 168, 155, 54, 29, 202, 64, 99,
-        ];
         assert!(block.is_valid());
     }
 
     #[test]
     fn test_validate_proof_of_work() {
-        let mut block = Block {
+        let block = Block {
             version: 2,
             hash: [
                 0, 0, 0, 0, 0, 2, 60, 60, 152, 89, 35, 223, 255, 89, 74, 130, 64, 234, 30, 151, 40,
@@ -1132,7 +1126,7 @@ mod tests {
     #[test]
     #[ignore] // TODO fix this test
     fn test_validate_target_expected() {
-        let mut block = Block {
+        let block = Block {
             version: 2,
             hash: [
                 0, 0, 0, 0, 0, 2, 60, 60, 152, 89, 35, 223, 255, 89, 74, 130, 64, 234, 30, 151, 40,
@@ -1202,11 +1196,6 @@ mod tests {
         let expected_u128 = u128::from_le_bytes(result_bytes[..].try_into().unwrap());
         assert_eq!(result_bytes, expected_bytes);
         assert_eq!(expected_u128, 3987683987354747618931849722262215421);
-
-        // Test case not fit in u128
-        let bytes = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128]; // 2596148429267413814265248164610048
-        let expected_bytes: Vec<u8> = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]; // (n*2) 5192296858534827628530496329220096
-        let result_bytes = Block::scalar_by(2, &bytes);
     }
 
     #[test]

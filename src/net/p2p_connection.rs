@@ -36,7 +36,7 @@ impl P2PConnection {
         tcp_stream.set_nonblocking(true).unwrap();
 
         Ok(Self {
-            logger_tx: logger_tx.clone(),
+            logger_tx,
             handshaked: true,
             peer_address: addr.to_owned(),
             tcp_stream,
@@ -138,7 +138,7 @@ fn parse_messages_from(buf: &mut Vec<u8>, logger_tx: Sender<String>) -> Vec<Mess
 
         if header.magic_number != 118034699 {
             log(
-                logger_tx.clone(),
+                logger_tx,
                 format!("Invalid magic number: 0x{:08x}", header.magic_number),
             );
             break;
@@ -154,10 +154,7 @@ fn parse_messages_from(buf: &mut Vec<u8>, logger_tx: Sender<String>) -> Vec<Mess
 
         let end_index = cursor + 24 + payload_size;
         if end_index > buf.len() {
-            log(
-                logger_tx.clone(),
-                format!("Invalid end index: {}", end_index),
-            );
+            log(logger_tx, format!("Invalid end index: {}", end_index));
             break; // the last message has more bytes than received
         }
 

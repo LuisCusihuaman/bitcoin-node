@@ -79,11 +79,8 @@ impl NodeNetwork {
                 }
             }));
 
-            match receiver.recv() {
-                Ok(msg) => {
-                    self.send_messages(vec![msg]);
-                }
-                Err(_) => {}
+            if let Ok(msg) = receiver.recv() {
+                self.send_messages(vec![msg]);
             };
         }
 

@@ -7,7 +7,7 @@ use std::io::Read;
 
 // use app::error::Error;
 
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct Config {
     pub log_file: String,
     pub addrs: String,
@@ -15,6 +15,12 @@ pub struct Config {
     pub dns: String,
     pub dns_port: u16,
     pub download_blocks_since_date: String,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Config {

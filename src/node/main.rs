@@ -14,7 +14,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     //     )
     // })?;
 
-    let config = Config::from_file(&"nodo.config")?;
+    let config = Config::from_file("nodo.config")?;
 
     let logger = Logger::new(&config)?;
     let logger_tx = logger.tx.clone();
@@ -25,13 +25,14 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut node_manager = NodeManager::new(config, logger_tx);
 
-    let is_main_node = true;
+    let is_main_node = false;
 
-    let node_network_ips = match is_main_node {
-        true => node_manager.get_initial_nodes()?,
+    let mut node_network_ips = node_manager.get_initial_nodes()?;
+
+    match is_main_node {
+        true => {}
         false => {
-            let main_node_ip = "127.0.0.1".to_string();
-            vec![main_node_ip.clone()]
+            node_network_ips.append(&mut vec!["127.0.0.1".to_string()]);
         }
     };
 

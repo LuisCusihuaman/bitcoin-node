@@ -1,9 +1,9 @@
+use super::block::Block;
 use super::MessagePayload;
-use super::{block::Block, version};
 
 use crate::utils::*;
 use bitcoin_hashes::Hash;
-use std::{hash, mem, vec};
+use std::{mem, vec};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PayloadGetHeaders {

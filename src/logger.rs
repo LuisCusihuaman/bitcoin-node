@@ -5,7 +5,6 @@ use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::thread;
 
 pub struct Logger {
     rx: Receiver<String>,
@@ -56,9 +55,7 @@ impl Logger {
 }
 
 pub fn log(logger_tx: Sender<String>, msg: String) {
-    match logger_tx.send(msg) {
-        _ => {}
-    }
+    let _ = logger_tx.send(msg);
 }
 
 #[cfg(test)]

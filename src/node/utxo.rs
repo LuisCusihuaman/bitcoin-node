@@ -1,14 +1,14 @@
 use bitcoin_hashes::{hash160, Hash};
 
 use crate::net::message::tx::Tx;
-use crate::utils::{get_address_base58, read_be};
-use std::collections::{BTreeMap, HashMap};
+use crate::utils::read_be;
+use std::collections::HashMap;
 use std::mem;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Utxo {
     pub transaction_id: [u8; 32],
-    pub output_index: u32, // this is a transaction tx/_in outpoint index?
+    pub output_index: u32,
     pub value: u64,
 }
 
@@ -138,9 +138,7 @@ pub fn generate_utxos(utxo_set: &mut HashMap<[u8; 20], Vec<Utxo>>, tx: &Tx) {
             }
             None => {
                 // new address from one month
-                let mut utxos_return = Vec::new();
-                utxos_return.push(utxo_new);
-                utxos_return
+                vec![utxo_new]
             }
         };
 

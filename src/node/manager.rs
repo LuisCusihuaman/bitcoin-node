@@ -26,7 +26,8 @@ use std::net::TcpListener;
 use std::net::{IpAddr, ToSocketAddrs};
 use std::sync::mpsc::channel;
 use std::sync::mpsc::Sender;
-use std::thread::spawn;
+use std::thread::{sleep, spawn};
+use std::time::Duration;
 use crate::node::config::Config;
 
 use super::utxo::get_utxos_by_address;
@@ -295,7 +296,7 @@ impl NodeManager {
                             self.logger_tx.clone(),
                             format!("Received getdata from {}", peer_address),
                         );
-
+                        sleep(Duration::from_millis(500));
                         self.send_blocks(getdata, peer_address);
                     }
                     MessagePayload::GetTxHistory(payload) => {
@@ -368,7 +369,6 @@ impl NodeManager {
                 Some(index) => self.blockchain[index].clone(),
                 None => continue,
             };
-
             self.send_to(address.to_owned(), &MessagePayload::Block(block));
         }
     }
@@ -505,7 +505,7 @@ impl NodeManager {
             self.logger_tx.clone(),
             format!("{:?} blocks loaded by file", self.blockchain.len()),
         );
-
+        self.wait_for(vec![]);
         self.send_get_headers();
     }
 
@@ -567,7 +567,7 @@ impl NodeManager {
             None => panic!("Error parsing date"),
         };
 
-        // TODO: Integrate date from self.config.download_blocks_since_date
+
         let blocks = self.get_blockchain();
 
         let index = match self.get_block_index_by_timestamp(timestamp) {

@@ -2,16 +2,18 @@
 mod tests {
     use std::thread;
 
-    use app::config::Config;
+    use rand::Rng;
+
+    use app::node::config::Config;
     use app::logger::Logger;
+    use app::net::message::block::Block;
     use app::net::message::get_blocks::PayloadGetBlocks;
     use app::net::message::get_data_inv::{Inventory, PayloadGetDataInv};
     use app::net::message::get_headers::PayloadGetHeaders;
-    use app::net::message::ping_pong::PayloadPingPong;
     use app::net::message::MessagePayload;
+    use app::net::message::ping_pong::PayloadPingPong;
     use app::node::manager::NodeManager;
     use app::utils::{check_blockchain_integrity, get_hash_block_genesis};
-    use rand::Rng;
 
     #[test]
     fn test_get_all_ips_from_dns() {
@@ -214,5 +216,12 @@ mod tests {
             .map(|(_, message)| message.clone())
             .map(|mut message| message.pop().unwrap())
             .collect()
+    }
+
+    #[test]
+    fn test_spit_headers() {
+        let mut node_manager = init_valid_node_manager();
+        let blockchain = Block::decode_blocks_from_file("block_headers.bin");
+        Block::encode_blocks_to_file(&blockchain[..2_400_000].to_vec(), "block_headers.client.bin")
     }
 }

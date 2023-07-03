@@ -635,20 +635,14 @@ impl NodeManager {
         }
     }
 
-    pub fn run_secondary(&mut self) {
-        loop {
-            self.wait_for(vec![]);
-        }
-    }
-
-    pub fn run_main(&mut self) {
+    pub fn run(&mut self) {
         let (sender, rx) = channel();
-        let listener = TcpListener::bind("127.0.0.1:18333").unwrap();
+        let listener = TcpListener::bind(self.config.node_address.clone()).unwrap();
         let logger_tx = self.logger_tx.clone();
 
         log(
             self.logger_tx.clone(),
-            "Listening on port 18333...".to_string(),
+            format!("Listening on {}", self.config.node_address)
         );
 
         spawn(move || {

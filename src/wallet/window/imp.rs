@@ -4,17 +4,17 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use glib::subclass::InitializingObject;
-use gtk::{ColumnView, ColumnViewColumn, CompositeTemplate, Entry, gio, glib, ListView, NoSelection};
 use gtk::gio::Settings;
-use gtk::glib::{Continue, MainContext, PRIORITY_DEFAULT, PropertyGet, Sender, StaticType};
 use gtk::glib::once_cell::unsync::OnceCell;
+use gtk::glib::{Continue, MainContext, PropertyGet, Sender, StaticType, PRIORITY_DEFAULT, Cast};
 use gtk::subclass::prelude::*;
-use gtk::traits::RecentManagerExt;
+use gtk::traits::{BoxExt, RecentManagerExt};
+use gtk::{gio, glib, ColumnView, ColumnViewColumn, CompositeTemplate, Entry, ListView, NoSelection, StringList};
 
-use app::config::Config;
 use app::logger::Logger;
 use app::net::message::{MessagePayload, TxStatus};
 use app::utils::array_to_hex;
+use app::wallet::config::Config;
 use app::wallet::wallet::{User, Wallet};
 
 use crate::transaction_object::TransactionObject;
@@ -23,6 +23,7 @@ pub enum MessageWallet {
     UpdateTransactions,
     NewPendingTransaction(String, String),
     UpdateBalance,
+    SelectUser(String),
 }
 
 // ANCHOR: struct_and_subclass
@@ -61,6 +62,10 @@ pub struct Window {
     #[template_child]
     pub amount_column: TemplateChild<ColumnViewColumn>,
     pub transactions: RefCell<Option<gio::ListStore>>,
+    #[template_child]
+    pub users_dropdown: TemplateChild<gtk::DropDown>,
+    #[template_child]
+    pub users: TemplateChild<StringList>,
 }
 
 // The central trait for subclassing a GObject
@@ -88,13 +93,18 @@ impl ObjectImpl for Window {
         // Call "constructed" on parent
         self.parent_constructed();
         let logger = Logger::mock_logger();
-        let config = Config::from_file("nodo.config")
+        let config = Config::from_file("wallet.config")
             .map_err(|err| err.to_string())
             .unwrap();
+        let mut users = Vec::new();
+        let users_list: StringList = self.users.clone().upcast();
+        for user_cfg in config.users.iter() {
+            users.push(User::new(user_cfg.name.clone(), user_cfg.private_key.clone(), false));
+            users_list.append(user_cfg.name.as_str());
+        }
+        // EL ultimo usuario activo es users[-1]
+        let wallet = Arc::new(Mutex::new(Wallet::new(config, logger.tx, users)));
 
-        let priv_key_wif = "cSM1NQcoCMDP8jy2AMQWHXTLc9d4HjSr7H4AqxKk2bD1ykbaRw59".to_string();
-        let messi = User::new("Messi".to_string(), priv_key_wif, false);
-        let wallet = Arc::new(Mutex::new(Wallet::new(config, logger.tx, messi)));
         let wallet_clone = wallet.clone(); // Clone the Arc<Mutex<Wallet>>
 
         let (sender, receiver) = MainContext::channel(PRIORITY_DEFAULT);
@@ -105,14 +115,13 @@ impl ObjectImpl for Window {
         obj.setup_transactions(sender_clone.clone());
         obj.setup_callbacks(sender.clone());
         obj.setup_factories(sender_clone);
-        thread::spawn(move || {
-            loop {
-                let mut wallet = wallet_clone.lock().unwrap();
-                wallet.update_txs_history();
-                wallet.receive();
-                drop(wallet);
-                thread::sleep(std::time::Duration::from_secs(5));
-            }
+        thread::spawn(move || loop {
+            let mut wallet = wallet_clone.lock().unwrap();
+            wallet.update_txs_history();
+            wallet.receive();
+            wallet.send_pending_tx();
+            drop(wallet);
+            thread::sleep(std::time::Duration::from_secs(5));
         });
 
         let transaction_list_clone = self.transactions.clone();
@@ -120,8 +129,12 @@ impl ObjectImpl for Window {
         receiver.attach(None, move |msg| match msg {
             MessageWallet::UpdateTransactions => {
                 let mut wallet = wallet.lock().unwrap();
-                transaction_list_clone.borrow().as_ref().unwrap().remove_all();
-                for (tx_id, tx_history) in wallet.tnxs_history.iter() {
+                transaction_list_clone
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .remove_all();
+                for (tx_id, tx_history) in wallet.users[wallet.index_last_active_user].tnxs_history.iter() {
                     let tx_id_str = array_to_hex(tx_id);
                     let status = match tx_history.1 {
                         TxStatus::Unconfirmed => "Unconfirmed",
@@ -134,7 +147,11 @@ impl ObjectImpl for Window {
                         tx_history.2.to_string(),
                         tx_history.3.to_string(),
                     );
-                    transaction_list_clone.borrow().as_ref().unwrap().append(&tx_obj);
+                    transaction_list_clone
+                        .borrow()
+                        .as_ref()
+                        .unwrap()
+                        .append(&tx_obj);
                 }
                 Continue(true)
             }
@@ -146,7 +163,9 @@ impl ObjectImpl for Window {
                     let mut wallet = wallet_clone.lock().unwrap();
                     wallet.create_pending_tx(address_clone, amount.parse::<f64>().unwrap());
                     println!("New Pending transaction: {} {}", address, amount);
-                    sender_clone.send(MessageWallet::UpdateTransactions).unwrap();
+                    sender_clone
+                        .send(MessageWallet::UpdateTransactions)
+                        .unwrap();
                 });
                 Continue(true)
             }
@@ -154,8 +173,17 @@ impl ObjectImpl for Window {
                 let wallet_clone = wallet.clone();
                 let mut wallet = wallet_clone.lock().unwrap();
                 wallet.update_balance();
-                let formatted_btc_balance = format!("{:.8} BTC", ((wallet.available_money as f64) / 100_000_000.0));
+                let formatted_btc_balance = format!(
+                    "{:.8} BTC",
+                    ((wallet.users[wallet.index_last_active_user].available_money as f64) / 100_000_000.0)
+                );
                 balance_value_clone.set_text(&formatted_btc_balance);
+                Continue(true)
+            }
+            MessageWallet::SelectUser(private_key) => {
+                let wallet_clone = wallet.clone();
+                let mut wallet = wallet_clone.lock().unwrap();
+                wallet.select_user(private_key);
                 Continue(true)
             }
         });

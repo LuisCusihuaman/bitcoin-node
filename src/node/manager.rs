@@ -1,4 +1,3 @@
-use crate::config::Config;
 use crate::logger::log;
 use crate::net::message::block::Block;
 use crate::net::message::get_data_inv::Inventory;
@@ -28,6 +27,7 @@ use std::net::{IpAddr, ToSocketAddrs};
 use std::sync::mpsc::channel;
 use std::sync::mpsc::Sender;
 use std::thread::spawn;
+use crate::node::config::Config;
 
 use super::utxo::get_utxos_by_address;
 

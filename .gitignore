@@ -1,2 +1,6 @@
 /target
 blocks.bin
+log.txt
+.vscode
+.idea
+block_headers.bin

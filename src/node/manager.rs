@@ -1,12 +1,13 @@
-use crate::config::Config;
 use crate::logger::log;
 use crate::net::message::block::Block;
 use crate::net::message::get_data_inv::Inventory;
 use crate::net::message::get_data_inv::PayloadGetDataInv;
 use crate::net::message::get_headers::PayloadGetHeaders;
 use crate::net::message::get_headers::PayloadHeaders;
+use crate::net::message::get_tx_history::PayloadGetTxHistory;
 use crate::net::message::ping_pong::PayloadPingPong;
 use crate::net::message::tx::Tx;
+use crate::net::message::tx_history::PayloadTxHistory;
 use crate::net::message::tx_status::PayloadTxStatus;
 use crate::net::message::utxos_msg::PayloadUtxosMsg;
 use crate::net::message::version::PayloadVersion;
@@ -25,7 +26,9 @@ use std::net::TcpListener;
 use std::net::{IpAddr, ToSocketAddrs};
 use std::sync::mpsc::channel;
 use std::sync::mpsc::Sender;
-use std::thread::spawn;
+use std::thread::{sleep, spawn};
+use std::time::Duration;
+use crate::node::config::Config;
 
 use super::utxo::get_utxos_by_address;
 
@@ -115,7 +118,7 @@ impl NodeManager {
                                     .push(MessagePayload::Headers(payload.clone()));
                             }
                             self.blockchain.extend(payload.headers.clone());
-                            Block::encode_blocks_to_file(&payload.headers, "block_headers.bin");
+                            Block::encode_blocks_to_file(&payload.headers, self.config.block_headers_file.as_str());
                         }
 
                         // Continuidad de la blockchain
@@ -131,7 +134,7 @@ impl NodeManager {
 
                         if blockchain_last_block.hash == payload_first_block.previous_block {
                             self.blockchain.extend(payload.headers.clone());
-                            Block::encode_blocks_to_file(&payload.headers, "block_headers.bin");
+                            Block::encode_blocks_to_file(&payload.headers, self.config.block_headers_file.as_str());
                         }
 
                         if commands.contains(&"headers") {
@@ -293,8 +296,16 @@ impl NodeManager {
                             self.logger_tx.clone(),
                             format!("Received getdata from {}", peer_address),
                         );
-
+                        sleep(Duration::from_millis(500));
                         self.send_blocks(getdata, peer_address);
+                    }
+                    MessagePayload::GetTxHistory(payload) => {
+                        log(
+                            self.logger_tx.clone(),
+                            format!("Received gettxhistory from {}", peer_address),
+                        );
+
+                        self.send_tx_history(payload, peer_address);
                     }
                     _ => {
                         log(
@@ -307,6 +318,42 @@ impl NodeManager {
             matched_messages.push((peer_address.clone(), matched_peer_messages));
         }
         matched_messages
+    }
+
+    fn send_tx_history(&mut self, payload: &PayloadGetTxHistory, address: &str) {
+        let tx_history = self.get_tx_history_by_address(payload.address.clone());
+
+        self.send_to(
+            address.to_owned(),
+            &MessagePayload::TxHistory(PayloadTxHistory {
+                pk_hash: payload.address.to_vec(),
+                txns_count: tx_history.len(),
+                txns: tx_history,
+            }),
+        );
+    }
+
+    pub fn get_tx_history_by_address(&mut self, pk_hash: [u8; 20]) -> Vec<Tx> {
+        let mut p2pkh_script: Vec<u8> = Vec::new();
+
+        p2pkh_script.extend([118]); // 0x76 = OP_DUP
+        p2pkh_script.extend([169]); // 0xa9 = OP_HASH160
+        p2pkh_script.extend(vec![pk_hash.len() as u8]);
+        p2pkh_script.extend(pk_hash);
+        p2pkh_script.extend([136]); // 0x88 = OP_EQUALVERIFY
+        p2pkh_script.extend([172]); // 0xac = OP_CHECKSIG
+
+        let blockchain = self.get_blockchain();
+
+        blockchain
+            .iter()
+            .flat_map(|block| block.txns.clone())
+            .filter(|tx| {
+                tx.tx_out
+                    .iter()
+                    .any(|output| output.pk_script == p2pkh_script)
+            })
+            .collect()
     }
 
     fn send_blocks(&mut self, get_data: &PayloadGetDataInv, address: &str) {
@@ -322,7 +369,6 @@ impl NodeManager {
                 Some(index) => self.blockchain[index].clone(),
                 None => continue,
             };
-
             self.send_to(address.to_owned(), &MessagePayload::Block(block));
         }
     }
@@ -445,8 +491,7 @@ impl NodeManager {
     }
 
     fn headers_first(&mut self) {
-        let file_path = "block_headers.bin";
-
+        let file_path = self.config.block_headers_file.as_str();
         if fs::metadata(file_path).is_ok() {
             // Blocks file already exists, no need to perform initial block download
             log(
@@ -460,7 +505,7 @@ impl NodeManager {
             self.logger_tx.clone(),
             format!("{:?} blocks loaded by file", self.blockchain.len()),
         );
-
+        self.wait_for(vec![]);
         self.send_get_headers();
     }
 
@@ -517,12 +562,12 @@ impl NodeManager {
     }
 
     fn blocks_download(&mut self) {
-        let timestamp = match date_to_timestamp("2023-06-30") {
+        let timestamp = match date_to_timestamp(self.config.download_blocks_since_date.as_str()) {
             Some(timestamp) => timestamp,
             None => panic!("Error parsing date"),
         };
 
-        // TODO: Integrate date from self.config.download_blocks_since_date
+
         let blocks = self.get_blockchain();
 
         let index = match self.get_block_index_by_timestamp(timestamp) {
@@ -589,20 +634,14 @@ impl NodeManager {
         }
     }
 
-    pub fn run_secondary(&mut self) {
-        loop {
-            self.wait_for(vec![]);
-        }
-    }
-
-    pub fn run_main(&mut self) {
+    pub fn run(&mut self) {
         let (sender, rx) = channel();
-        let listener = TcpListener::bind("127.0.0.1:18333").unwrap();
+        let listener = TcpListener::bind(self.config.node_address.clone()).unwrap();
         let logger_tx = self.logger_tx.clone();
 
         log(
             self.logger_tx.clone(),
-            "Listening on port 18333...".to_string(),
+            format!("Listening on {}", self.config.node_address)
         );
 
         spawn(move || {

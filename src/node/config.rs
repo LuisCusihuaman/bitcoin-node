@@ -15,6 +15,9 @@ pub struct Config {
     pub dns: String,
     pub dns_port: u16,
     pub download_blocks_since_date: String,
+    pub node_address: String,
+    pub block_headers_file: String,
+
 }
 
 impl Default for Config {
@@ -32,6 +35,8 @@ impl Config {
             dns: String::from(""),
             dns_port: 80,
             download_blocks_since_date: String::from(""),
+            node_address: String::from(""),
+            block_headers_file: String::from(""),
         }
     }
     // Abro el archivo
@@ -50,6 +55,8 @@ impl Config {
             dns: String::from(""),
             dns_port: 80,
             download_blocks_since_date: String::from(""),
+            node_address: String::from(""),
+            block_headers_file: String::from(""),
         };
 
         for line in reader.lines() {
@@ -75,6 +82,8 @@ impl Config {
             "DNS" => self.dns = String::from(value),
             "DOWNLOAD_BLOCKS_SINCE_DATE" => self.download_blocks_since_date = String::from(value),
             "DNS_PORT" => self.dns_port = value.parse::<u16>()?,
+            "NODE_ADDRESS" => self.node_address = String::from(value),
+            "BLOCK_HEADERS_FILE" => self.block_headers_file = String::from(value),
             _ => {}
         }
         Ok(())

@@ -104,7 +104,7 @@ impl ObjectImpl for Window {
         }
         // EL ultimo usuario activo es users[-1]
         let wallet = Arc::new(Mutex::new(Wallet::new(config, logger.tx, users)));
-
+        wallet.lock().unwrap().init_txs_history();
         let wallet_clone = wallet.clone(); // Clone the Arc<Mutex<Wallet>>
 
         let (sender, receiver) = MainContext::channel(PRIORITY_DEFAULT);
@@ -141,11 +141,12 @@ impl ObjectImpl for Window {
                         TxStatus::Confirmed => "Confirmed",
                         TxStatus::Unknown => "Unknown",
                     };
+
                     let tx_obj = TransactionObject::new(
                         tx_id_str,
                         status.to_string(),
                         tx_history.2.to_string(),
-                        tx_history.3.to_string(),
+                        if tx_history.3 == 0.0 { "---".to_string()} else {tx_history.3.to_string()},
                     );
                     transaction_list_clone
                         .borrow()

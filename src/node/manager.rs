@@ -320,11 +320,12 @@ impl NodeManager {
     }
 
     fn send_tx_history(&mut self, payload: &PayloadGetTxHistory, address: &str) {
-        let tx_history = self.get_tx_history_by_address(payload.address);
+        let tx_history = self.get_tx_history_by_address(payload.address.clone());
 
         self.send_to(
             address.to_owned(),
             &MessagePayload::TxHistory(PayloadTxHistory {
+                pk_hash: payload.address.to_vec(),
                 txns_count: tx_history.len(),
                 txns: tx_history,
             }),

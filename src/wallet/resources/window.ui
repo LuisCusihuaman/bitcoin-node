@@ -135,7 +135,7 @@
                         <property name="visible">False</property>
                         <child>
                             <object class="GtkLabel" id="transactions_title">
-                                <property name="label">Transactions sent</property>
+                                <property name="label">Transactions</property>
                             </object>
                         </child>
                         <child>

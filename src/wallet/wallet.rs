@@ -2,20 +2,21 @@ use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 use std::vec;
 
-use bitcoin_hashes::hash160;
 use bitcoin_hashes::Hash;
-use rand::rngs::OsRng;
+use bitcoin_hashes::hash160;
 use rand::Rng;
+use rand::rngs::OsRng;
 use secp256k1::{Message, Secp256k1, SecretKey};
 
 use crate::logger::log;
+use crate::net::message::{MessagePayload, TxStatus};
+use crate::net::message::get_tx_history::PayloadGetTxHistory;
 use crate::net::message::get_utxos::PayloadGetUtxos;
 use crate::net::message::tx::{decode_internal_tx, decode_tx, OutPoint, Tx, TxIn, TxOut};
-use crate::net::message::{MessagePayload, TxStatus};
 use crate::net::p2p_connection::P2PConnection;
-use crate::wallet::config::Config;
 use crate::node::utxo::Utxo;
-use crate::utils::{array_to_hex, double_sha256, pk_hash_from_addr};
+use crate::utils::{array_to_hex, double_sha256, get_address_base58, pk_hash_from_addr};
+use crate::wallet::config::Config;
 
 #[derive(Clone)]
 pub struct Wallet {
@@ -95,9 +96,16 @@ impl Wallet {
                     };
                 }
                 MessagePayload::TxHistory(payload) => {
-                    println!("Tx History: {:?}", payload);
+                    //get user by payload.pk_hash
+                    //update user.tnxs_history with payload.txns // HashMap<[u8; 32], (Tx, TxStatus, String, f64)>,
 
-                    // TODO Integrar en el front
+                    let mut user = self.users.iter_mut().find(|u| u.pk_hash.to_vec() == payload.pk_hash).unwrap();
+                    let mut tnxs_history = HashMap::new();
+                    for tx in payload.txns.iter() {
+                        tnxs_history.insert(tx.id, (tx.clone(), TxStatus::Confirmed, "---".to_string(), 0.0));
+                        println!("txid: {:?}", array_to_hex(tx.id.as_ref()));
+                    }
+                    user.tnxs_history = tnxs_history;
                 }
                 _ => continue,
             }
@@ -109,7 +117,7 @@ impl Wallet {
         self.users[self.index_last_active_user].available_money = self.get_balance();
 
         let amount = amount * 100_000_000.0; // amount to send in satoshis
-        let fee =  self.config.tx_fee; // self.config.tx_fee ; // fee for the Tx
+        let fee = self.config.tx_fee; // self.config.tx_fee ; // fee for the Tx
 
         if amount <= 0 as f64 {
             log(self.logger_tx.clone(), "Error: Invalid amount".to_string());
@@ -349,13 +357,26 @@ impl Wallet {
 
     pub fn update_txs_history(&mut self) {
         for (_, tx_history) in self.users[self.index_last_active_user].tnxs_history.clone().iter() {
-            let tx_cloned = tx_history.0.clone();
-            self.send(MessagePayload::GetTxStatus(tx_cloned));
+            if tx_history.1 == TxStatus::Unconfirmed {
+                let tx_cloned = tx_history.0.clone();
+                self.send(MessagePayload::GetTxStatus(tx_cloned));
+            }
         }
     }
-    pub fn select_user(&mut self, name: String){
+
+    pub fn init_txs_history(&mut self) {
+        for user in self.users.clone().iter() {
+            let payload = PayloadGetTxHistory {
+                address: user.pk_hash,
+            };
+
+            self.send(MessagePayload::GetTxHistory(payload));
+        }
+    }
+
+    pub fn select_user(&mut self, name: String) {
         let mut index = 0;
-        for user in self.users.iter(){
+        for user in self.users.iter() {
             if user.name == name {
                 self.index_last_active_user = index;
                 return;
@@ -378,7 +399,8 @@ pub struct User {
     pub pk_hash: [u8; 20],
     pub secret_key: SecretKey,
     pub public_key: [u8; 33],
-    pub tnxs_history: HashMap<[u8; 32], (Tx, TxStatus, String, f64)>, //tnxs_history: Vec<(TxStatus, Tx)>, // puede ser un struct
+    pub tnxs_history: HashMap<[u8; 32], (Tx, TxStatus, String, f64)>,
+    //tnxs_history: Vec<(TxStatus, Tx)>, // puede ser un struct
     pub utxo_available: Vec<Utxo>,
     pub available_money: u64,
     pub utxo_updated: bool,
@@ -428,7 +450,6 @@ impl User {
                 amount: 0.0,
             },
         }
-
     }
 
     // 33 byte public key
@@ -474,7 +495,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_one_active_user(){
+    fn test_create_one_active_user() {
         let logger = Logger::mock_logger();
         let config = Config::from_file("nodo.config")
             .map_err(|err| err.to_string())
@@ -496,7 +517,7 @@ mod tests {
 
 
     #[test]
-    fn test_create_tx_from_user_one(){
+    fn test_create_tx_from_user_one() {
         let logger = Logger::mock_logger();
         let config = Config::from_file("nodo.config")
             .map_err(|err| err.to_string())
@@ -519,8 +540,7 @@ mod tests {
         let amount = 0.001544886;
 
         // User one creates Tx
-        wallet.create_pending_tx(receiver_addr, amount, );
-
+        wallet.create_pending_tx(receiver_addr, amount);
     }
 
     #[test]

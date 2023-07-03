@@ -143,6 +143,10 @@ pub fn get_le_varint(value: usize) -> Vec<u8> {
 }
 
 pub fn read_varint(buff: &[u8]) -> usize {
+    if buff.is_empty() {
+        return 0;
+    }
+
     match buff[0] {
         0xfd => u16::from_le_bytes([buff[1], buff[2]]) as usize,
         0xfe => u32::from_le_bytes([buff[1], buff[2], buff[3], buff[4]]) as usize,

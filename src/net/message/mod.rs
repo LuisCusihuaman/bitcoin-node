@@ -1,5 +1,7 @@
 use self::get_data_inv::{decode_get_data, decode_inv, PayloadGetDataInv};
 use self::get_headers::{decode_get_headers, PayloadHeaders};
+use self::get_tx_history::{decode_get_tx_history, PayloadGetTxHistory};
+use self::tx_history::{decode_tx_history, PayloadTxHistory};
 use self::tx_status::{decode_send_tx_status, PayloadTxStatus};
 use crate::net::message::block::{decode_block, Block};
 use crate::net::message::get_blocks::PayloadGetBlocks;
@@ -16,9 +18,11 @@ pub mod block;
 pub mod get_blocks;
 pub mod get_data_inv;
 pub mod get_headers;
+pub mod get_tx_history;
 pub mod get_utxos;
 pub mod ping_pong;
 pub mod tx;
+pub mod tx_history;
 pub mod tx_status;
 pub mod utxos_msg;
 pub mod version;
@@ -45,8 +49,10 @@ pub enum MessagePayload {
     GetUTXOs(PayloadGetUtxos),
     UTXOs(PayloadUtxosMsg),
     Tx(Tx),
-    GetTxStatus(Tx),           // Wallet -> Node
-    TxStatus(PayloadTxStatus), // Node -> Wallet
+    GetTxStatus(Tx),                   // Wallet -> Node
+    TxStatus(PayloadTxStatus),         // Node -> Wallet
+    GetTxHistory(PayloadGetTxHistory), // Wallet -> Node
+    TxHistory(PayloadTxHistory),       // Node -> Wallet
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -138,6 +144,8 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::TxStatus(tx_status) => tx_status.size(),
             MessagePayload::Headers(headers) => headers.size(),
             MessagePayload::Block(block) => block.size(),
+            MessagePayload::GetTxHistory(tx_history) => tx_history.size(),
+            MessagePayload::TxHistory(tx_history) => tx_history.size(),
             _ => no_payload,
         }
     }
@@ -183,6 +191,12 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::Block(block) => {
                 block.encode(buffer);
             }
+            MessagePayload::GetTxHistory(tx_history) => {
+                tx_history.encode(buffer);
+            }
+            MessagePayload::TxHistory(tx_history) => {
+                tx_history.encode(buffer);
+            }
             _ => {}
         }
         Ok(())
@@ -205,6 +219,8 @@ impl Encoding<MessagePayload> for MessagePayload {
             MessagePayload::Tx(_) => "tx",
             MessagePayload::GetTxStatus(_) => "gettxstatus",
             MessagePayload::TxStatus(_) => "txstatus",
+            MessagePayload::GetTxHistory(_) => "gettxhistory",
+            MessagePayload::TxHistory(_) => "txhistory",
         }
     }
 
@@ -225,6 +241,8 @@ impl Encoding<MessagePayload> for MessagePayload {
             "getheaders" => decode_get_headers(buffer),
             "gettxstatus" => decode_tx_status(buffer),
             "txstatus" => decode_send_tx_status(buffer),
+            "gettxhistory" => decode_get_tx_history(buffer),
+            "txhistory" => decode_tx_history(buffer),
             _ => Err("Unknown command: ".to_owned() + cmd),
         }
     }

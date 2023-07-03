@@ -5,8 +5,10 @@ use crate::net::message::get_data_inv::Inventory;
 use crate::net::message::get_data_inv::PayloadGetDataInv;
 use crate::net::message::get_headers::PayloadGetHeaders;
 use crate::net::message::get_headers::PayloadHeaders;
+use crate::net::message::get_tx_history::PayloadGetTxHistory;
 use crate::net::message::ping_pong::PayloadPingPong;
 use crate::net::message::tx::Tx;
+use crate::net::message::tx_history::PayloadTxHistory;
 use crate::net::message::tx_status::PayloadTxStatus;
 use crate::net::message::utxos_msg::PayloadUtxosMsg;
 use crate::net::message::version::PayloadVersion;
@@ -296,6 +298,14 @@ impl NodeManager {
 
                         self.send_blocks(getdata, peer_address);
                     }
+                    MessagePayload::GetTxHistory(payload) => {
+                        log(
+                            self.logger_tx.clone(),
+                            format!("Received gettxhistory from {}", peer_address),
+                        );
+
+                        self.send_tx_history(payload, peer_address);
+                    }
                     _ => {
                         log(
                             self.logger_tx.clone(),
@@ -307,6 +317,41 @@ impl NodeManager {
             matched_messages.push((peer_address.clone(), matched_peer_messages));
         }
         matched_messages
+    }
+
+    fn send_tx_history(&mut self, payload: &PayloadGetTxHistory, address: &str) {
+        let tx_history = self.get_tx_history_by_address(payload.address);
+
+        self.send_to(
+            address.to_owned(),
+            &MessagePayload::TxHistory(PayloadTxHistory {
+                txns_count: tx_history.len(),
+                txns: tx_history,
+            }),
+        );
+    }
+
+    pub fn get_tx_history_by_address(&mut self, pk_hash: [u8; 20]) -> Vec<Tx> {
+        let mut p2pkh_script: Vec<u8> = Vec::new();
+
+        p2pkh_script.extend([118]); // 0x76 = OP_DUP
+        p2pkh_script.extend([169]); // 0xa9 = OP_HASH160
+        p2pkh_script.extend(vec![pk_hash.len() as u8]);
+        p2pkh_script.extend(pk_hash);
+        p2pkh_script.extend([136]); // 0x88 = OP_EQUALVERIFY
+        p2pkh_script.extend([172]); // 0xac = OP_CHECKSIG
+
+        let blockchain = self.get_blockchain();
+
+        blockchain
+            .iter()
+            .flat_map(|block| block.txns.clone())
+            .filter(|tx| {
+                tx.tx_out
+                    .iter()
+                    .any(|output| output.pk_script == p2pkh_script)
+            })
+            .collect()
     }
 
     fn send_blocks(&mut self, get_data: &PayloadGetDataInv, address: &str) {

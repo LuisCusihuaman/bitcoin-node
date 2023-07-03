@@ -130,6 +130,11 @@ impl Wallet {
                         }
                     };
                 }
+                MessagePayload::TxHistory(payload) => {
+                    println!("Tx History: {:?}", payload);
+
+                    // TODO Integrar en el front
+                }
                 _ => continue,
             }
         }
@@ -412,6 +417,7 @@ impl User {
 #[cfg(test)]
 mod tests {
     use crate::logger::Logger;
+    use crate::net::message::get_tx_history::PayloadGetTxHistory;
     use crate::net::message::ping_pong::PayloadPingPong;
     use crate::net::message::tx::{OutPoint, Tx, TxIn, TxOut};
     use crate::utils::get_address_base58;
@@ -437,7 +443,7 @@ mod tests {
     }
 
     #[test]
-    fn test_received_correctly_uxtos() {
+    fn test_received_correctly_uxtos() -> Result<(), String> {
         let logger = Logger::mock_logger();
         let config = Config::from_file("nodo.config")
             .map_err(|err| err.to_string())
@@ -451,6 +457,7 @@ mod tests {
         // voy a enviar un msg Payload y quiero recibir una lista de UTXOs
 
         //let utxo = !vec[]
+        Ok(())
     }
 
     #[test]
@@ -587,6 +594,28 @@ mod tests {
         let tx_status_message = MessagePayload::GetTxStatus(tx);
 
         wallet.send(tx_status_message);
+        wallet.receive();
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_wallet_sends_get_tx_history() -> Result<(), String> {
+        let logger = Logger::mock_logger();
+        let config = Config::from_file("nodo.config")
+            .map_err(|err| err.to_string())
+            .unwrap();
+
+        let priv_key_wif = "cSM1NQcoCMDP8jy2AMQWHXTLc9d4HjSr7H4AqxKk2bD1ykbaRw59".to_string();
+        let messi = User::new("Messi".to_string(), priv_key_wif, false);
+
+        let mut wallet = Wallet::new(config, logger.tx, messi.clone());
+
+        let payload = PayloadGetTxHistory {
+            address: messi.pk_hash,
+        };
+
+        wallet.send(MessagePayload::GetTxHistory(payload));
         wallet.receive();
 
         Ok(())

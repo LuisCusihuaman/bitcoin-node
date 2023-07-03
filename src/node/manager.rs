@@ -117,7 +117,7 @@ impl NodeManager {
                                     .push(MessagePayload::Headers(payload.clone()));
                             }
                             self.blockchain.extend(payload.headers.clone());
-                            Block::encode_blocks_to_file(&payload.headers, "block_headers.bin");
+                            Block::encode_blocks_to_file(&payload.headers, self.config.block_headers_file.as_str());
                         }
 
                         // Continuidad de la blockchain
@@ -133,7 +133,7 @@ impl NodeManager {
 
                         if blockchain_last_block.hash == payload_first_block.previous_block {
                             self.blockchain.extend(payload.headers.clone());
-                            Block::encode_blocks_to_file(&payload.headers, "block_headers.bin");
+                            Block::encode_blocks_to_file(&payload.headers, self.config.block_headers_file.as_str());
                         }
 
                         if commands.contains(&"headers") {
@@ -491,8 +491,7 @@ impl NodeManager {
     }
 
     fn headers_first(&mut self) {
-        let file_path = "block_headers.bin";
-
+        let file_path = self.config.block_headers_file.as_str();
         if fs::metadata(file_path).is_ok() {
             // Blocks file already exists, no need to perform initial block download
             log(
@@ -563,7 +562,7 @@ impl NodeManager {
     }
 
     fn blocks_download(&mut self) {
-        let timestamp = match date_to_timestamp("2023-06-30") {
+        let timestamp = match date_to_timestamp(self.config.download_blocks_since_date.as_str()) {
             Some(timestamp) => timestamp,
             None => panic!("Error parsing date"),
         };
